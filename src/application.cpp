@@ -1,7 +1,12 @@
 #include "application.h"
+#include "deck_module.h"
+#include <cassert>
 #include <cstring>
+#include <fstream>
+#include <iostream>
 #include <lua.hpp>
 #include <memory_resource>
+#include <string_view>
 
 namespace
 {
@@ -19,6 +24,12 @@ constexpr size_t alloc_size_clamp(size_t value)
 	return target;
 }
 
+struct ReaderData
+{
+	std::ifstream fp;
+	std::vector<char> buffer;
+};
+
 } // namespace
 
 Application::Application()
@@ -27,7 +38,14 @@ Application::Application()
 	m_mem_resource = new std::pmr::unsynchronized_pool_resource({ 1024, largest_alloc_block }, std::pmr::new_delete_resource());
 
 	L = lua_newstate(&_lua_alloc, this);
+	lua_checkstack(L, 200);
+
 	luaL_openlibs(L);
+
+	luaL_requiref(L, "deck", &DeckModule::push_new, 1);
+	m_deck_module = DeckModule::from_stack(L, -1, false);
+	assert(m_deck_module && "Internal error creating DeckModule instance");
+	lua_pop(L, 1);
 }
 
 Application::~Application()
@@ -38,12 +56,123 @@ Application::~Application()
 
 bool Application::init(std::vector<std::string_view>&& args)
 {
+	if (args.size() <= 1)
+		m_deckfile_file_name = "deckfile.lua";
+	else
+		m_deckfile_file_name = args[1];
+
+	int oldtop = lua_gettop(L);
+
+	int result = load_script(m_deckfile_file_name.c_str());
+	if (result != LUA_OK)
+	{
+		switch (result)
+		{
+			case LUA_ERRFILE:
+				std::cerr << "Unable to open/read file " << m_deckfile_file_name << std::endl;
+				break;
+			case LUA_ERRSYNTAX:
+				std::cerr << "Syntax error in " << m_deckfile_file_name << std::endl;
+				break;
+			case LUA_ERRMEM:
+				std::cerr << "Out of memory while loading " << m_deckfile_file_name << std::endl;
+				break;
+			default:
+				std::cerr << "Lua error #" << result << " while loading " << m_deckfile_file_name << std::endl;
+				break;
+		}
+
+		if (lua_gettop(L) > oldtop)
+		{
+			size_t err_msg_len;
+			char const* err_msg = luaL_tolstring(L, -1, &err_msg_len);
+			if (err_msg)
+				std::cerr << "Error: " << std::string_view(err_msg, err_msg_len) << std::endl;
+		}
+
+		lua_settop(L, oldtop);
+		return false;
+	}
+
+	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading script");
+
+	// XXX remove me
+	lua_pushvalue(L, -1);
+	result = lua_pcall(L, 0, 0, 0);
+	if (result != LUA_OK)
+	{
+		switch (result)
+		{
+			case LUA_ERRRUN:
+				std::cerr << "Runtime error while running " << m_deckfile_file_name << std::endl;
+				break;
+			case LUA_ERRMEM:
+				std::cerr << "Out of memory while running " << m_deckfile_file_name << std::endl;
+				break;
+			case LUA_ERRERR:
+				std::cerr << "Internal error while running " << m_deckfile_file_name << std::endl;
+				break;
+			default:
+				std::cerr << "Lua error #" << result << " while running " << m_deckfile_file_name << std::endl;
+				break;
+		}
+
+		if (lua_gettop(L) > oldtop)
+		{
+			size_t err_msg_len;
+			char const* err_msg = luaL_tolstring(L, -1, &err_msg_len);
+			if (err_msg)
+				std::cerr << "Error: " << std::string_view(err_msg, err_msg_len) << std::endl;
+		}
+
+		lua_settop(L, oldtop);
+		return false;
+	}
+
+	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading script");
 	return true;
 }
 
 int Application::run()
 {
 	return 0;
+}
+
+int Application::load_script(char const* file_name)
+{
+	ReaderData reader_data;
+
+	reader_data.fp.open(file_name, std::ios::in | std::ios::binary);
+	if (!reader_data.fp.good())
+		return LUA_ERRFILE;
+
+	reader_data.buffer.resize(4096);
+
+	int result = lua_load(L, &Application::_lua_file_reader, &reader_data, file_name, "bt");
+	if (result != LUA_OK)
+		return result;
+
+	char const* has_upvalue = lua_getupvalue(L, -1, 1);
+	lua_pop(L, 1);
+
+	if (has_upvalue)
+	{
+		// Create a new ENV table for the new chunk
+		lua_createtable(L, 0, 0);
+		// Create a metatable that indexes into the state global table
+		lua_createtable(L, 0, 3);
+		lua_pushboolean(L, true);
+		lua_setfield(L, -2, "__metatable");
+		lua_geti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+		lua_setfield(L, -2, "__index");
+		lua_pushstring(L, file_name);
+		lua_setfield(L, -2, "__name");
+		//  Set the metatable then set the table as the ENV table
+		lua_setmetatable(L, -2);
+		lua_setupvalue(L, -2, 1);
+	}
+
+	return LUA_OK;
 }
 
 void* Application::_lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
@@ -88,4 +217,15 @@ void* Application::_lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 		std::memset(new_mem, 0, nsize);
 		return new_mem;
 	}
+}
+
+char const* Application::_lua_file_reader(lua_State* L, void* data, size_t* size)
+{
+	ReaderData* reader_data = reinterpret_cast<ReaderData*>(data);
+	if (!reader_data->fp.good())
+		return nullptr;
+
+	reader_data->fp.read(reader_data->buffer.data(), reader_data->buffer.size());
+	*size = reader_data->fp.gcount();
+	return reader_data->buffer.data();
 }

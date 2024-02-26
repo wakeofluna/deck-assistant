@@ -1,5 +1,6 @@
 sources = files(
     'application.cpp',
+    'deck_module.cpp',
     'lua_class.cpp',
 )
 
