@@ -52,24 +52,42 @@ constexpr inline char const* __typename()
 // *************************** GC FINALIZE *************************
 
 template <typename T>
-constexpr inline bool call_finalize(lua_State* L, T* obj, not_available)
+constexpr inline bool has_finalize(not_available)
 {
-	return true;
+	return false;
 }
 
 template <typename T>
-inline bool call_finalize(lua_State* L, T* obj, std::enable_if_t<std::is_same_v<bool, decltype(TPTR->finalize(LPTR))>, is_available>)
+constexpr inline bool has_finalize(std::enable_if_t<std::is_same_v<bool, decltype(TPTR->finalize(LPTR))>,
+                                                    is_available>)
 {
-	return obj->finalize(L);
+	return true;
 }
 
 template <typename T>
 int __gc(lua_State* L)
 {
 	T* object = reinterpret_cast<T*>(lua_touserdata(L, 1));
-	if (call_finalize(L, object, is_available()))
+	if constexpr (has_finalize<T>(is_available()))
+	{
+		if (object->finalize())
+			object->~T();
+	}
+	else
+	{
 		object->~T();
+	}
 	return 0;
+}
+
+template <typename T>
+void register_gc(lua_State* L)
+{
+	if constexpr (has_finalize<T>(is_available()) || !std::is_trivially_destructible_v<T>)
+	{
+		lua_pushcfunction(L, &__gc<T>);
+		lua_setfield(L, -2, "__gc");
+	}
 }
 
 // *************************** INIT CLASS *************************
@@ -344,21 +362,22 @@ int __index(lua_State* L)
 
 	if constexpr (hasInstanceTable)
 	{
-		lua_getiuservalue(L, -2, IDX_USER_INSTANCETABLE);
-		lua_pushvalue(L, -2);
-		if (lua_rawget(L, -2) != LUA_TNIL)
+		LuaHelpers::push_instance_table(L, 1);
+		lua_pushvalue(L, 2);
+		lua_rawget(L, -2);
+		if (lua_type(L, -1) != LUA_TNIL)
 			return 1;
 		lua_pop(L, 2);
 	}
 
 	if constexpr (hasClassTable)
 	{
-		lua_getmetatable(L, -2);
-		lua_rawgeti(L, -1, IDX_META_CLASSTABLE);
-		lua_pushvalue(L, -3);
-		if (lua_rawget(L, -2) != LUA_TNIL)
+		LuaHelpers::push_class_table(L, 1);
+		lua_pushvalue(L, 2);
+		lua_rawget(L, -2);
+		if (lua_type(L, -1) != LUA_TNIL)
 			return 1;
-		lua_pop(L, 3);
+		lua_pop(L, 2);
 	}
 
 	if constexpr (hasIndex)
@@ -523,18 +542,18 @@ int __newindex(lua_State* L)
 
 	if constexpr (hasInstanceTable)
 	{
-		lua_getiuservalue(L, -3, IDX_USER_INSTANCETABLE);
+		LuaHelpers::push_instance_table(L, 1);
 		lua_replace(L, -4);
 		lua_rawset(L, -3);
 	}
 	else
 	{
 		if constexpr (hasIndexInt && hasIndexString)
-			luaL_typeerror(L, 2, "integer or string");
+			luaL_typerror(L, 2, "integer or string");
 		else if constexpr (hasIndexInt)
-			luaL_typeerror(L, 2, "integer");
+			luaL_typerror(L, 2, "integer");
 		else if constexpr (hasIndexString)
-			luaL_typeerror(L, 2, "string");
+			luaL_typerror(L, 2, "string");
 	}
 	return 0;
 }
@@ -592,47 +611,28 @@ inline bool register_call(lua_State* L, std::enable_if_t<
 template <typename T>
 T* LuaClass<T>::alloc_new(lua_State* L)
 {
-	int numUserValues = 0;
-	if constexpr (has_init_instance_table<T>(is_available()))
-		++numUserValues;
+	T* object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
 
-	T* object = reinterpret_cast<T*>(lua_newuserdatauv(L, sizeof(T), numUserValues));
-
-	lua_getfield(L, LUA_REGISTRYINDEX, "deck-assistant.LuaClass");
-	if (lua_type(L, -1) != LUA_TTABLE)
-	{
-		lua_pop(L, 1);
-		lua_createtable(L, 0, 128);
-
-		lua_createtable(L, 0, 2);
-		lua_pushliteral(L, "v");
-		lua_setfield(L, -2, "__mode");
-		lua_pushboolean(L, true);
-		lua_setfield(L, -2, "__metatable");
-		lua_setmetatable(L, -2);
-
-		lua_pushvalue(L, -1);
-		lua_setfield(L, LUA_REGISTRYINDEX, "deck-assistant.LuaClass");
-	}
-	lua_pushvalue(L, -2);
-	lua_rawsetp(L, -2, object);
+	LuaHelpers::push_class_table_container(L);
+	lua_pushlightuserdata(L, object);
+	lua_pushvalue(L, -3);
+	lua_rawset(L, -3);
 	lua_pop(L, 1);
 
 	push_metatable(L);
 	lua_setmetatable(L, -2);
 
-	return object;
-}
-
-template <typename T>
-void LuaClass<T>::alloc_new_finish(lua_State* L)
-{
 	if constexpr (has_init_instance_table<T>(is_available()))
 	{
+		LuaHelpers::push_instance_table_container(L);
+		lua_pushvalue(L, -2);
 		lua_newtable(L);
-		__init_instance_table<T>(L, static_cast<T*>(this));
-		lua_setiuservalue(L, -2, IDX_USER_INSTANCETABLE);
+		__init_instance_table<T>(L, object);
+		lua_rawset(L, -3);
+		lua_pop(L, 1);
 	}
+
+	return object;
 }
 
 template <typename T>
@@ -652,7 +652,7 @@ T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throwError)
 		return reinterpret_cast<T*>(p);
 
 	if (throwError)
-		luaL_typeerror(L, idx, __typename<T>());
+		luaL_typerror(L, idx, __typename<T>());
 
 	return nullptr;
 }
@@ -667,7 +667,8 @@ template <typename T>
 int LuaClass<T>::push_metatable(lua_State* L)
 {
 	char const* tname = __typename<T>();
-	if (lua_getfield(L, LUA_REGISTRYINDEX, tname) != LUA_TTABLE)
+	lua_getfield(L, LUA_REGISTRYINDEX, tname);
+	if (lua_type(L, -1) != LUA_TTABLE)
 	{
 		lua_pop(L, 1);
 		lua_createtable(L, 1, 12);
@@ -681,9 +682,6 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		lua_pushboolean(L, true);
 		lua_setfield(L, -2, "__metatable");
 
-		lua_pushcfunction(L, &__gc<T>);
-		lua_setfield(L, -2, "__gc");
-
 		if constexpr (has_init_class_table<T>(is_available()))
 		{
 			// Class table
@@ -692,6 +690,7 @@ int LuaClass<T>::push_metatable(lua_State* L)
 			lua_rawseti(L, -2, IDX_META_CLASSTABLE);
 		}
 
+		register_gc<T>(L);
 		register_len<T>(L, is_available());
 		register_tostring<T>(L, is_available());
 		register_eq<T>(L, is_available());

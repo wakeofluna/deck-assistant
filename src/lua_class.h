@@ -6,18 +6,26 @@
 #include <string_view>
 #include <utility>
 
-class LuaClassBase
+struct LuaHelpers
 {
-public:
-	void push_this(lua_State* L) const;
+	static int push_class_table_container(lua_State* L);
+	static int push_instance_table_container(lua_State* L);
 
-protected:
+	static int push_class_table_of_top_value(lua_State* L);
+	static int push_instance_table_of_top_value(lua_State* L);
 	static void push_class_table(lua_State* L, int idx);
 	static void push_instance_table(lua_State* L, int idx);
 	static void index_cache_in_class_table(lua_State* L);
 	static void index_cache_in_instance_table(lua_State* L);
 	static std::string_view check_arg_string(lua_State* L, int idx);
 	static lua_Integer check_arg_int(lua_State* L, int idx);
+	static void push_converted_to_string(lua_State* L, int idx);
+};
+
+class LuaClassBase : protected LuaHelpers
+{
+public:
+	void push_this(lua_State* L) const;
 };
 
 /**
@@ -63,7 +71,6 @@ class LuaClass : public LuaClassBase
 {
 private:
 	static T* alloc_new(lua_State* L);
-	void alloc_new_finish(lua_State* L);
 
 public:
 	static char const* type_name();
@@ -75,7 +82,6 @@ public:
 	{
 		T* obj = alloc_new(L);
 		new (obj) T(std::forward<ARGS>(args)...);
-		obj->alloc_new_finish(L);
 		return obj;
 	}
 

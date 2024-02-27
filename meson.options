@@ -6,6 +6,13 @@ option(
 )
 
 option(
+    'luajit',
+    type: 'feature',
+    value: 'auto',
+    description: 'Use LuaJIT instead of regular lua',
+)
+
+option(
     'sdl-image',
     type: 'feature',
     value: 'auto',

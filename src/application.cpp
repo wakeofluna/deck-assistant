@@ -42,10 +42,8 @@ Application::Application()
 
 	luaL_openlibs(L);
 
-	luaL_requiref(L, "deck", &DeckModule::push_new, 1);
-	m_deck_module = DeckModule::from_stack(L, -1, false);
-	assert(m_deck_module && "Internal error creating DeckModule instance");
-	lua_pop(L, 1);
+	m_deck_module = DeckModule::create_new(L);
+	lua_setglobal(L, "deck");
 }
 
 Application::~Application()
@@ -84,8 +82,10 @@ bool Application::init(std::vector<std::string_view>&& args)
 
 		if (lua_gettop(L) > oldtop)
 		{
+			LuaHelpers::push_converted_to_string(L, -1);
+
 			size_t err_msg_len;
-			char const* err_msg = luaL_tolstring(L, -1, &err_msg_len);
+			char const* err_msg = lua_tolstring(L, -1, &err_msg_len);
 			if (err_msg)
 				std::cerr << "Error: " << std::string_view(err_msg, err_msg_len) << std::endl;
 		}
@@ -119,8 +119,10 @@ bool Application::init(std::vector<std::string_view>&& args)
 
 		if (lua_gettop(L) > oldtop)
 		{
+			LuaHelpers::push_converted_to_string(L, -1);
+
 			size_t err_msg_len;
-			char const* err_msg = luaL_tolstring(L, -1, &err_msg_len);
+			char const* err_msg = lua_tolstring(L, -1, &err_msg_len);
 			if (err_msg)
 				std::cerr << "Error: " << std::string_view(err_msg, err_msg_len) << std::endl;
 		}
@@ -148,29 +150,23 @@ int Application::load_script(char const* file_name)
 
 	reader_data.buffer.resize(4096);
 
-	int result = lua_load(L, &Application::_lua_file_reader, &reader_data, file_name, "bt");
+	int result = lua_load(L, &Application::_lua_file_reader, &reader_data, file_name);
 	if (result != LUA_OK)
 		return result;
 
-	char const* has_upvalue = lua_getupvalue(L, -1, 1);
-	lua_pop(L, 1);
-
-	if (has_upvalue)
-	{
-		// Create a new ENV table for the new chunk
-		lua_createtable(L, 0, 0);
-		// Create a metatable that indexes into the state global table
-		lua_createtable(L, 0, 3);
-		lua_pushboolean(L, true);
-		lua_setfield(L, -2, "__metatable");
-		lua_geti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
-		lua_setfield(L, -2, "__index");
-		lua_pushstring(L, file_name);
-		lua_setfield(L, -2, "__name");
-		//  Set the metatable then set the table as the ENV table
-		lua_setmetatable(L, -2);
-		lua_setupvalue(L, -2, 1);
-	}
+	// Create a new ENV table for the new chunk
+	lua_createtable(L, 0, 0);
+	// Create a metatable that indexes into the state global table
+	lua_createtable(L, 0, 3);
+	lua_pushboolean(L, true);
+	lua_setfield(L, -2, "__metatable");
+	lua_pushvalue(L, LUA_GLOBALSINDEX);
+	lua_setfield(L, -2, "__index");
+	lua_pushstring(L, file_name);
+	lua_setfield(L, -2, "__name");
+	//  Set the metatable then set the table as the ENV table
+	lua_setmetatable(L, -2);
+	lua_setfenv(L, -2);
 
 	return LUA_OK;
 }

@@ -27,10 +27,18 @@ feature_streamdeck = get_option(
 ).require(hidapi.found(), error_message: 'requires hidapi')
 
 lua = dependency(
-    'lua5.4',
-    version: '>=5.4.6',
-    required: true,
+    'luajit',
+    version: '>=2.1.0',
+    required: get_option('luajit'),
 )
+
+if not lua.found()
+    lua = dependency(
+        'lua5.1',
+        version: '>=5.1.5',
+        required: true,
+    )
+endif
 
 sdl = dependency(
     'sdl2',
@@ -60,6 +68,7 @@ summary(
     {
         'catch2': catch2,
         'hidapi': hidapi,
+        'lua': lua,
         'sdl': sdl,
         'sdl-image': sdl_image,
         'sdl-ttf': sdl_ttf,
@@ -69,6 +78,7 @@ summary(
 
 summary(
     {
+        'luajit': get_option('luajit'),
         'test': get_option('test'),
         'sdl-image': get_option('sdl-image'),
         'sdl-ttf': get_option('sdl-ttf'),
