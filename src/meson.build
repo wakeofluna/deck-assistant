@@ -1,6 +1,11 @@
 sources = files(
     'application.cpp',
+    'deck_card.cpp',
+    'deck_component.cpp',
+    'deck_font.cpp',
+    'deck_font_container.cpp',
     'deck_module.cpp',
+    'deck_text.cpp',
     'lua_class.cpp',
 )
 

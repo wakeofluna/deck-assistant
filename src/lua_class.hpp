@@ -2,7 +2,6 @@
 #define DECK_ASSISTANT_LUA_CLASS_HPP_
 
 #include "lua_class.h"
-#include "lua_class_private.h"
 #include <cassert>
 #include <lua.hpp>
 #include <new>
@@ -185,10 +184,20 @@ int __tostring2(lua_State* L)
 	return object->to_string(L);
 }
 
-template <typename>
+template <typename T>
+int __tostring3(lua_State* L)
+{
+	T const* object = reinterpret_cast<T*>(lua_touserdata(L, -1));
+	lua_pushfstring(L, "%s: %p", __typename<T>(), object);
+	return 1;
+}
+
+template <typename T>
 constexpr inline bool register_tostring(lua_State* L, not_available)
 {
-	return false;
+	lua_pushcfunction(L, &__tostring3<T>);
+	lua_setfield(L, -2, "__tostring");
+	return true;
 }
 
 template <typename T>
@@ -636,25 +645,15 @@ T* LuaClass<T>::alloc_new(lua_State* L)
 }
 
 template <typename T>
-T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throwError)
+T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throw_error)
 {
-	int equal = 0;
+	return reinterpret_cast<T*>(check_arg_userdata(L, idx, __typename<T>(), throw_error));
+}
 
-	void* p = lua_touserdata(L, idx);
-	if (p != nullptr && lua_getmetatable(L, idx))
-	{
-		lua_getfield(L, LUA_REGISTRYINDEX, __typename<T>());
-		equal = lua_rawequal(L, -1, -2);
-		lua_pop(L, 2);
-	}
-
-	if (equal)
-		return reinterpret_cast<T*>(p);
-
-	if (throwError)
-		luaL_typerror(L, idx, __typename<T>());
-
-	return nullptr;
+template <typename T>
+bool LuaClass<T>::is_on_stack(lua_State* L, int idx)
+{
+	return check_arg_userdata(L, idx, __typename<T>(), false);
 }
 
 template <typename T>
@@ -702,6 +701,12 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		register_call<T>(L, is_available());
 	}
 	return 1;
+}
+
+template <typename T>
+void LuaClass<T>::convert_top_of_stack(lua_State* L)
+{
+	newindex_type_or_convert(L, type_name(), &T::push_new, nullptr);
 }
 
 template <typename T>

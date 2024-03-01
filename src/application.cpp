@@ -43,6 +43,8 @@ Application::Application()
 	luaL_openlibs(L);
 
 	m_deck_module = DeckModule::create_new(L);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, LUA_REGISTRYINDEX, DeckModule::LUA_GLOBAL_INDEX_NAME);
 	lua_setglobal(L, "deck");
 }
 
@@ -95,6 +97,8 @@ bool Application::init(std::vector<std::string_view>&& args)
 	}
 
 	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading script");
+
+	// TODO add safe mode by removing some dangerous stdlib functions
 
 	// XXX remove me
 	lua_pushvalue(L, -1);
