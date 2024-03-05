@@ -1,6 +1,7 @@
 #include "deck_module.h"
 #include "deck_card.h"
 #include "deck_component.h"
+#include "deck_connector_container.h"
 #include "deck_font.h"
 #include "deck_font_container.h"
 #include "lua_class.hpp"
@@ -37,8 +38,11 @@ void DeckModule::init_class_table(lua_State* L)
 
 void DeckModule::init_instance_table(lua_State* L)
 {
-	DeckFontContainer::push_new(L);
+	m_font_container = DeckFontContainer::create_new(L);
 	lua_setfield(L, -2, "fonts");
+
+	m_connector_container = DeckConnectorContainer::create_new(L);
+	lua_setfield(L, -2, "connectors");
 }
 
 int DeckModule::newindex(lua_State* L)

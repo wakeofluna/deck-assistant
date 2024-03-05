@@ -1,6 +1,8 @@
 #ifndef DECK_ASSISTANT_APPLICATION_H
 #define DECK_ASSISTANT_APPLICATION_H
 
+#include <chrono>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,6 +37,7 @@ private:
 	lua_State* L;
 	DeckModule* m_deck_module;
 	std::string m_deckfile_file_name;
+	std::chrono::steady_clock::time_point m_clock;
 };
 
 #endif // DECK_ASSISTANT_APPLICATION_H

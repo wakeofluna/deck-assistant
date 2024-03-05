@@ -170,13 +170,17 @@ void* LuaHelpers::check_arg_userdata(lua_State* L, int idx, char const* tname, b
 	return nullptr;
 }
 
-std::string_view LuaHelpers::check_arg_string(lua_State* L, int idx)
+std::string_view LuaHelpers::check_arg_string(lua_State* L, int idx, bool allow_empty)
 {
 	idx = absidx(L, idx);
 	luaL_checktype(L, idx, LUA_TSTRING);
 
 	size_t len;
 	char const* str = lua_tolstring(L, idx, &len);
+
+	if (!allow_empty && len == 0)
+		luaL_argerror(L, idx, "string value cannot be empty");
+
 	return std::string_view(str, len);
 }
 
@@ -215,6 +219,7 @@ lua_Integer LuaHelpers::check_arg_int(lua_State* L, int idx)
 std::string_view LuaHelpers::push_converted_to_string(lua_State* L, int idx)
 {
 	int const oldtop = lua_gettop(L);
+	idx              = absidx(L, idx);
 
 	if (lua_type(L, idx) == LUA_TSTRING)
 	{
@@ -230,9 +235,6 @@ std::string_view LuaHelpers::push_converted_to_string(lua_State* L, int idx)
 	}
 	else
 	{
-		if (idx < 0)
-			idx += lua_gettop(L) + 1;
-
 		lua_getglobal(L, "tostring");
 		lua_pushvalue(L, idx);
 		lua_pcall(L, 1, 1, 0);

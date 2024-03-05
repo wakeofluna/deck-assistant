@@ -26,7 +26,7 @@ struct LuaHelpers
 	static void index_cache_in_class_table(lua_State* L);
 	static void index_cache_in_instance_table(lua_State* L);
 	static void* check_arg_userdata(lua_State* L, int idx, char const* tname, bool throw_error = true);
-	static std::string_view check_arg_string(lua_State* L, int idx);
+	static std::string_view check_arg_string(lua_State* L, int idx, bool allow_empty = false);
 	static std::string_view check_arg_string_or_none(lua_State* L, int idx);
 	static lua_Integer check_arg_int(lua_State* L, int idx);
 	static std::string_view push_converted_to_string(lua_State* L, int idx);
@@ -85,9 +85,6 @@ public:
 template <typename T>
 class LuaClass : public LuaClassBase
 {
-private:
-	static T* alloc_new(lua_State* L);
-
 public:
 	static char const* type_name();
 	static T* from_stack(lua_State* L, int idx, bool throw_error = true);
@@ -96,12 +93,7 @@ public:
 	static void convert_top_of_stack(lua_State* L);
 
 	template <typename... ARGS>
-	static T* create_new(lua_State* L, ARGS... args)
-	{
-		T* obj = alloc_new(L);
-		new (obj) T(std::forward<ARGS>(args)...);
-		return obj;
-	}
+	static T* create_new(lua_State* L, ARGS... args);
 
 	template <typename... ARGS>
 	static inline int push_new(lua_State* L, ARGS... args)

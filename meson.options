@@ -13,22 +13,29 @@ option(
 )
 
 option(
+    'sdl',
+    type: 'feature',
+    value: 'auto',
+    description: 'Support for Desktop-related connectors',
+)
+
+option(
     'sdl-image',
     type: 'feature',
     value: 'auto',
-    description: 'Include SDL2-image to load and display images',
+    description: 'Support for loading and manipulating images',
 )
 
 option(
     'sdl-ttf',
     type: 'feature',
     value: 'auto',
-    description: 'Include SDL2-ttf to render fonts',
+    description: 'Support for rendering text onto surfaces',
 )
 
 option(
-    'streamdeck',
+    'hidapi',
     type: 'feature',
     value: 'auto',
-    description: 'Support for Elgato Stream Deck',
+    description: 'Support for HID device connectors (Elgato Streamdeck)',
 )

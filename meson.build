@@ -8,23 +8,27 @@ project(
     default_options: ['cpp_std=c++20'],
 )
 
-hidapi = dependency(
-    'hidapi-hidraw',
-    disabler: true,
-    required: false,
-)
-
-if not hidapi.found()
+if get_option('hidapi').allowed()
     hidapi = dependency(
-        'hidapi-libusb',
-        disabler: true,
+        'hidapi-hidraw',
+        disabler: false,
         required: false,
     )
-endif
 
-feature_streamdeck = get_option(
-    'streamdeck',
-).require(hidapi.found(), error_message: 'requires hidapi')
+    if not hidapi.found()
+        hidapi = dependency(
+            'hidapi-libusb',
+            disabler: false,
+            required: get_option('hidapi'),
+        )
+    endif
+else
+    hidapi = dependency(
+        'hidapi-hidraw',
+        disabler: false,
+        required: get_option('hidapi'),
+    )
+endif
 
 lua = dependency(
     'luajit',
@@ -42,7 +46,8 @@ endif
 
 sdl = dependency(
     'sdl2',
-    required: true,
+    disabler: false,
+    required: get_option('sdl'),
 )
 
 sdl_image = dependency(
@@ -66,25 +71,40 @@ catch2 = dependency(
 
 summary(
     {
-        'catch2': catch2,
-        'hidapi': hidapi,
-        'lua': lua,
-        'sdl': sdl,
-        'sdl-image': sdl_image,
-        'sdl-ttf': sdl_ttf,
+        'hidapi': get_option('hidapi'),
+        'luajit': get_option('luajit'),
+        'sdl': get_option('sdl'),
+        'sdl-image': get_option('sdl-image'),
+        'sdl-ttf': get_option('sdl-ttf'),
+        'test': get_option('test'),
     },
-    section: 'Runtime dependencies',
+    section: 'Features',
 )
 
 summary(
     {
-        'luajit': get_option('luajit'),
-        'test': get_option('test'),
-        'sdl-image': get_option('sdl-image'),
-        'sdl-ttf': get_option('sdl-ttf'),
-        'streamdeck': feature_streamdeck,
+        catch2.name(): catch2,
+        hidapi.name(): hidapi,
+        lua.name(): lua,
+        sdl.name(): sdl,
+        sdl_image.name(): sdl_image,
+        sdl_ttf.name(): sdl_ttf,
     },
-    section: 'Features',
+    section: 'Runtime dependencies',
 )
+
+buildflags = []
+if hidapi.found()
+    buildflags += '-DHAVE_HIDAPI'
+endif
+if sdl.found()
+    buildflags += '-DHAVE_SDL'
+endif
+if sdl_image.found()
+    buildflags += '-DHAVE_SDL_IMAGE'
+endif
+if sdl_ttf.found()
+    buildflags += '-DHAVE_SDL_TTF'
+endif
 
 subdir('src')

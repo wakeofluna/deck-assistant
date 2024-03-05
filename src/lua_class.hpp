@@ -618,9 +618,11 @@ inline bool register_call(lua_State* L, std::enable_if_t<
 } // namespace
 
 template <typename T>
-T* LuaClass<T>::alloc_new(lua_State* L)
+template <typename... ARGS>
+T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 {
 	T* object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
+	new (object) T(std::forward<ARGS>(args)...);
 
 	LuaHelpers::push_class_table_container(L);
 	lua_pushlightuserdata(L, object);
@@ -704,9 +706,26 @@ int LuaClass<T>::push_metatable(lua_State* L)
 }
 
 template <typename T>
+constexpr inline bool has_simple_constructor(not_available)
+{
+	return false;
+}
+
+template <typename T>
+constexpr inline bool has_simple_constructor(std::enable_if_t<
+                                             std::is_same_v<T, decltype(T())>,
+                                             is_available>)
+{
+	return true;
+}
+
+template <typename T>
 void LuaClass<T>::convert_top_of_stack(lua_State* L)
 {
-	newindex_type_or_convert(L, type_name(), &T::push_new, nullptr);
+	if constexpr (has_simple_constructor<T>(is_available()))
+		newindex_type_or_convert(L, type_name(), &T::push_new, nullptr);
+	else
+		check_arg_userdata(L, -1, __typename<T>(), true);
 }
 
 template <typename T>

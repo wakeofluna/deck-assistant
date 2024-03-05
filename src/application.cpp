@@ -1,4 +1,5 @@
 #include "application.h"
+#include "deck_connector_container.h"
 #include "deck_module.h"
 #include <cassert>
 #include <cstring>
@@ -7,6 +8,7 @@
 #include <lua.hpp>
 #include <memory_resource>
 #include <string_view>
+#include <thread>
 
 namespace
 {
@@ -134,13 +136,63 @@ bool Application::init(std::vector<std::string_view>&& args)
 		lua_settop(L, oldtop);
 		return false;
 	}
-
 	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading script");
+
+	// Save a copy of the new global table
+	lua_getfenv(L, -1);
+	lua_setfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
+	// Now pop the function, it has served its purpose
+	lua_pop(L, 1);
+
 	return true;
 }
 
 int Application::run()
 {
+	m_clock = std::chrono::steady_clock::now();
+
+	while (true)
+	{
+		auto now   = std::chrono::steady_clock::now();
+		auto delta = now - m_clock;
+		m_clock    = now;
+
+		int const resettop = lua_gettop(L);
+		int delta_msec     = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+		m_deck_module->get_connector_container()->tick_all(L, delta_msec);
+		assert(lua_gettop(L) >= resettop && "Connector tick functions are not stack balanced");
+		lua_settop(L, resettop);
+
+		lua_getfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
+		lua_getfield(L, -1, "tick");
+		if (lua_type(L, -1) == LUA_TFUNCTION)
+		{
+			lua_pushinteger(L, delta_msec);
+			int result = lua_pcall(L, 1, 0, 0);
+			if (result != LUA_OK)
+			{
+				switch (result)
+				{
+					case LUA_ERRRUN:
+						std::cerr << "Runtime error while running tick()" << std::endl;
+						break;
+					case LUA_ERRMEM:
+						std::cerr << "Out of memory while running tick()" << std::endl;
+						break;
+					case LUA_ERRERR:
+						std::cerr << "Internal error while running tick()" << std::endl;
+						break;
+					default:
+						std::cerr << "Lua error #" << result << " while running tick()" << std::endl;
+						break;
+				}
+			}
+		}
+		lua_settop(L, resettop);
+
+		std::this_thread::sleep_until(m_clock + std::chrono::milliseconds(15));
+	}
+
 	return 0;
 }
 
