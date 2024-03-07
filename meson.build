@@ -8,7 +8,18 @@ project(
     default_options: ['cpp_std=c++20'],
 )
 
-if get_option('hidapi').allowed()
+feature_hidapi = get_option('hidapi')
+feature_luajit = get_option('luajit')
+feature_sdl = get_option('sdl')
+feature_sdl_image = get_option(
+    'sdl-image',
+).require(feature_sdl.allowed(), error_message: 'SDL_image requires SDL')
+feature_sdl_ttf = get_option(
+    'sdl-ttf',
+).require(feature_sdl.allowed(), error_message: 'SDL_ttf requires SDL')
+feature_test = get_option('test')
+
+if feature_hidapi.allowed()
     hidapi = dependency(
         'hidapi-hidraw',
         disabler: false,
@@ -19,21 +30,21 @@ if get_option('hidapi').allowed()
         hidapi = dependency(
             'hidapi-libusb',
             disabler: false,
-            required: get_option('hidapi'),
+            required: feature_hidapi,
         )
     endif
 else
     hidapi = dependency(
         'hidapi-hidraw',
         disabler: false,
-        required: get_option('hidapi'),
+        required: feature_hidapi,
     )
 endif
 
 lua = dependency(
     'luajit',
     version: '>=2.1.0',
-    required: get_option('luajit'),
+    required: feature_luajit,
 )
 
 if not lua.found()
@@ -47,36 +58,36 @@ endif
 sdl = dependency(
     'sdl2',
     disabler: false,
-    required: get_option('sdl'),
+    required: feature_sdl,
 )
 
 sdl_image = dependency(
     'SDL2_image',
     disabler: false,
-    required: get_option('sdl-image'),
+    required: feature_sdl_image,
 )
 
 sdl_ttf = dependency(
     'SDL2_ttf',
     disabler: false,
-    required: get_option('sdl-ttf'),
+    required: feature_sdl_ttf,
 )
 
 catch2 = dependency(
     'catch2-with-main',
     version: '>=3.0.0',
     disabler: true,
-    required: get_option('test'),
+    required: feature_test,
 )
 
 summary(
     {
-        'hidapi': get_option('hidapi'),
-        'luajit': get_option('luajit'),
-        'sdl': get_option('sdl'),
-        'sdl-image': get_option('sdl-image'),
-        'sdl-ttf': get_option('sdl-ttf'),
-        'test': get_option('test'),
+        'hidapi': feature_hidapi,
+        'luajit': feature_luajit,
+        'sdl': feature_sdl,
+        'sdl-image': feature_sdl_image,
+        'sdl-ttf': feature_sdl_ttf,
+        'test': feature_test,
     },
     section: 'Features',
 )
