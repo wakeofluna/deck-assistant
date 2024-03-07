@@ -1,5 +1,6 @@
 #include "application.h"
 #include "deck_connector_container.h"
+#include "deck_logger.h"
 #include "deck_module.h"
 #include <algorithm>
 #include <cassert>
@@ -23,10 +24,9 @@ struct ApplicationPrivate
 	std::pmr::memory_resource* mem_resource;
 	lua_State* state;
 	DeckModule* deck_module;
+	DeckLogger* deck_logger;
 	std::string deckfile_file_name;
 };
-
-#define L m_private->state
 
 namespace
 {
@@ -73,7 +73,17 @@ void* _lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 	}
 }
 
+int override_print(lua_State* L)
+{
+	DeckLogger* logger = reinterpret_cast<DeckLogger*>(lua_touserdata(L, lua_upvalueindex(1)));
+	logger->push_this(L);
+	lua_insert(L, 1);
+	return logger->call(L);
+};
+
 } // namespace
+
+#define L m_private->state
 
 Application::Application()
     : m_private(new ApplicationPrivate)
@@ -89,6 +99,14 @@ Application::Application()
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, DeckModule::LUA_GLOBAL_INDEX_NAME);
 	lua_setglobal(L, "deck");
+
+	m_private->deck_logger = DeckLogger::create_new(L);
+	lua_pushvalue(L, -1);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, LUA_REGISTRYINDEX, DeckLogger::LUA_GLOBAL_INDEX_NAME);
+	lua_setglobal(L, "logger");
+
+	install_function_overrides();
 }
 
 Application::Application(Application&& other)
@@ -123,7 +141,10 @@ bool Application::init(std::vector<std::string_view>&& args)
 
 	if (!LuaHelpers::load_script(L, m_private->deckfile_file_name.c_str()))
 	{
-		LuaHelpers::print_error_context(std::cerr);
+		std::stringstream buf;
+		LuaHelpers::print_error_context(buf);
+		m_private->deck_logger->log_message(L, DeckLogger::Level::Error, buf.str());
+
 		return false;
 	}
 
@@ -134,7 +155,10 @@ bool Application::init(std::vector<std::string_view>&& args)
 
 	if (!LuaHelpers::pcall(L, 0, 0))
 	{
-		LuaHelpers::print_error_context(std::cerr);
+		std::stringstream buf;
+		LuaHelpers::print_error_context(buf);
+		m_private->deck_logger->log_message(L, DeckLogger::Level::Error, buf.str());
+
 		return false;
 	}
 
@@ -170,7 +194,9 @@ int Application::run()
 			lua_pushinteger(L, delta_msec);
 			if (!LuaHelpers::pcall(L, 1, 0))
 			{
-				LuaHelpers::print_error_context(std::cerr);
+				std::stringstream buf;
+				LuaHelpers::print_error_context(buf);
+				m_private->deck_logger->log_message(L, DeckLogger::Level::Error, buf.str());
 				break;
 			}
 		}
@@ -182,4 +208,11 @@ int Application::run()
 	m_private->deck_module->shutdown(L);
 
 	return m_private->deck_module->get_exit_code();
+}
+
+void Application::install_function_overrides()
+{
+	lua_pushlightuserdata(L, m_private->deck_logger);
+	lua_pushcclosure(L, &override_print, 1);
+	lua_setglobal(L, "print");
 }

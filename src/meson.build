@@ -7,6 +7,7 @@ sources = files(
     'deck_connector_container.cpp',
     'deck_font.cpp',
     'deck_font_container.cpp',
+    'deck_logger.cpp',
     'deck_module.cpp',
     'deck_text.cpp',
     'i_connector.cpp',

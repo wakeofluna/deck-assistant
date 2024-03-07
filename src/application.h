@@ -22,6 +22,9 @@ public:
 	int run();
 
 private:
+	void install_function_overrides();
+
+private:
 	ApplicationPrivate* m_private;
 };
 

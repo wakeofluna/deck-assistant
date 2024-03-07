@@ -475,7 +475,7 @@ void LuaHelpers::print_error_context(std::ostream& stream, ErrorContext const& c
 	stream << std::endl
 	       << context.message << std::endl;
 
-	if (context.stack.empty())
+	if (context.stack.size() <= 1)
 		return;
 
 	stream << "=== Callstack ===" << std::endl;
