@@ -597,7 +597,7 @@ template <typename T>
 int __call(lua_State* L)
 {
 	T* object = reinterpret_cast<T*>(lua_touserdata(L, 1));
-	return object->operator()(L);
+	return object->call(L);
 }
 
 template <typename T>
@@ -608,7 +608,7 @@ constexpr inline bool register_call(lua_State* L, not_available)
 
 template <typename T>
 inline bool register_call(lua_State* L, std::enable_if_t<
-                                            std::is_same_v<int, decltype(TPTR->operator()(LPTR))>,
+                                            std::is_same_v<int, decltype(TPTR->call(LPTR))>,
                                             is_available>)
 {
 	lua_pushcfunction(L, &__call<T>);

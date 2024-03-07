@@ -8,19 +8,19 @@
 class DeckConnector : public LuaClass<DeckConnector>
 {
 public:
+	static char const* LUA_TYPENAME;
+
 	DeckConnector(std::unique_ptr<IConnector>&& connector);
 	~DeckConnector();
 
 	inline IConnector const* get_connector() const { return m_connector.get(); }
 	inline IConnector* get_connector() { return m_connector.get(); }
 
-	static char const* LUA_TYPENAME;
+	void post_init(lua_State* L);
+	void tick(lua_State* L, int delta_msec);
+	void shutdown(lua_State* L);
 
 	void init_instance_table(lua_State* L);
-	void post_init(lua_State* L);
-
-	void tick(lua_State* L, int delta_msec);
-
 	int index(lua_State* L) const;
 	int newindex(lua_State* L);
 	int to_string(lua_State* L) const;

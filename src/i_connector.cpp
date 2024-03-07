@@ -11,3 +11,7 @@ void IConnector::init_instance_table(lua_State* L)
 void IConnector::post_init(lua_State* L)
 {
 }
+
+void IConnector::shutdown(lua_State* L)
+{
+}

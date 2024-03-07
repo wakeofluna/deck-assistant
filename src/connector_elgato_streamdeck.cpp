@@ -201,6 +201,15 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 	}
 }
 
+void ConnectorElgatoStreamDeck::shutdown(lua_State* L)
+{
+	if (m_hid_device)
+	{
+		hid_close(m_hid_device);
+		m_hid_device = nullptr;
+	}
+}
+
 void ConnectorElgatoStreamDeck::init_instance_table(lua_State* L)
 {
 	lua_pushlightuserdata(L, this);

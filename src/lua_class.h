@@ -1,48 +1,10 @@
 #ifndef DECK_ASSISTANT_LUA_CLASS_H_
 #define DECK_ASSISTANT_LUA_CLASS_H_
 
-#include <lua.hpp>
+#include "lua_helpers.h"
 #include <new>
 #include <string_view>
 #include <utility>
-
-// Indices in class metatable
-constexpr lua_Integer IDX_META_CLASSTABLE = 1;
-
-struct LuaHelpers
-{
-	static int absidx(lua_State* L, int idx);
-
-	static void push_standard_weak_key_metatable(lua_State* L);
-	static void push_standard_weak_value_metatable(lua_State* L);
-
-	static void push_class_table_container(lua_State* L);
-	static void push_instance_table_container(lua_State* L);
-
-	static int push_class_table_of_top_value(lua_State* L);
-	static int push_instance_table_of_top_value(lua_State* L);
-	static void push_class_table(lua_State* L, int idx);
-	static void push_instance_table(lua_State* L, int idx);
-	static void index_cache_in_class_table(lua_State* L);
-	static void index_cache_in_instance_table(lua_State* L);
-	static void* check_arg_userdata(lua_State* L, int idx, char const* tname, bool throw_error = true);
-	static std::string_view check_arg_string(lua_State* L, int idx, bool allow_empty = false);
-	static std::string_view check_arg_string_or_none(lua_State* L, int idx);
-	static lua_Integer check_arg_int(lua_State* L, int idx);
-	static std::string_view push_converted_to_string(lua_State* L, int idx);
-
-	using TypeCreateFunction = lua_CFunction;
-	static void newindex_type_or_convert(lua_State* L, char const* tname, TypeCreateFunction type_create, char const* text_field);
-	static void copy_table_fields(lua_State* L);
-
-	static void debug_dump_stack(lua_State* L, char const* description = nullptr);
-};
-
-class LuaClassBase : protected LuaHelpers
-{
-public:
-	void push_this(lua_State* L) const;
-};
 
 /**
  * Wrap a class with Lua compatible meta functions
@@ -70,7 +32,7 @@ public:
  *              Or convenience functions:
  *                int newindex(lua_State *L, lua_Integer key)
  *                int newindex(lua_State *L, std::string_view const& key)
- * __call     : int operator() (lua_State *L)
+ * __call     : int call(lua_State *L)
  *
  * Additionally the class supports two tables:
  * + Class table: shared between all instances, for functions and default values
@@ -83,7 +45,7 @@ public:
  * @tparam T Class to curiously recurringly wrap
  */
 template <typename T>
-class LuaClass : public LuaClassBase
+class LuaClass : public LuaHelpers
 {
 public:
 	static char const* type_name();

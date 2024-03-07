@@ -97,7 +97,7 @@ DeckConnectorContainer* DeckConnectorContainer::get_global_instance(lua_State* L
 	return container;
 }
 
-void DeckConnectorContainer::tick_all(lua_State* L, int delta_msec) const
+void DeckConnectorContainer::for_each(lua_State* L, std::function<void(lua_State* L, DeckConnector*)> const& visitor) const
 {
 	int const resettop = lua_gettop(L);
 
@@ -112,9 +112,9 @@ void DeckConnectorContainer::tick_all(lua_State* L, int delta_msec) const
 
 		DeckConnector* connector = DeckConnector::from_stack(L, -1, false);
 		if (connector)
-			connector->tick(L, delta_msec);
+			visitor(L, connector);
 
-		assert(lua_gettop(L) >= checktop && "DeckConnector tick function was not stack balanced");
+		assert(lua_gettop(L) >= checktop && "DeckConnector visitor function was not stack balanced");
 		lua_settop(L, checktop - 1);
 	}
 

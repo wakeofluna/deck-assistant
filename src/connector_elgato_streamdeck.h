@@ -19,6 +19,7 @@ public:
 	char const* get_subtype_name() const override;
 
 	void tick(lua_State* L, int delta_msec) override;
+	void shutdown(lua_State* L) override;
 
 	void init_instance_table(lua_State* L) override;
 	int index(lua_State* L) const override;

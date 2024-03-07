@@ -10,7 +10,7 @@ sources = files(
     'deck_module.cpp',
     'deck_text.cpp',
     'i_connector.cpp',
-    'lua_class.cpp',
+    'lua_helpers.cpp',
 )
 
 slib = static_library(

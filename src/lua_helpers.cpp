@@ -1,6 +1,8 @@
-#include "lua_class.h"
+#include "lua_helpers.h"
 #include <cassert>
+#include <fstream>
 #include <iostream>
+#include <vector>
 
 namespace
 {
@@ -10,12 +12,44 @@ constexpr char const k_instance_tables_key[]      = "deck-assistant.InstanceTabl
 constexpr char const k_weak_key_metatable_key[]   = "deck-assistant.WeakKeyMetatable";
 constexpr char const k_weak_value_metatable_key[] = "deck-assistant.WeakValueMetatable";
 
+LuaHelpers::ErrorContext g_last_error_context;
+
+int _lua_error_handler(lua_State* L)
+{
+	g_last_error_context.message = lua_tostring(L, 1);
+
+	lua_Debug ar;
+
+	int level = 1;
+	while (lua_getstack(L, level, &ar) == 1)
+	{
+		auto& frame = g_last_error_context.stack.emplace_back();
+
+		lua_getinfo(L, "nSl", &ar);
+		frame.source_name   = ar.short_src;
+		frame.function_name = ar.name ? ar.name : ar.namewhat;
+		frame.line          = ar.currentline;
+		frame.line_defined  = ar.linedefined;
+
+		++level;
+	}
+
+	return 0;
+}
+
 } // namespace
 
-void LuaClassBase::push_this(lua_State* L) const
+void LuaHelpers::ErrorContext::reset()
+{
+	call_result = LUA_OK;
+	message.clear();
+	stack.clear();
+}
+
+void LuaHelpers::push_this(lua_State* L) const
 {
 	lua_getfield(L, LUA_REGISTRYINDEX, k_instance_list_key);
-	lua_pushlightuserdata(L, const_cast<LuaClassBase*>(this));
+	lua_pushlightuserdata(L, const_cast<LuaHelpers*>(this));
 	lua_rawget(L, -2);
 	lua_replace(L, -2);
 }
@@ -218,26 +252,66 @@ lua_Integer LuaHelpers::check_arg_int(lua_State* L, int idx)
 
 std::string_view LuaHelpers::push_converted_to_string(lua_State* L, int idx)
 {
-	int const oldtop = lua_gettop(L);
 	idx              = absidx(L, idx);
+	int const oldtop = lua_gettop(L);
+	int const vtype  = lua_type(L, idx);
 
-	if (lua_type(L, idx) == LUA_TSTRING)
+	lua_checkstack(L, oldtop + 5);
+
+	switch (vtype)
 	{
-		lua_pushvalue(L, idx);
-	}
-	else if (lua_type(L, idx) == LUA_TNUMBER)
-	{
-		lua_pushvalue(L, idx);
-		lua_tolstring(L, -1, nullptr);
-	}
-	else if (luaL_callmeta(L, idx, "__tostring"))
-	{
-	}
-	else
-	{
-		lua_getglobal(L, "tostring");
-		lua_pushvalue(L, idx);
-		lua_pcall(L, 1, 1, 0);
+		case LUA_TNONE:
+			lua_pushliteral(L, "none");
+			break;
+		case LUA_TNIL:
+			lua_pushliteral(L, "nil");
+			break;
+		case LUA_TBOOLEAN:
+			if (lua_toboolean(L, idx))
+				lua_pushliteral(L, "true");
+			else
+				lua_pushliteral(L, "false");
+			break;
+		case LUA_TNUMBER:
+			lua_pushvalue(L, idx);
+			lua_tolstring(L, -1, nullptr);
+			break;
+		case LUA_TSTRING:
+			lua_pushvalue(L, idx);
+			break;
+		case LUA_TUSERDATA:
+		case LUA_TTABLE:
+			if (lua_getmetatable(L, idx) != 0)
+			{
+				lua_getfield(L, -1, "__tostring");
+				if (lua_type(L, -1) == LUA_TFUNCTION)
+				{
+					lua_pushvalue(L, idx);
+					if (lua_pcall(L, 1, 1, 0) == LUA_OK)
+					{
+						if (lua_type(L, -1) != LUA_TSTRING)
+							push_converted_to_string(L, -1);
+
+						lua_replace(L, oldtop + 1);
+						lua_settop(L, oldtop + 1);
+						break;
+					}
+				}
+				lua_getfield(L, -1, "__name");
+				if (lua_type(L, -1) == LUA_TSTRING)
+				{
+					lua_pushfstring(L, "%s: %p", lua_tostring(L, -1), lua_topointer(L, idx));
+					lua_replace(L, oldtop + 1);
+					lua_settop(L, oldtop + 1);
+					break;
+				}
+				// Clean up all failures
+				lua_settop(L, oldtop);
+			}
+			// fallthrough
+		default:
+			lua_pushfstring(L, "%s: %p", lua_typename(L, vtype), lua_topointer(L, idx));
+			break;
 	}
 
 	assert(lua_gettop(L) == oldtop + 1 && "push_converted_to_string() failed to produce a single value");
@@ -290,6 +364,138 @@ void LuaHelpers::copy_table_fields(lua_State* L)
 
 	// Pop the original table, leaving only the target
 	lua_pop(L, 1);
+}
+
+bool LuaHelpers::load_script(lua_State* L, char const* file_name)
+{
+	int const top = lua_gettop(L);
+
+	g_last_error_context.reset();
+	g_last_error_context.call_result = luaL_loadfile(L, file_name);
+
+	if (g_last_error_context.call_result != LUA_OK)
+	{
+		if (lua_gettop(L) > top)
+			g_last_error_context.message = lua_tostring(L, -1);
+
+		lua_settop(L, top);
+		return false;
+	}
+
+	assign_new_env_table(L, -1, file_name);
+	return true;
+}
+
+bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script)
+{
+	int const top = lua_gettop(L);
+
+	g_last_error_context.reset();
+	g_last_error_context.call_result = luaL_loadbuffer(L, script.data(), script.size(), chunk_name);
+
+	if (g_last_error_context.call_result != LUA_OK)
+	{
+		if (lua_gettop(L) > top)
+			g_last_error_context.message = lua_tostring(L, -1);
+
+		lua_settop(L, top);
+		return false;
+	}
+
+	assign_new_env_table(L, -1, chunk_name);
+	return true;
+}
+
+void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_name)
+{
+	idx = absidx(L, idx);
+	assert(lua_isfunction(L, idx));
+
+	// Create a new ENV table for the new chunk
+	lua_createtable(L, 0, 0);
+	// Create a metatable that indexes into the original ENV table
+	lua_createtable(L, 0, 3);
+	lua_pushboolean(L, true);
+	lua_setfield(L, -2, "__metatable");
+	lua_getfenv(L, idx);
+	lua_setfield(L, -2, "__index");
+	lua_pushstring(L, chunk_name);
+	lua_setfield(L, -2, "__name");
+	// Set the metatable on the new ENV table
+	lua_setmetatable(L, -2);
+	// Assign the new ENV table to the function
+	lua_setfenv(L, -2);
+}
+
+bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults)
+{
+	int const funcidx = lua_gettop(L) - nargs;
+
+	lua_pushcfunction(L, _lua_error_handler);
+	lua_insert(L, funcidx);
+
+	g_last_error_context.reset();
+	g_last_error_context.call_result = lua_pcall(L, nargs, nresults, funcidx);
+
+	lua_remove(L, funcidx);
+	lua_settop(L, funcidx - 1);
+
+	return g_last_error_context.call_result == LUA_OK;
+}
+
+LuaHelpers::ErrorContext const& LuaHelpers::get_last_error_context()
+{
+	return g_last_error_context;
+}
+
+void LuaHelpers::print_error_context(std::ostream& stream, ErrorContext const& context)
+{
+	switch (context.call_result)
+	{
+		case LUA_ERRRUN:
+			stream << "Runtime error";
+			break;
+		case LUA_ERRFILE:
+			stream << "Unable to open/read file";
+			break;
+		case LUA_ERRSYNTAX:
+			stream << "Syntax error";
+			break;
+		case LUA_ERRMEM:
+			stream << "Out of memory";
+			break;
+		case LUA_ERRERR:
+			stream << "Internal error";
+			break;
+		default:
+			stream << "Lua error #" << context.call_result;
+			break;
+	}
+
+	stream << std::endl
+	       << context.message << std::endl;
+
+	if (context.stack.empty())
+		return;
+
+	stream << "=== Callstack ===" << std::endl;
+	for (size_t i = 0; i < context.stack.size(); ++i)
+	{
+		auto const& frame = context.stack[i];
+
+		stream << '#' << i << ' ';
+		if (frame.line == -1)
+			stream << frame.source_name;
+		else
+			stream << '[' << frame.source_name << ':' << frame.line << ']';
+
+		if (i == 0 && !frame.function_name.empty())
+			stream << " in function " << frame.function_name << "()";
+		else if (i > 0 && !context.stack[i - 1].function_name.empty())
+			stream << ' ' << context.stack[i - 1].function_name << "()";
+
+		stream << std::endl;
+	}
 }
 
 void LuaHelpers::debug_dump_stack(lua_State* L, char const* description)

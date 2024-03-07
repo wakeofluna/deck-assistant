@@ -2,7 +2,10 @@
 #define DECK_ASSISTANT_DECK_CONNECTOR_CONTAINER_H
 
 #include "lua_class.h"
+#include <functional>
 #include <string>
+
+class DeckConnector;
 
 class DeckConnectorContainer : public LuaClass<DeckConnectorContainer>
 {
@@ -12,11 +15,10 @@ public:
 	static void push_global_instance(lua_State* L);
 	static DeckConnectorContainer* get_global_instance(lua_State* L);
 
-	void tick_all(lua_State* L, int delta_msec) const;
+	void for_each(lua_State* L, std::function<void(lua_State* L, DeckConnector*)> const& visitor) const;
 
 	static void init_class_table(lua_State* L);
 	void init_instance_table(lua_State* L);
-
 	int newindex(lua_State* L);
 
 private:

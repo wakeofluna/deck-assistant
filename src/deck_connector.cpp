@@ -33,11 +33,6 @@ DeckConnector::DeckConnector(std::unique_ptr<IConnector>&& connector)
 
 DeckConnector::~DeckConnector() = default;
 
-void DeckConnector::init_instance_table(lua_State* L)
-{
-	m_connector->init_instance_table(L);
-}
-
 void DeckConnector::post_init(lua_State* L)
 {
 	run_connector_function(L, this, &IConnector::post_init);
@@ -46,6 +41,16 @@ void DeckConnector::post_init(lua_State* L)
 void DeckConnector::tick(lua_State* L, int delta_msec)
 {
 	run_connector_function(L, this, &IConnector::tick, delta_msec);
+}
+
+void DeckConnector::shutdown(lua_State* L)
+{
+	run_connector_function(L, this, &IConnector::shutdown);
+}
+
+void DeckConnector::init_instance_table(lua_State* L)
+{
+	m_connector->init_instance_table(L);
 }
 
 int DeckConnector::index(lua_State* L) const
