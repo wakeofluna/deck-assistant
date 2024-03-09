@@ -127,27 +127,12 @@ void LuaHelpers::push_instance_table_container(lua_State* L)
 	}
 }
 
-int LuaHelpers::push_class_table_of_top_value(lua_State* L)
-{
-	if (lua_type(L, -1) != LUA_TUSERDATA)
-		luaL_checkudata(L, -1, "userdata");
-	push_class_table(L, -1);
-	return 1;
-}
-
-int LuaHelpers::push_instance_table_of_top_value(lua_State* L)
-{
-	if (lua_type(L, -1) != LUA_TUSERDATA)
-		luaL_checkudata(L, -1, "userdata");
-	push_instance_table(L, -1);
-	return 1;
-}
-
 void LuaHelpers::push_class_table(lua_State* L, int idx)
 {
 	lua_getmetatable(L, idx);
 	lua_rawgeti(L, -1, IDX_META_CLASSTABLE);
-	assert(lua_type(L, -1) == LUA_TTABLE && "class has no class table!");
+	if (lua_type(L, -1) != LUA_TTABLE)
+		luaL_error(L, "Internal error: class has no class table");
 	lua_replace(L, -2);
 }
 
@@ -158,26 +143,9 @@ void LuaHelpers::push_instance_table(lua_State* L, int idx)
 	lua_getfield(L, LUA_REGISTRYINDEX, k_instance_tables_key);
 	lua_pushvalue(L, idx);
 	lua_rawget(L, -2);
-	assert(lua_type(L, -1) == LUA_TTABLE && "class has no instance table!");
+	if (lua_type(L, -1) != LUA_TTABLE)
+		luaL_error(L, "Internal error: class has no instance table");
 	lua_replace(L, -2);
-}
-
-void LuaHelpers::index_cache_in_class_table(lua_State* L)
-{
-	push_class_table(L, 1);
-	lua_pushvalue(L, 2);
-	lua_pushvalue(L, -3);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
-}
-
-void LuaHelpers::index_cache_in_instance_table(lua_State* L)
-{
-	push_instance_table(L, 1);
-	lua_pushvalue(L, 2);
-	lua_pushvalue(L, -3);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
 }
 
 void* LuaHelpers::check_arg_userdata(lua_State* L, int idx, char const* tname, bool throw_error)
@@ -241,13 +209,7 @@ lua_Integer LuaHelpers::check_arg_int(lua_State* L, int idx)
 {
 	idx = absidx(L, idx);
 	luaL_checktype(L, idx, LUA_TNUMBER);
-
-	int isnum;
-	lua_Integer value = lua_tointegerx(L, idx, &isnum);
-	if (!isnum)
-		luaL_typerror(L, idx, "integer");
-
-	return value;
+	return lua_tointeger(L, idx);
 }
 
 std::string_view LuaHelpers::push_converted_to_string(lua_State* L, int idx)
@@ -322,7 +284,16 @@ std::string_view LuaHelpers::push_converted_to_string(lua_State* L, int idx)
 	return std::string_view(str, len);
 }
 
-void LuaHelpers::newindex_type_or_convert(lua_State* L, char const* tname, TypeCreateFunction type_create, char const* text_field)
+void LuaHelpers::newindex_store_in_instance_table(lua_State* L)
+{
+	push_instance_table(L, 1);
+	lua_pushvalue(L, 2);
+	lua_pushvalue(L, -3);
+	lua_rawset(L, -3);
+	lua_pop(L, 1);
+}
+
+void LuaHelpers::newindex_type_or_convert(lua_State* L, char const* tname, lua_CFunction type_create, char const* text_field)
 {
 	if (!check_arg_userdata(L, -1, tname, false))
 	{
@@ -438,9 +409,17 @@ bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults)
 	g_last_error_context.call_result = lua_pcall(L, nargs, nresults, funcidx);
 
 	lua_remove(L, funcidx);
-	lua_settop(L, funcidx - 1);
 
-	return g_last_error_context.call_result == LUA_OK;
+	if (g_last_error_context.call_result == LUA_OK)
+	{
+		lua_settop(L, funcidx - 1 + nresults);
+		return true;
+	}
+	else
+	{
+		lua_settop(L, funcidx - 1);
+		return false;
+	}
 }
 
 LuaHelpers::ErrorContext const& LuaHelpers::get_last_error_context()
@@ -498,12 +477,12 @@ void LuaHelpers::print_error_context(std::ostream& stream, ErrorContext const& c
 	}
 }
 
-void LuaHelpers::debug_dump_stack(lua_State* L, char const* description)
+void LuaHelpers::debug_dump_stack(std::ostream& stream, lua_State* L, char const* description)
 {
-	std::cout << "===== Lua stack";
+	stream << "===== Lua stack";
 	if (description)
-		std::cout << " - " << description;
-	std::cout << " =====" << std::endl;
+		stream << " - " << description;
+	stream << " =====" << std::endl;
 
 	for (int i = 1;; ++i)
 	{
@@ -513,7 +492,7 @@ void LuaHelpers::debug_dump_stack(lua_State* L, char const* description)
 			break;
 
 		std::string_view value_str = push_converted_to_string(L, i);
-		std::cout << i << ": " << value_str << std::endl;
+		stream << i << ": " << value_str << std::endl;
 		lua_pop(L, 1);
 	}
 }

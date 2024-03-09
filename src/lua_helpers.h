@@ -39,20 +39,18 @@ struct LuaHelpers
 	static void push_class_table_container(lua_State* L);
 	static void push_instance_table_container(lua_State* L);
 
-	static int push_class_table_of_top_value(lua_State* L);
-	static int push_instance_table_of_top_value(lua_State* L);
 	static void push_class_table(lua_State* L, int idx);
 	static void push_instance_table(lua_State* L, int idx);
-	static void index_cache_in_class_table(lua_State* L);
-	static void index_cache_in_instance_table(lua_State* L);
+
 	static void* check_arg_userdata(lua_State* L, int idx, char const* tname, bool throw_error = true);
 	static std::string_view check_arg_string(lua_State* L, int idx, bool allow_empty = false);
 	static std::string_view check_arg_string_or_none(lua_State* L, int idx);
 	static lua_Integer check_arg_int(lua_State* L, int idx);
+
 	static std::string_view push_converted_to_string(lua_State* L, int idx);
 
-	using TypeCreateFunction = lua_CFunction;
-	static void newindex_type_or_convert(lua_State* L, char const* tname, TypeCreateFunction type_create, char const* text_field);
+	static void newindex_store_in_instance_table(lua_State* L);
+	static void newindex_type_or_convert(lua_State* L, char const* tname, lua_CFunction type_create, char const* text_field);
 	static void copy_table_fields(lua_State* L);
 
 	static bool load_script(lua_State* L, char const* file_name);
@@ -64,7 +62,7 @@ struct LuaHelpers
 	static void print_error_context(std::ostream& stream, ErrorContext const& context);
 	static inline void print_error_context(std::ostream& stream) { print_error_context(stream, get_last_error_context()); }
 
-	static void debug_dump_stack(lua_State* L, char const* description = nullptr);
+	static void debug_dump_stack(std::ostream& stream, lua_State* L, char const* description = nullptr);
 };
 
 #endif // DECK_ASSISTANT_LUA_HELPERS_H

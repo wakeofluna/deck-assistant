@@ -40,7 +40,7 @@ int DeckFontContainer::newindex(lua_State* L)
 	from_stack(L, 1);
 	check_arg_string(L, 2);
 	DeckFont::convert_top_of_stack(L);
-	index_cache_in_instance_table(L);
+	newindex_store_in_instance_table(L);
 	return 0;
 }
 

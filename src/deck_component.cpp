@@ -40,7 +40,7 @@ int DeckComponent::newindex(lua_State* L, lua_Integer key)
 			break;
 	}
 
-	index_cache_in_instance_table(L);
+	newindex_store_in_instance_table(L);
 	return 0;
 }
 
@@ -49,6 +49,6 @@ int DeckComponent::newindex(lua_State* L, std::string_view const& key)
 	if (key == "text")
 		DeckText::convert_top_of_stack(L);
 
-	index_cache_in_instance_table(L);
+	newindex_store_in_instance_table(L);
 	return 0;
 }

@@ -1,0 +1,8 @@
+ignore_errors = unused,unused
+include = */src/*
+exclude = */src/*test.cpp
+omit_lines = assert
+genhtml_dark_mode = 1
+geninfo_external = 0
+function_coverage = 1
+branch_coverage = 1

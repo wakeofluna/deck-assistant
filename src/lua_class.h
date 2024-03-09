@@ -63,10 +63,6 @@ public:
 		create_new(L, std::forward<ARGS>(args)...);
 		return 1;
 	}
-
-protected:
-	template <int (T::*X)(lua_State*)>
-	static int wrapped_member(lua_State* L);
 };
 
 #endif // DECK_ASSISTANT_LUA_CLASS_H_

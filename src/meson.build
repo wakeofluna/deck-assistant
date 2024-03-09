@@ -14,6 +14,10 @@ sources = files(
     'lua_helpers.cpp',
 )
 
+test_sources = files(
+    'lua_helpers_test.cpp',
+)
+
 slib = static_library(
     'deck-assistant',
     sources: sources,
@@ -27,3 +31,13 @@ executable(
     link_with: [slib],
     cpp_args: ['-fno-exceptions'],
 )
+
+tests = executable(
+    'testdeck',
+    sources: test_sources,
+    link_with: [slib],
+    dependencies: [catch2, lua],
+    cpp_args: buildflags,
+)
+
+test('testdeck', tests)

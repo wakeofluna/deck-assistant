@@ -31,7 +31,7 @@ int DeckCard::newindex(lua_State* L, lua_Integer key)
 		lua_pop(L, 2);
 	}
 
-	index_cache_in_instance_table(L);
+	newindex_store_in_instance_table(L);
 	return 0;
 }
 
@@ -40,6 +40,6 @@ int DeckCard::newindex(lua_State* L, std::string_view const& key)
 	if (key == "root")
 		DeckComponent::convert_top_of_stack(L);
 
-	index_cache_in_instance_table(L);
+	newindex_store_in_instance_table(L);
 	return 0;
 }

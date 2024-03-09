@@ -107,7 +107,7 @@ int DeckLogger::newindex(lua_State* L)
 		if (key == "on_message")
 		{
 			luaL_argcheck(L, lua_type(L, 3) == LUA_TFUNCTION, 3, "must be a function");
-			index_cache_in_instance_table(L);
+			newindex_store_in_instance_table(L);
 			return 0;
 		}
 	}

@@ -728,12 +728,4 @@ void LuaClass<T>::convert_top_of_stack(lua_State* L)
 		check_arg_userdata(L, -1, __typename<T>(), true);
 }
 
-template <typename T>
-template <int (T::*X)(lua_State*)>
-int LuaClass<T>::wrapped_member(lua_State* L)
-{
-	T* object = LuaClass<T>::from_stack(L, 1, true);
-	return (object->*X)(L);
-}
-
 #endif // DECK_ASSISTANT_LUA_CLASS_HPP_

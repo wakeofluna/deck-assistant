@@ -57,7 +57,7 @@ void convert_button_table(lua_State* L, int idx)
 	std::vector<bool> buttons;
 	buttons.reserve(32);
 
-	for (lua_Integer i = 1; i == buttons.size() + 1; ++i)
+	for (std::size_t i = 1; i == buttons.size() + 1; ++i)
 	{
 		lua_rawgeti(L, idx, i);
 		if (lua_isboolean(L, -1))
