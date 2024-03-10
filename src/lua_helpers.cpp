@@ -95,7 +95,7 @@ void LuaHelpers::push_standard_weak_value_metatable(lua_State* L)
 	}
 }
 
-void LuaHelpers::push_class_table_container(lua_State* L)
+void LuaHelpers::push_userdata_container(lua_State* L)
 {
 	lua_getfield(L, LUA_REGISTRYINDEX, k_instance_list_key);
 	if (lua_type(L, -1) != LUA_TTABLE)

@@ -36,7 +36,7 @@ struct LuaHelpers
 	static void push_standard_weak_key_metatable(lua_State* L);
 	static void push_standard_weak_value_metatable(lua_State* L);
 
-	static void push_class_table_container(lua_State* L);
+	static void push_userdata_container(lua_State* L);
 	static void push_instance_table_container(lua_State* L);
 
 	static void push_class_table(lua_State* L, int idx);

@@ -57,7 +57,7 @@ constexpr inline bool has_finalize(not_available)
 }
 
 template <typename T>
-constexpr inline bool has_finalize(std::enable_if_t<std::is_same_v<bool, decltype(TPTR->finalize(LPTR))>,
+constexpr inline bool has_finalize(std::enable_if_t<std::is_same_v<void, decltype(TPTR->finalize(LPTR))>,
                                                     is_available>)
 {
 	return true;
@@ -68,14 +68,9 @@ int __gc(lua_State* L)
 {
 	T* object = reinterpret_cast<T*>(lua_touserdata(L, 1));
 	if constexpr (has_finalize<T>(is_available()))
-	{
-		if (object->finalize())
-			object->~T();
-	}
-	else
-	{
-		object->~T();
-	}
+		object->finalize(L);
+
+	object->~T();
 	return 0;
 }
 
@@ -138,32 +133,6 @@ inline bool __init_instance_table(lua_State* L, T* obj)
 	obj->init_instance_table(L);
 	(void)oldtop;
 	assert(lua_gettop(L) == oldtop);
-	return true;
-}
-
-// *************************** LEN *************************
-
-template <typename T>
-int __len(lua_State* L)
-{
-	T const* object = reinterpret_cast<T*>(lua_touserdata(L, -1));
-	lua_pushinteger(L, object->length());
-	return 1;
-}
-
-template <typename>
-constexpr inline bool register_len(lua_State* L, not_available)
-{
-	return false;
-}
-
-template <typename T>
-inline bool register_len(lua_State* L, std::enable_if_t<
-                                           std::is_same_v<int, decltype(TCPTR->length())>,
-                                           is_available>)
-{
-	lua_pushcfunction(L, &__len<T>);
-	lua_setfield(L, -2, "__len");
 	return true;
 }
 
@@ -624,7 +593,7 @@ T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 	T* object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
 	new (object) T(std::forward<ARGS>(args)...);
 
-	LuaHelpers::push_class_table_container(L);
+	LuaHelpers::push_userdata_container(L);
 	lua_pushlightuserdata(L, object);
 	lua_pushvalue(L, -3);
 	lua_rawset(L, -3);
@@ -692,7 +661,6 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		}
 
 		register_gc<T>(L);
-		register_len<T>(L, is_available());
 		register_tostring<T>(L, is_available());
 		register_eq<T>(L, is_available());
 		register_lt<T>(L, is_available());
@@ -723,7 +691,7 @@ template <typename T>
 void LuaClass<T>::convert_top_of_stack(lua_State* L)
 {
 	if constexpr (has_simple_constructor<T>(is_available()))
-		newindex_type_or_convert(L, type_name(), &T::push_new, nullptr);
+		newindex_type_or_convert(L, __typename<T>(), &T::push_new, nullptr);
 	else
 		check_arg_userdata(L, -1, __typename<T>(), true);
 }

@@ -15,7 +15,9 @@ sources = files(
 )
 
 test_sources = files(
+    'lua_class_test.cpp',
     'lua_helpers_test.cpp',
+    'test_utils_test.cpp',
 )
 
 slib = static_library(

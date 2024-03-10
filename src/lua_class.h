@@ -11,10 +11,11 @@
  *
  * Implement the following public functions in your class to enable metafunctions:
  *
- * __gc       : bool finalize(lua_State *L)
- *                chance to cancel collection by creating a new reference
- *                return true to call C++ destructor or false to bypass destructor
- * __len      : int length() const
+ * __gc       : void finalize(lua_State *L)
+ *                callback called before destruction
+ *                NOTE: you can resurrect the instance by storing it somewhere
+ *                      but lua5.1 still considers the object finalized so
+ *                      the finalizer will not be called again after this.
  * __tostring : For full control:
  *                int to_string(lua_State *L) const
  *              Or convenience function:
