@@ -148,30 +148,6 @@ void LuaHelpers::push_instance_table(lua_State* L, int idx)
 	lua_replace(L, -2);
 }
 
-void* LuaHelpers::check_arg_userdata(lua_State* L, int idx, char const* tname, bool throw_error)
-{
-	int equal = 0;
-
-	void* p = lua_touserdata(L, idx);
-	if (p != nullptr && lua_getmetatable(L, idx))
-	{
-		lua_getfield(L, LUA_REGISTRYINDEX, tname);
-		equal = lua_rawequal(L, -1, -2);
-		lua_pop(L, 2);
-	}
-
-	if (equal)
-		return p;
-
-	if (throw_error)
-	{
-		idx = absidx(L, idx);
-		luaL_typerror(L, idx, tname);
-	}
-
-	return nullptr;
-}
-
 std::string_view LuaHelpers::check_arg_string(lua_State* L, int idx, bool allow_empty)
 {
 	idx = absidx(L, idx);
@@ -291,33 +267,6 @@ void LuaHelpers::newindex_store_in_instance_table(lua_State* L)
 	lua_pushvalue(L, -3);
 	lua_rawset(L, -3);
 	lua_pop(L, 1);
-}
-
-void LuaHelpers::newindex_type_or_convert(lua_State* L, char const* tname, lua_CFunction type_create, char const* text_field)
-{
-	if (!check_arg_userdata(L, -1, tname, false))
-	{
-		int const vtype = lua_type(L, -1);
-
-		assert(type_create);
-		(*type_create)(L);
-
-		lua_insert(L, -2);
-
-		if (text_field && vtype == LUA_TSTRING)
-		{
-			lua_setfield(L, -2, text_field);
-		}
-		else if (vtype == LUA_TTABLE)
-		{
-			copy_table_fields(L);
-		}
-		else
-		{
-			lua_remove(L, -2);
-			luaL_typerror(L, absidx(L, -1), tname);
-		}
-	}
 }
 
 void LuaHelpers::copy_table_fields(lua_State* L)
@@ -484,13 +433,8 @@ void LuaHelpers::debug_dump_stack(std::ostream& stream, lua_State* L, char const
 		stream << " - " << description;
 	stream << " =====" << std::endl;
 
-	for (int i = 1;; ++i)
+	for (int i = 1; lua_type(L, i) != LUA_TNONE; ++i)
 	{
-		int const vtype = lua_type(L, i);
-
-		if (vtype == LUA_TNONE)
-			break;
-
 		std::string_view value_str = push_converted_to_string(L, i);
 		stream << i << ": " << value_str << std::endl;
 		lua_pop(L, 1);

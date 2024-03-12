@@ -17,9 +17,9 @@
  *                      but lua5.1 still considers the object finalized so
  *                      the finalizer will not be called again after this.
  * __tostring : For full control:
- *                int to_string(lua_State *L) const
+ *                int tostring(lua_State *L) const
  *              Or convenience function:
- *                const char * to_string() const
+ *                const char * tostring() const
  * __eq       : bool operator== (const T&) const
  * __lt       : bool operator<  (const T&) const
  * __le       : bool operator<= (const T&) const
@@ -50,10 +50,17 @@ class LuaClass : public LuaHelpers
 {
 public:
 	static char const* type_name();
+
+	static void push_global_instance(lua_State* L);
+	static T* get_global_instance(lua_State* L);
+
 	static T* from_stack(lua_State* L, int idx, bool throw_error = true);
 	static bool is_on_stack(lua_State* L, int idx);
 	static int push_metatable(lua_State* L);
-	static void convert_top_of_stack(lua_State* L);
+
+	static T* convert_top_of_stack(lua_State* L, bool throw_error = true);
+	static void create_from_table(lua_State* L, int idx);
+	static void create_from_string(lua_State* L, std::string_view const& value);
 
 	template <typename... ARGS>
 	static T* create_new(lua_State* L, ARGS... args);
@@ -64,6 +71,12 @@ public:
 		create_new(L, std::forward<ARGS>(args)...);
 		return 1;
 	}
+
+protected:
+	static void const* m_metatable_ptr;
 };
+
+template <typename T>
+void const* LuaClass<T>::m_metatable_ptr = nullptr;
 
 #endif // DECK_ASSISTANT_LUA_CLASS_H_

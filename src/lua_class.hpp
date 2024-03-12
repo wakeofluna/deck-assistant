@@ -48,6 +48,28 @@ constexpr inline char const* __typename()
 	return __typename<T>(is_available());
 }
 
+// *************************** GLOBAL INDEX *************************
+
+template <typename T>
+constexpr inline bool has_global_index_name(not_available)
+{
+	return false;
+}
+
+template <typename T>
+constexpr inline bool has_global_index_name(std::enable_if_t<
+                                            std::is_same_v<char const*, decltype(T::LUA_GLOBAL_INDEX_NAME)>,
+                                            is_available>)
+{
+	return true;
+}
+
+template <typename T>
+constexpr inline bool has_global_index_name()
+{
+	return has_global_index_name<T>(is_available());
+}
+
 // *************************** GC FINALIZE *************************
 
 template <typename T>
@@ -142,7 +164,7 @@ template <typename T>
 int __tostring1(lua_State* L)
 {
 	T const* object = reinterpret_cast<T*>(lua_touserdata(L, -1));
-	lua_pushstring(L, object->to_string());
+	lua_pushstring(L, object->tostring());
 	return 1;
 }
 
@@ -150,7 +172,7 @@ template <typename T>
 int __tostring2(lua_State* L)
 {
 	T const* object = reinterpret_cast<T*>(lua_touserdata(L, -1));
-	return object->to_string(L);
+	return object->tostring(L);
 }
 
 template <typename T>
@@ -171,7 +193,7 @@ constexpr inline bool register_tostring(lua_State* L, not_available)
 
 template <typename T>
 inline bool register_tostring(lua_State* L, std::enable_if_t<
-                                                std::is_same_v<char const*, decltype(TCPTR->to_string())>,
+                                                std::is_same_v<char const*, decltype(TCPTR->tostring())>,
                                                 is_available>)
 {
 	lua_pushcfunction(L, &__tostring1<T>);
@@ -181,7 +203,7 @@ inline bool register_tostring(lua_State* L, std::enable_if_t<
 
 template <typename T>
 inline bool register_tostring(lua_State* L, std::enable_if_t<
-                                                std::is_same_v<int, decltype(TCPTR->to_string(LPTR))>,
+                                                std::is_same_v<int, decltype(TCPTR->tostring(LPTR))>,
                                                 is_available>)
 {
 	lua_pushcfunction(L, &__tostring2<T>);
@@ -590,6 +612,13 @@ template <typename T>
 template <typename... ARGS>
 T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 {
+	if constexpr (has_global_index_name<T>())
+	{
+		push_global_instance(L);
+		assert(lua_type(L, -1) == LUA_TNIL && "global instance of type already exists!");
+		lua_pop(L, 1);
+	}
+
 	T* object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
 	new (object) T(std::forward<ARGS>(args)...);
 
@@ -601,6 +630,12 @@ T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 
 	push_metatable(L);
 	lua_setmetatable(L, -2);
+
+	if constexpr (has_global_index_name<T>())
+	{
+		lua_pushvalue(L, -1);
+		lua_setfield(L, LUA_REGISTRYINDEX, T::LUA_GLOBAL_INDEX_NAME);
+	}
 
 	if constexpr (has_init_instance_table<T>(is_available()))
 	{
@@ -616,15 +651,56 @@ T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 }
 
 template <typename T>
+void LuaClass<T>::push_global_instance(lua_State* L)
+{
+	if constexpr (has_global_index_name<T>())
+	{
+		lua_getfield(L, LUA_REGISTRYINDEX, T::LUA_GLOBAL_INDEX_NAME);
+	}
+	else
+	{
+		assert(false && "attempted to get global instance of non-global class");
+	}
+}
+
+template <typename T>
+T* LuaClass<T>::get_global_instance(lua_State* L)
+{
+	push_global_instance(L);
+	T* instance = from_stack(L, -1, false);
+	lua_pop(L, 1);
+	return instance;
+}
+
+template <typename T>
 T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throw_error)
 {
-	return reinterpret_cast<T*>(check_arg_userdata(L, idx, __typename<T>(), throw_error));
+	lua_getmetatable(L, idx);
+
+	bool ok = (lua_type(L, -1) == LUA_TTABLE && lua_topointer(L, -1) == T::m_metatable_ptr);
+	lua_pop(L, 1);
+
+	if (ok)
+		return reinterpret_cast<T*>(lua_touserdata(L, idx));
+
+	if (throw_error)
+	{
+		idx = absidx(L, idx);
+		luaL_typerror(L, idx, __typename<T>());
+	}
+
+	return nullptr;
 }
 
 template <typename T>
 bool LuaClass<T>::is_on_stack(lua_State* L, int idx)
 {
-	return check_arg_userdata(L, idx, __typename<T>(), false);
+	lua_getmetatable(L, idx);
+
+	bool ok = (lua_type(L, -1) == LUA_TTABLE && lua_topointer(L, -1) == T::m_metatable_ptr);
+	lua_pop(L, 1);
+
+	return ok;
 }
 
 template <typename T>
@@ -669,6 +745,8 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		register_newindex<T>(L, is_available());
 		register_pairs<T>(L, is_available());
 		register_call<T>(L, is_available());
+
+		T::m_metatable_ptr = lua_topointer(L, -1);
 	}
 	return 1;
 }
@@ -688,12 +766,81 @@ constexpr inline bool has_simple_constructor(std::enable_if_t<
 }
 
 template <typename T>
-void LuaClass<T>::convert_top_of_stack(lua_State* L)
+constexpr inline bool has_string_constructor(not_available)
+{
+	return false;
+}
+
+template <typename T>
+constexpr inline bool has_string_constructor(std::enable_if_t<
+                                             std::is_same_v<T, decltype(T("hello"))>,
+                                             is_available>)
+{
+	return true;
+}
+
+template <typename T>
+T* LuaClass<T>::convert_top_of_stack(lua_State* L, bool throw_error)
+{
+	int const vtype    = lua_type(L, -1);
+	int const checktop = lua_gettop(L);
+
+	if (vtype == LUA_TNIL)
+	{
+		if constexpr (has_simple_constructor<T>(is_available()))
+		{
+			T::push_new(L);
+		}
+	}
+	else if (vtype == LUA_TSTRING)
+	{
+		size_t len;
+		char const* str = lua_tolstring(L, -1, &len);
+		std::string_view value(str, len);
+
+		T::create_from_string(L, value);
+	}
+	else if (vtype == LUA_TTABLE)
+	{
+		T::create_from_table(L, -1);
+	}
+
+	assert(lua_gettop(L) >= checktop);
+	assert(lua_type(L, checktop) == vtype);
+
+	T* item = from_stack(L, -1, false);
+	if (item)
+		lua_replace(L, checktop);
+
+	lua_settop(L, checktop);
+
+	if (!item && throw_error)
+		luaL_error(L, "unable to auto-convert from %s to %s", lua_typename(L, vtype), __typename<T>());
+
+	return item;
+}
+
+template <typename T>
+void LuaClass<T>::create_from_table(lua_State* L, int idx)
 {
 	if constexpr (has_simple_constructor<T>(is_available()))
-		newindex_type_or_convert(L, __typename<T>(), &T::push_new, nullptr);
-	else
-		check_arg_userdata(L, -1, __typename<T>(), true);
+	{
+		assert(lua_type(L, idx) == LUA_TTABLE && "create_from_table called on a non-table value");
+		idx = absidx(L, idx);
+
+		T::push_new(L);
+		lua_pushvalue(L, idx);
+		copy_table_fields(L);
+	}
+}
+
+template <typename T>
+void LuaClass<T>::create_from_string(lua_State* L, std::string_view const& value)
+{
+	if constexpr (has_string_constructor<T>(is_available()))
+	{
+		T::push_new(L, value);
+	}
 }
 
 #endif // DECK_ASSISTANT_LUA_CLASS_HPP_

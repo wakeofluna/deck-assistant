@@ -3,11 +3,13 @@
 
 template class LuaClass<DeckText>;
 
-char const* DeckText::LUA_TYPENAME = "deck-assistant.DeckText";
+char const* DeckText::LUA_TYPENAME = "deck:Text";
 
-void DeckText::convert_top_of_stack(lua_State* L)
+DeckText::DeckText() = default;
+
+DeckText::DeckText(std::string_view const& value)
+    : m_text(value)
 {
-	newindex_type_or_convert(L, type_name(), &DeckText::push_new, "text");
 }
 
 int DeckText::index(lua_State* L, std::string_view const& key) const
@@ -50,8 +52,8 @@ int DeckText::newindex(lua_State* L, std::string_view const& key)
 	return 0;
 }
 
-int DeckText::to_string(lua_State* L) const
+int DeckText::tostring(lua_State* L) const
 {
-	lua_pushfstring(L, "%s: %p: \"%s\"", type_name(), this, m_text.c_str());
+	lua_pushfstring(L, "%s { text='%s', font='%s' }", LUA_TYPENAME, m_text.c_str(), m_font.c_str());
 	return 1;
 }

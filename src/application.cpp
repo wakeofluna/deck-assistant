@@ -96,14 +96,9 @@ Application::Application()
 	luaL_openlibs(L);
 
 	m_private->deck_module = DeckModule::create_new(L);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, LUA_REGISTRYINDEX, DeckModule::LUA_GLOBAL_INDEX_NAME);
 	lua_setglobal(L, "deck");
 
 	m_private->deck_logger = DeckLogger::create_new(L);
-	lua_pushvalue(L, -1);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, LUA_REGISTRYINDEX, DeckLogger::LUA_GLOBAL_INDEX_NAME);
 	lua_setglobal(L, "logger");
 
 	install_function_overrides();

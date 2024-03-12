@@ -8,18 +8,13 @@ class DeckFont : public LuaClass<DeckFont>
 {
 public:
 	DeckFont();
-	~DeckFont();
+	DeckFont(std::string_view const& value);
 
 	static char const* LUA_TYPENAME;
 
-	static void init_class_table(lua_State* L);
-
 	int index(lua_State* L, std::string_view const& key) const;
 	int newindex(lua_State* L, std::string_view const& key);
-	int to_string(lua_State* L) const;
-
-private:
-	static int _lua_clone(lua_State* L);
+	int tostring(lua_State* L) const;
 
 private:
 	std::string m_font_name;

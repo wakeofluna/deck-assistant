@@ -1,10 +1,11 @@
 #include "deck_module.h"
 #include "deck_card.h"
-#include "deck_component.h"
+#include "deck_colour.h"
 #include "deck_connector.h"
 #include "deck_connector_container.h"
 #include "deck_font.h"
-#include "deck_font_container.h"
+#include "deck_image.h"
+#include "deck_text.h"
 #include "lua_class.hpp"
 
 template class LuaClass<DeckModule>;
@@ -16,19 +17,6 @@ DeckModule::DeckModule()
     : m_total_delta(0)
     , m_last_delta(0)
 {
-}
-
-void DeckModule::push_global_instance(lua_State* L)
-{
-	lua_getfield(L, LUA_REGISTRYINDEX, LUA_GLOBAL_INDEX_NAME);
-}
-
-DeckModule* DeckModule::get_global_instance(lua_State* L)
-{
-	push_global_instance(L);
-	DeckModule* instance = DeckModule::from_stack(L, -1, true);
-	lua_pop(L, 1);
-	return instance;
 }
 
 void DeckModule::tick(lua_State* L, int delta_msec)
@@ -62,11 +50,19 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_pushcfunction(L, &DeckModule::_lua_create_card);
 	lua_setfield(L, -2, "Card");
 
-	lua_pushcfunction(L, &DeckModule::_lua_create_component);
-	lua_setfield(L, -2, "Component");
+	lua_pushcfunction(L, &DeckModule::_lua_create_colour);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "Colour");
+	lua_setfield(L, -2, "Color");
 
 	lua_pushcfunction(L, &DeckModule::_lua_create_font);
 	lua_setfield(L, -2, "Font");
+
+	lua_pushcfunction(L, &DeckModule::_lua_create_image);
+	lua_setfield(L, -2, "Image");
+
+	lua_pushcfunction(L, &DeckModule::_lua_create_text);
+	lua_setfield(L, -2, "Text");
 
 	lua_pushcfunction(L, &DeckModule::_lua_request_quit);
 	lua_pushvalue(L, -1);
@@ -76,9 +72,6 @@ void DeckModule::init_class_table(lua_State* L)
 
 void DeckModule::init_instance_table(lua_State* L)
 {
-	m_font_container = DeckFontContainer::create_new(L);
-	lua_setfield(L, -2, "fonts");
-
 	m_connector_container = DeckConnectorContainer::create_new(L);
 	lua_setfield(L, -2, "connectors");
 }
@@ -106,42 +99,44 @@ int DeckModule::newindex(lua_State* L)
 	return 0;
 }
 
-int DeckModule::lua_create_impl(lua_State* L, lua_CFunction create_func)
+int DeckModule::_lua_create_card(lua_State* L)
 {
-	from_stack(L, 1, true);
-
-	assert(create_func);
-	(*create_func)(L);
-
-	switch (lua_type(L, 2))
-	{
-		case LUA_TNONE:
-			break;
-		case LUA_TTABLE:
-			lua_pushvalue(L, 2);
-			copy_table_fields(L);
-			break;
-		default:
-			luaL_typerror(L, 2, "table or none");
-			break;
-	}
-
+	from_stack(L, 1);
+	lua_settop(L, 2);
+	DeckCard::convert_top_of_stack(L);
 	return 1;
 }
 
-int DeckModule::_lua_create_card(lua_State* L)
+int DeckModule::_lua_create_colour(lua_State* L)
 {
-	return lua_create_impl(L, &DeckCard::push_new);
-}
-
-int DeckModule::_lua_create_component(lua_State* L)
-{
-	return lua_create_impl(L, &DeckComponent::push_new);
+	from_stack(L, 1);
+	lua_settop(L, 2);
+	DeckColour::convert_top_of_stack(L);
+	return 1;
 }
 
 int DeckModule::_lua_create_font(lua_State* L)
 {
-	return lua_create_impl(L, &DeckFont::push_new);
+	from_stack(L, 1);
+	lua_settop(L, 2);
+	DeckFont::convert_top_of_stack(L);
+	return 1;
+}
+
+int DeckModule::_lua_create_image(lua_State* L)
+{
+	from_stack(L, 1);
+	lua_settop(L, 2);
+	DeckImage::convert_top_of_stack(L);
+	return 1;
+}
+
+int DeckModule::_lua_create_text(lua_State* L)
+{
+	from_stack(L, 1);
+	lua_settop(L, 2);
+	DeckText::convert_top_of_stack(L);
+	return 1;
 }
 
 int DeckModule::_lua_request_quit(lua_State* L)

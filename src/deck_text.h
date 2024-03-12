@@ -7,13 +7,14 @@
 class DeckText : public LuaClass<DeckText>
 {
 public:
-	static char const* LUA_TYPENAME;
+	DeckText();
+	DeckText(std::string_view const& value);
 
-	static void convert_top_of_stack(lua_State* L);
+	static char const* LUA_TYPENAME;
 
 	int index(lua_State* L, std::string_view const& key) const;
 	int newindex(lua_State* L, std::string_view const& key);
-	int to_string(lua_State* L) const;
+	int tostring(lua_State* L) const;
 
 private:
 	std::string m_text;

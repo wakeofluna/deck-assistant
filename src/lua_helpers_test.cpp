@@ -13,7 +13,7 @@ namespace lua_helpers_test
 class TestClass : public LuaClass<TestClass>
 {
 public:
-	int to_string(lua_State* L) const
+	int tostring(lua_State* L) const
 	{
 		lua_pushfstring(L, "It's a secret (%d)", 333);
 		return 1;
@@ -189,32 +189,6 @@ TEST_CASE("LuaHelpers", "[lua]")
 		REQUIRE(lua_tointeger(L, -1) == 42);
 		lua_getfield(L, 5, "value");
 		REQUIRE(lua_tointeger(L, -1) == 69);
-	}
-
-	SECTION("check_arg_userdata")
-	{
-		char const* class_name = TestClass2::LUA_TYPENAME;
-
-		for (int tp = LUA_TNONE; tp <= LUA_TTHREAD; ++tp)
-		{
-			DYNAMIC_SECTION("Failure test for type " << tp << ':' << lua_typename(L, tp))
-			{
-				int idx = push_dummy_value(L, tp);
-				REQUIRE(LuaHelpers::check_arg_userdata(L, idx, class_name, false) == nullptr);
-				REQUIRE(lua_gettop(L) == (tp == LUA_TNONE ? 0 : 1));
-				REQUIRE_THROWS(LuaHelpers::check_arg_userdata(L, 1, class_name));
-				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
-			}
-		}
-
-		SECTION("Success test")
-		{
-			// Full userdata, correct class
-			tc2->push_this(L);
-			REQUIRE(LuaHelpers::check_arg_userdata(L, 1, class_name, false) == tc2);
-			REQUIRE(LuaHelpers::check_arg_userdata(L, 1, class_name) == tc2);
-			REQUIRE(lua_gettop(L) == 1);
-		}
 	}
 
 	SECTION("check_arg_string")
@@ -428,87 +402,6 @@ TEST_CASE("LuaHelpers", "[lua]")
 		lua_gettable(L, -2);
 		REQUIRE(lua_tointeger(L, -1) == 1337);
 		lua_pop(L, 1);
-	}
-
-	SECTION("newindex_type_or_convert")
-	{
-		void* ud = lua_newuserdata(L, 4);
-		lua_pushliteral(L, "newindex_key");
-
-		for (int tp = LUA_TNIL; tp <= LUA_TTHREAD; ++tp)
-		{
-			if (tp == LUA_TTABLE)
-				continue;
-
-			DYNAMIC_SECTION("Failure test for type " << tp << ':' << lua_typename(L, tp))
-			{
-				push_dummy_value(L, tp);
-
-				REQUIRE_THROWS(LuaHelpers::newindex_type_or_convert(L, TestClass2::LUA_TYPENAME, &TestClass2::push_new, nullptr));
-				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
-				REQUIRE(lua_type(L, 3) == tp);
-
-				if (tp != LUA_TSTRING)
-				{
-					lua_settop(L, 3);
-					REQUIRE_THROWS(LuaHelpers::newindex_type_or_convert(L, TestClass2::LUA_TYPENAME, &TestClass2::push_new, "textfield"));
-					REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
-					REQUIRE(lua_type(L, 3) == tp);
-				}
-			}
-		}
-
-		SECTION("Correct userdata type")
-		{
-			tc2->push_this(L);
-			LuaHelpers::newindex_type_or_convert(L, TestClass2::LUA_TYPENAME, &TestClass2::push_new, nullptr);
-			REQUIRE(lua_gettop(L) == 3);
-			REQUIRE(lua_touserdata(L, 3) == tc2);
-		}
-
-		SECTION("Table conversion")
-		{
-			lua_createtable(L, 0, 2);
-			lua_pushboolean(L, true);
-			lua_setfield(L, -2, "field1");
-			lua_pushstring(L, "value");
-			lua_setfield(L, -2, "field2");
-
-			LuaHelpers::newindex_type_or_convert(L, TestClass2::LUA_TYPENAME, &TestClass2::push_new, nullptr);
-			REQUIRE(lua_gettop(L) == 3);
-			REQUIRE(lua_isuserdata(L, 3));
-
-			TestClass2* tc = TestClass2::from_stack(L, -1, false);
-			REQUIRE(tc != nullptr);
-
-			lua_getfield(L, -1, "field1");
-			REQUIRE(lua_toboolean(L, -1) == true);
-			lua_getfield(L, -2, "field2");
-			REQUIRE(to_string_view(L, -1) == "value");
-			lua_pop(L, 2);
-		}
-
-		SECTION("String conversion to field")
-		{
-			lua_pushliteral(L, "CONVERSION");
-
-			LuaHelpers::newindex_type_or_convert(L, TestClass2::LUA_TYPENAME, &TestClass2::push_new, "textfield");
-			REQUIRE(lua_gettop(L) == 3);
-			REQUIRE(lua_isuserdata(L, 3));
-
-			TestClass2* tc = TestClass2::from_stack(L, -1, false);
-			REQUIRE(tc != nullptr);
-
-			lua_getfield(L, -1, "textfield");
-			REQUIRE(to_string_view(L, -1) == "CONVERSION");
-			lua_pop(L, 1);
-		}
-
-		LuaHelpers::debug_dump_stack(std::cout, L);
-
-		REQUIRE(lua_gettop(L) >= 3);
-		REQUIRE(lua_touserdata(L, 1) == ud);
-		REQUIRE(to_string_view(L, 2) == "newindex_key");
 	}
 
 	SECTION("copy_table_fields")

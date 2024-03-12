@@ -69,7 +69,7 @@ int DeckConnector::newindex(lua_State* L)
 	return self->m_connector->newindex(L);
 }
 
-int DeckConnector::to_string(lua_State* L) const
+int DeckConnector::tostring(lua_State* L) const
 {
 	lua_pushfstring(L, "%s: %p: %s", type_name(), this, m_connector->get_subtype_name());
 	return 1;

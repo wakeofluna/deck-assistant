@@ -42,7 +42,6 @@ struct LuaHelpers
 	static void push_class_table(lua_State* L, int idx);
 	static void push_instance_table(lua_State* L, int idx);
 
-	static void* check_arg_userdata(lua_State* L, int idx, char const* tname, bool throw_error = true);
 	static std::string_view check_arg_string(lua_State* L, int idx, bool allow_empty = false);
 	static std::string_view check_arg_string_or_none(lua_State* L, int idx);
 	static lua_Integer check_arg_int(lua_State* L, int idx);
@@ -50,7 +49,6 @@ struct LuaHelpers
 	static std::string_view push_converted_to_string(lua_State* L, int idx);
 
 	static void newindex_store_in_instance_table(lua_State* L);
-	static void newindex_type_or_convert(lua_State* L, char const* tname, lua_CFunction type_create, char const* text_field);
 	static void copy_table_fields(lua_State* L);
 
 	static bool load_script(lua_State* L, char const* file_name);

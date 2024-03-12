@@ -23,7 +23,7 @@ public:
 	void init_instance_table(lua_State* L);
 	int index(lua_State* L) const;
 	int newindex(lua_State* L);
-	int to_string(lua_State* L) const;
+	int tostring(lua_State* L) const;
 
 private:
 	std::unique_ptr<IConnector> m_connector;

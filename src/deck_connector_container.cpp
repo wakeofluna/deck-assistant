@@ -79,23 +79,8 @@ int get_existing_or_create_new(lua_State* L)
 
 } // namespace
 
-char const* DeckConnectorContainer::LUA_TYPENAME = "deck-assistant.DeckConnectorContainer";
-
-void DeckConnectorContainer::push_global_instance(lua_State* L)
-{
-	DeckModule::push_global_instance(L);
-	lua_getfield(L, -1, "connectors");
-	lua_replace(L, -2);
-}
-
-DeckConnectorContainer* DeckConnectorContainer::get_global_instance(lua_State* L)
-{
-	DeckModule::push_global_instance(L);
-	lua_getfield(L, -1, "connectors");
-	DeckConnectorContainer* container = DeckConnectorContainer::from_stack(L, -1, true);
-	lua_pop(L, 2);
-	return container;
-}
+char const* DeckConnectorContainer::LUA_TYPENAME          = "deck-assistant.DeckConnectorContainer";
+char const* DeckConnectorContainer::LUA_GLOBAL_INDEX_NAME = "DeckConnectorContainerInstance";
 
 void DeckConnectorContainer::for_each(lua_State* L, std::function<void(lua_State* L, DeckConnector*)> const& visitor) const
 {
