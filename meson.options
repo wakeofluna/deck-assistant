@@ -11,31 +11,3 @@ option(
     value: 'auto',
     description: 'Use LuaJIT instead of regular lua',
 )
-
-option(
-    'sdl',
-    type: 'feature',
-    value: 'auto',
-    description: 'Support for Desktop-related connectors',
-)
-
-option(
-    'sdl-image',
-    type: 'feature',
-    value: 'auto',
-    description: 'Support for loading and manipulating images',
-)
-
-option(
-    'sdl-ttf',
-    type: 'feature',
-    value: 'auto',
-    description: 'Support for rendering text onto surfaces',
-)
-
-option(
-    'hidapi',
-    type: 'feature',
-    value: 'auto',
-    description: 'Support for HID device connectors (Elgato Streamdeck)',
-)

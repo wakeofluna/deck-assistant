@@ -1,11 +1,9 @@
 #ifndef DECK_ASSISTANT_CONNECTOR_ELGATO_STREAMDECK_H
 #define DECK_ASSISTANT_CONNECTOR_ELGATO_STREAMDECK_H
 
-#ifdef HAVE_HIDAPI
-
 #include "i_connector.h"
+#include <SDL_hidapi.h>
 #include <array>
-#include <hidapi.h>
 #include <string>
 #include <vector>
 
@@ -38,17 +36,20 @@ private:
 	void force_disconnect();
 
 private:
-	hid_device* m_hid_device;
+	SDL_hid_device* m_hid_device;
 	std::string m_last_error;
 	std::string m_filter_serialnumber;
 	int m_delta_since_last_scan;
+
+	std::string m_serialnumber;
+	int m_vid;
+	int m_pid;
+
 	unsigned char m_wanted_brightness;
 	unsigned char m_actual_brightness;
 	std::array<unsigned char, 1024> m_buffer;
 	std::vector<bool> m_buttons_state;
 	std::vector<bool> m_buttons_new_state;
 };
-
-#endif
 
 #endif // DECK_ASSISTANT_CONNECTOR_ELGATO_STREAMDECK_H

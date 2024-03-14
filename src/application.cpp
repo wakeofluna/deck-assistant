@@ -2,6 +2,9 @@
 #include "deck_connector_container.h"
 #include "deck_logger.h"
 #include "deck_module.h"
+#include <SDL.h>
+#include <SDL_image.h>
+#include <SDL_ttf.h>
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -95,6 +98,11 @@ Application::Application()
 
 	luaL_openlibs(L);
 
+	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+	SDL_hid_init();
+	IMG_Init(0xffffffff);
+	TTF_Init();
+
 	m_private->deck_module = DeckModule::create_new(L);
 	lua_setglobal(L, "deck");
 
@@ -112,6 +120,11 @@ Application::Application(Application&& other)
 
 Application::~Application()
 {
+	TTF_Quit();
+	IMG_Quit();
+	SDL_hid_exit();
+	SDL_Quit();
+
 	delete m_private;
 }
 

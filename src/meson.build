@@ -23,8 +23,8 @@ test_sources = files(
 slib = static_library(
     'deck-assistant',
     sources: sources,
-    dependencies: [lua, hidapi, sdl, sdl_image, sdl_ttf],
-    cpp_args: ['-fno-exceptions'] + buildflags,
+    dependencies: [lua, sdl, sdl_image, sdl_ttf],
+    cpp_args: ['-fno-exceptions'],
 )
 
 executable(
@@ -39,7 +39,6 @@ tests = executable(
     sources: test_sources,
     link_with: [slib],
     dependencies: [catch2, lua],
-    cpp_args: buildflags,
 )
 
 test('testdeck', tests)

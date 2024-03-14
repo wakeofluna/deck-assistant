@@ -1,9 +1,7 @@
-#ifdef HAVE_HIDAPI
-
 #include "connector_elgato_streamdeck.h"
+#include "SDL_error.h"
 #include <algorithm>
 #include <codecvt>
-#include <hidapi.h>
 #include <iostream>
 #include <locale>
 
@@ -108,7 +106,7 @@ char const* ConnectorElgatoStreamDeck::SUBTYPE_NAME = "Elgato StreamDeck";
 
 ConnectorElgatoStreamDeck::ConnectorElgatoStreamDeck()
     : m_hid_device(nullptr)
-    , m_delta_since_last_scan(-1000)
+    , m_delta_since_last_scan(1000)
     , m_wanted_brightness(INVALID_BRIGHTNESS)
     , m_actual_brightness(INVALID_BRIGHTNESS)
 {
@@ -117,7 +115,7 @@ ConnectorElgatoStreamDeck::ConnectorElgatoStreamDeck()
 ConnectorElgatoStreamDeck::~ConnectorElgatoStreamDeck()
 {
 	if (m_hid_device)
-		hid_close(m_hid_device);
+		SDL_hid_close(m_hid_device);
 }
 
 char const* ConnectorElgatoStreamDeck::get_subtype_name() const
@@ -205,7 +203,7 @@ void ConnectorElgatoStreamDeck::shutdown(lua_State* L)
 {
 	if (m_hid_device)
 	{
-		hid_close(m_hid_device);
+		SDL_hid_close(m_hid_device);
 		m_hid_device = nullptr;
 	}
 }
@@ -256,41 +254,24 @@ int ConnectorElgatoStreamDeck::index(lua_State* L) const
 		}
 		else if (key == "vid")
 		{
-			hid_device_info* info = m_hid_device ? hid_get_device_info(m_hid_device) : nullptr;
-			if (info)
-				lua_pushinteger(L, info->vendor_id);
+			if (m_vid)
+				lua_pushinteger(L, m_vid);
 		}
 		else if (key == "pid")
 		{
-			hid_device_info* info = m_hid_device ? hid_get_device_info(m_hid_device) : nullptr;
-			if (info)
-				lua_pushinteger(L, info->product_id);
+			if (m_pid)
+				lua_pushinteger(L, m_pid);
 		}
 		else if (key == "model")
 		{
-			hid_device_info* info = m_hid_device ? hid_get_device_info(m_hid_device) : nullptr;
-			if (info)
-			{
-				std::string_view model = get_model(info->product_id);
-				if (!model.empty())
-				{
-					lua_pushlstring(L, model.data(), model.size());
-				}
-				else
-				{
-					std::string product = convert(info->product_string);
-					lua_pushlstring(L, product.data(), product.size());
-				}
-			}
+			std::string_view model = get_model(m_pid);
+			if (!model.empty())
+				lua_pushlstring(L, model.data(), model.size());
 		}
 		else if (key == "serialnumber")
 		{
-			hid_device_info* info = m_hid_device ? hid_get_device_info(m_hid_device) : nullptr;
-			if (info)
-			{
-				std::string serialnumber = convert(info->serial_number);
-				lua_pushlstring(L, serialnumber.data(), serialnumber.size());
-			}
+			if (!m_serialnumber.empty())
+				lua_pushlstring(L, m_serialnumber.data(), m_serialnumber.size());
 		}
 	}
 
@@ -334,9 +315,8 @@ int ConnectorElgatoStreamDeck::newindex(lua_State* L)
 int ConnectorElgatoStreamDeck::_lua_default_on_connect(lua_State* L)
 {
 	ConnectorElgatoStreamDeck* self = reinterpret_cast<ConnectorElgatoStreamDeck*>(lua_touserdata(L, lua_upvalueindex(1)));
-	hid_device_info* info           = self->m_hid_device ? hid_get_device_info(self->m_hid_device) : nullptr;
-	std::string_view model          = info ? get_model(info->product_id) : "(error)";
-	std::string serialnumber        = info ? convert(info->serial_number) : "(error)";
+	std::string_view model          = get_model(self->m_pid);
+	std::string_view serialnumber   = self->m_serialnumber;
 
 	lua_getglobal(L, "print");
 
@@ -409,16 +389,17 @@ void ConnectorElgatoStreamDeck::attempt_connect_device()
 	if (m_hid_device)
 		return;
 
-	hid_device_info* device_list = hid_enumerate(0x0fd9, 0);
+	SDL_hid_device_info* device_list = SDL_hid_enumerate(0x0fd9, 0);
 	if (!device_list)
 	{
-		m_last_error = "Enumerate failed: " + convert(hid_error(NULL));
+		m_last_error  = "Enumerate failed: ";
+		m_last_error += SDL_GetError();
 		return;
 	}
 
 	bool found_any = false;
 
-	for (hid_device_info* info = device_list; info; info = info->next)
+	for (SDL_hid_device_info* info = device_list; info; info = info->next)
 	{
 		std::string_view model = get_model(info->product_id);
 		if (!model.empty())
@@ -434,16 +415,23 @@ void ConnectorElgatoStreamDeck::attempt_connect_device()
 
 			if (!m_hid_device)
 			{
-				m_hid_device = hid_open_path(info->path);
+				m_hid_device = SDL_hid_open_path(info->path, false);
 				if (!m_hid_device)
 				{
-					m_last_error = "Open failed: " + convert(hid_error(nullptr));
+					m_last_error  = "Open failed: ";
+					m_last_error += SDL_GetError();
+				}
+				else
+				{
+					m_serialnumber.swap(device_serialnumber);
+					m_vid = info->vendor_id;
+					m_pid = info->product_id;
 				}
 			}
 		}
 	}
 
-	hid_free_enumeration(device_list);
+	SDL_hid_free_enumeration(device_list);
 
 	if (!found_any)
 		m_last_error = "No suitable devices found";
@@ -464,10 +452,11 @@ void ConnectorElgatoStreamDeck::write_brightness(unsigned char value)
 		m_buffer[1] = 0x08;
 		m_buffer[2] = value;
 
-		int result = hid_send_feature_report(m_hid_device, m_buffer.data(), 32);
+		int result = SDL_hid_send_feature_report(m_hid_device, m_buffer.data(), 32);
 		if (result == -1)
 		{
-			m_last_error = "Send feature report failed: " + convert(hid_error(m_hid_device));
+			m_last_error  = "Send feature report failed: ";
+			m_last_error += SDL_GetError();
 			force_disconnect();
 		}
 		else
@@ -481,10 +470,11 @@ bool ConnectorElgatoStreamDeck::update_button_state()
 {
 	if (m_hid_device)
 	{
-		int len = hid_read_timeout(m_hid_device, m_buffer.data(), m_buffer.size(), 0);
+		int len = SDL_hid_read_timeout(m_hid_device, m_buffer.data(), m_buffer.size(), 0);
 		if (len == -1)
 		{
-			m_last_error = "HID read failed: " + convert(hid_error(m_hid_device));
+			m_last_error  = "HID read failed: ";
+			m_last_error += SDL_GetError();
 			force_disconnect();
 		}
 		else if (len >= 4 && m_buffer[0] == 0x01) // button report
@@ -509,9 +499,7 @@ void ConnectorElgatoStreamDeck::force_disconnect()
 {
 	if (m_hid_device)
 	{
-		hid_close(m_hid_device);
+		SDL_hid_close(m_hid_device);
 		m_hid_device = nullptr;
 	}
 }
-
-#endif

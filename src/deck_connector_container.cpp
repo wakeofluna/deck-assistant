@@ -141,9 +141,5 @@ int DeckConnectorContainer::_lua_all(lua_State* L)
 
 int DeckConnectorContainer::_lua_create_elgato_streamdeck(lua_State* L)
 {
-#ifdef HAVE_HIDAPI
 	return get_existing_or_create_new<ConnectorElgatoStreamDeck>(L);
-#else
-	return connector_not_available(L, "HIDAPI not enabled, Elgato StreamDeck connector not available");
-#endif
 }
