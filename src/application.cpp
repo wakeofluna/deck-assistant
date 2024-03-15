@@ -1,5 +1,6 @@
 #include "application.h"
 #include "deck_connector_container.h"
+#include "deck_formatter.h"
 #include "deck_logger.h"
 #include "deck_module.h"
 #include <SDL.h>
@@ -95,7 +96,6 @@ Application::Application()
 
 	L = lua_newstate(&_lua_alloc, m_private->mem_resource);
 	lua_checkstack(L, 200);
-
 	luaL_openlibs(L);
 
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
@@ -108,6 +108,8 @@ Application::Application()
 
 	m_private->deck_logger = DeckLogger::create_new(L);
 	lua_setglobal(L, "logger");
+
+	DeckFormatter::insert_enum_values(L);
 
 	install_function_overrides();
 }

@@ -1,17 +1,19 @@
 sources = files(
     'application.cpp',
+    'builtins.cpp',
     'connector_elgato_streamdeck.cpp',
     'deck_card.cpp',
     'deck_colour.cpp',
     'deck_connector.cpp',
     'deck_connector_container.cpp',
-    'deck_font.cpp',
+    'deck_formatter.cpp',
     'deck_image.cpp',
     'deck_logger.cpp',
     'deck_module.cpp',
     'deck_text.cpp',
     'i_connector.cpp',
     'lua_helpers.cpp',
+    'util_colour.cpp',
 )
 
 test_sources = files(

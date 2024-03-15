@@ -841,6 +841,12 @@ void LuaClass<T>::create_from_string(lua_State* L, std::string_view const& value
 	{
 		T::push_new(L, value);
 	}
+	else if constexpr (has_simple_constructor<T>(is_available()))
+	{
+		T::push_new(L);
+		lua_pushlstring(L, value.data(), value.size());
+		lua_setfield(L, -2, "__init");
+	}
 }
 
 #endif // DECK_ASSISTANT_LUA_CLASS_HPP_

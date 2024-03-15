@@ -82,16 +82,44 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 
 void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message)
 {
+	lua_log_message(L, level, message, std::string_view());
+}
+
+void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2)
+{
 	DeckLogger* logger = get_global_instance(L);
 	if (logger)
 	{
 		lua_Debug ar;
-		if (lua_getstack(L, 1, &ar))
+		int depth       = 1;
+		bool have_stack = false;
+
+		while (lua_getstack(L, depth, &ar))
 		{
-			lua_getinfo(L, "Sl", &ar);
+			lua_getinfo(L, "l", &ar);
+			if (ar.currentline != -1)
+			{
+				have_stack = true;
+				break;
+			}
+			++depth;
+		}
+
+		if (have_stack)
+		{
+			lua_getinfo(L, "S", &ar);
 
 			std::stringstream full_message;
 			full_message << ar.short_src << ':' << ar.currentline << " -- " << message;
+			if (!part2.empty())
+				full_message << ": " << part2;
+
+			logger->log_message(L, level, full_message.str());
+		}
+		else if (!part2.empty())
+		{
+			std::stringstream full_message;
+			full_message << message << ": " << part2;
 			logger->log_message(L, level, full_message.str());
 		}
 		else

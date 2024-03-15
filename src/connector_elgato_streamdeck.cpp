@@ -1,9 +1,17 @@
 #include "connector_elgato_streamdeck.h"
 #include "SDL_error.h"
+#include "deck_card.h"
+#include "deck_connector.h"
+#include "deck_image.h"
+#include "deck_logger.h"
 #include <algorithm>
+#include <cassert>
 #include <codecvt>
+#include <cstring>
+#include <fstream>
 #include <iostream>
 #include <locale>
+#include <sstream>
 
 namespace
 {
@@ -80,33 +88,13 @@ void convert_button_table(lua_State* L, int idx)
 	luaL_pushresult(&buf);
 }
 
-/*
-constexpr char nibble(unsigned char ch)
-{
-    if (ch < 10)
-        return '0' + ch;
-    else
-        return 'a' + ch - 10;
-}
-
-void dump(std::ostream& stream, unsigned char const* data, std::size_t len)
-{
-    for (std::size_t i = 0; i < len; ++i)
-    {
-        char const ch = data[i];
-        stream << nibble(ch >> 8) << nibble(ch & 0x0f) << ' ';
-    }
-    stream << std::endl;
-}
-*/
-
 } // namespace
 
 char const* ConnectorElgatoStreamDeck::SUBTYPE_NAME = "Elgato StreamDeck";
 
 ConnectorElgatoStreamDeck::ConnectorElgatoStreamDeck()
     : m_hid_device(nullptr)
-    , m_delta_since_last_scan(1000)
+    , m_hid_last_scan(-1)
     , m_wanted_brightness(INVALID_BRIGHTNESS)
     , m_actual_brightness(INVALID_BRIGHTNESS)
 {
@@ -125,29 +113,33 @@ char const* ConnectorElgatoStreamDeck::get_subtype_name() const
 
 void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 {
-	m_delta_since_last_scan += delta_msec;
-
-	if (!m_hid_device && m_delta_since_last_scan >= 1000)
+	if (!m_hid_device)
 	{
-		m_delta_since_last_scan = 0;
-		attempt_connect_device();
-
-		if (m_hid_device)
+		std::uint32_t changes = SDL_hid_device_change_count();
+		if (changes != m_hid_last_scan)
 		{
-			lua_getfield(L, -1, "on_connect");
-			if (lua_type(L, -1) == LUA_TFUNCTION)
+			m_hid_last_scan = changes;
+			attempt_connect_device();
+		}
+
+		if (!m_hid_device)
+			return;
+
+		lua_getfield(L, -1, "on_connect");
+		if (lua_type(L, -1) == LUA_TFUNCTION)
+		{
+			if (!LuaHelpers::pcall(L, 0, 0))
 			{
-				lua_pcall(L, 0, 0, 0);
-			}
-			else
-			{
-				lua_pop(L, 1);
+				std::stringstream buf;
+				LuaHelpers::print_error_context(buf);
+				DeckLogger::lua_log_message(L, DeckLogger::Level::Error, buf.str());
 			}
 		}
+		else
+		{
+			lua_pop(L, 1);
+		}
 	}
-
-	if (!m_hid_device)
-		return;
 
 	if (m_actual_brightness != m_wanted_brightness && m_wanted_brightness != INVALID_BRIGHTNESS)
 		write_brightness(m_wanted_brightness);
@@ -223,6 +215,9 @@ void ConnectorElgatoStreamDeck::init_instance_table(lua_State* L)
 
 	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_default_on_release);
 	lua_setfield(L, -2, "on_release");
+
+	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_set_button);
+	lua_setfield(L, -2, "set_button");
 }
 
 int ConnectorElgatoStreamDeck::index(lua_State* L) const
@@ -384,6 +379,39 @@ int ConnectorElgatoStreamDeck::_lua_default_on_release(lua_State* L)
 	return 0;
 }
 
+int ConnectorElgatoStreamDeck::_lua_set_button(lua_State* L)
+{
+	ConnectorElgatoStreamDeck* self = static_cast<ConnectorElgatoStreamDeck*>(from_stack(L, 1, SUBTYPE_NAME));
+	unsigned char button            = LuaHelpers::check_arg_int(L, 2);
+
+	if (button < 1)
+	{
+		luaL_argerror(L, 2, "buttons start counting at 1");
+	}
+	else if (!self->m_hid_device)
+	{
+		luaL_error(L, "Device is not connected");
+	}
+	else if (DeckImage* image = DeckImage::from_stack(L, 3, false); image)
+	{
+		SDL_Surface* surface = image->get_surface();
+		if (surface)
+			self->set_button(button, surface);
+	}
+	else if (DeckCard* card = DeckCard::from_stack(L, 3, false); card)
+	{
+		SDL_Surface* surface = card->get_surface();
+		if (surface)
+			self->set_button(button, surface);
+	}
+	else
+	{
+		luaL_typerror(L, 3, "deck:Image or deck:Card");
+	}
+
+	return 0;
+}
+
 void ConnectorElgatoStreamDeck::attempt_connect_device()
 {
 	if (m_hid_device)
@@ -392,8 +420,7 @@ void ConnectorElgatoStreamDeck::attempt_connect_device()
 	SDL_hid_device_info* device_list = SDL_hid_enumerate(0x0fd9, 0);
 	if (!device_list)
 	{
-		m_last_error  = "Enumerate failed: ";
-		m_last_error += SDL_GetError();
+		m_last_error = "HID enumerate failed";
 		return;
 	}
 
@@ -424,8 +451,10 @@ void ConnectorElgatoStreamDeck::attempt_connect_device()
 				else
 				{
 					m_serialnumber.swap(device_serialnumber);
-					m_vid = info->vendor_id;
-					m_pid = info->product_id;
+					m_vid         = info->vendor_id;
+					m_pid         = info->product_id;
+					m_button_size = (info->product_id == 0x006c) ? 96 : 72;
+					break;
 				}
 			}
 		}
@@ -466,6 +495,117 @@ void ConnectorElgatoStreamDeck::write_brightness(unsigned char value)
 	}
 }
 
+void ConnectorElgatoStreamDeck::write_image_data(unsigned char button, std::vector<unsigned char> const& bytes)
+{
+	if (!m_hid_device)
+		return;
+
+	int const max_payload_size = 1024 - 8;
+
+	std::size_t total_sent  = 0;
+	std::uint16_t iteration = 0;
+
+	while (total_sent < bytes.size())
+	{
+		std::size_t remaining      = bytes.size() - total_sent;
+		bool last_packet           = remaining <= max_payload_size;
+		std::uint16_t slice_length = last_packet ? remaining : max_payload_size;
+
+		m_buffer[0] = 0x02;
+		m_buffer[1] = 0x07;
+		m_buffer[2] = button;
+		m_buffer[3] = last_packet ? 1 : 0;
+		m_buffer[4] = slice_length & 0xff;
+		m_buffer[5] = slice_length >> 8;
+		m_buffer[6] = iteration & 0xff;
+		m_buffer[7] = iteration >> 8;
+
+		std::memcpy(&m_buffer.at(8), &bytes.at(total_sent), slice_length);
+		if (slice_length < max_payload_size)
+			std::memset(&m_buffer.at(8 + slice_length), 0, max_payload_size - slice_length);
+
+		std::size_t sent = 0;
+		while (sent < m_buffer.size())
+		{
+			int result = SDL_hid_write(m_hid_device, m_buffer.data() + sent, m_buffer.size() - sent);
+			if (result <= 0)
+			{
+				m_last_error = "HID write failed";
+				force_disconnect();
+				break;
+			}
+			sent += result;
+		}
+
+		total_sent += slice_length;
+		++iteration;
+	}
+}
+
+void ConnectorElgatoStreamDeck::set_button(unsigned char button, SDL_Surface* surface)
+{
+	if (!surface)
+		return;
+
+	std::vector<unsigned char> bytes;
+
+	// Elgato has the buttons rotated 180 degrees so we need to make a copy and shuffle the pixels...
+	// There's a chance the surfaces are not continguous, so we have to reverse all pixel data per row
+	SDL_Surface* new_surface;
+
+	if (surface->w == m_button_size && surface->h == m_button_size)
+	{
+		new_surface = SDL_CreateRGBSurfaceWithFormat(0, m_button_size, m_button_size, 32, SDL_PIXELFORMAT_ARGB32);
+
+		unsigned char* source_data = reinterpret_cast<unsigned char*>(surface->pixels);
+		unsigned char* target_data = reinterpret_cast<unsigned char*>(new_surface->pixels) + (new_surface->h * new_surface->pitch);
+
+		for (int y = 0; y < m_button_size; ++y)
+		{
+			target_data -= new_surface->pitch;
+
+			std::uint32_t const* source = reinterpret_cast<std::uint32_t*>(source_data);
+			std::uint32_t* target       = reinterpret_cast<std::uint32_t*>(target_data);
+			std::reverse_copy(source, source + m_button_size, target);
+
+			source_data += surface->pitch;
+		}
+	}
+	else
+	{
+		new_surface = DeckImage::resize_surface(surface, m_button_size, m_button_size);
+
+		unsigned char* start_data = reinterpret_cast<unsigned char*>(new_surface->pixels);
+		unsigned char* end_data   = start_data + (new_surface->h * new_surface->pitch);
+
+		// Note that the center line will be skipped if the image is odd-sized, but no known button sizes are affected anyway
+
+		for (int y = 0; y < new_surface->h / 2; ++y)
+		{
+			end_data -= new_surface->pitch;
+
+			std::uint32_t* front_row    = reinterpret_cast<std::uint32_t*>(start_data);
+			std::uint32_t* back_row     = reinterpret_cast<std::uint32_t*>(end_data);
+			std::uint32_t* back_row_end = back_row + new_surface->w;
+
+			while (back_row != back_row_end)
+			{
+				--back_row_end;
+				std::swap(*front_row, *back_row_end);
+				++front_row;
+			}
+
+			start_data += new_surface->pitch;
+		}
+	}
+
+	bytes = DeckImage::save_surface_as_jpeg(new_surface);
+	SDL_FreeSurface(new_surface);
+
+	if (!bytes.empty())
+		write_image_data(button - 1, bytes);
+}
+
 bool ConnectorElgatoStreamDeck::update_button_state()
 {
 	if (m_hid_device)
@@ -473,8 +613,7 @@ bool ConnectorElgatoStreamDeck::update_button_state()
 		int len = SDL_hid_read_timeout(m_hid_device, m_buffer.data(), m_buffer.size(), 0);
 		if (len == -1)
 		{
-			m_last_error  = "HID read failed: ";
-			m_last_error += SDL_GetError();
+			m_last_error = "HID read failed";
 			force_disconnect();
 		}
 		else if (len >= 4 && m_buffer[0] == 0x01) // button report

@@ -3,7 +3,7 @@
 #include "deck_colour.h"
 #include "deck_connector.h"
 #include "deck_connector_container.h"
-#include "deck_font.h"
+#include "deck_formatter.h"
 #include "deck_image.h"
 #include "deck_text.h"
 #include "lua_class.hpp"
@@ -55,14 +55,11 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_setfield(L, -3, "Colour");
 	lua_setfield(L, -2, "Color");
 
-	lua_pushcfunction(L, &DeckModule::_lua_create_font);
-	lua_setfield(L, -2, "Font");
+	lua_pushcfunction(L, &DeckModule::_lua_create_formatter);
+	lua_setfield(L, -2, "Formatter");
 
 	lua_pushcfunction(L, &DeckModule::_lua_create_image);
 	lua_setfield(L, -2, "Image");
-
-	lua_pushcfunction(L, &DeckModule::_lua_create_text);
-	lua_setfield(L, -2, "Text");
 
 	lua_pushcfunction(L, &DeckModule::_lua_request_quit);
 	lua_pushvalue(L, -1);
@@ -102,8 +99,9 @@ int DeckModule::newindex(lua_State* L)
 int DeckModule::_lua_create_card(lua_State* L)
 {
 	from_stack(L, 1);
-	lua_settop(L, 2);
-	DeckCard::convert_top_of_stack(L);
+	int width  = check_arg_int(L, 2);
+	int height = check_arg_int(L, 3);
+	DeckCard::create_new(L, width, height);
 	return 1;
 }
 
@@ -115,11 +113,11 @@ int DeckModule::_lua_create_colour(lua_State* L)
 	return 1;
 }
 
-int DeckModule::_lua_create_font(lua_State* L)
+int DeckModule::_lua_create_formatter(lua_State* L)
 {
 	from_stack(L, 1);
 	lua_settop(L, 2);
-	DeckFont::convert_top_of_stack(L);
+	DeckFormatter::convert_top_of_stack(L);
 	return 1;
 }
 
@@ -128,14 +126,6 @@ int DeckModule::_lua_create_image(lua_State* L)
 	from_stack(L, 1);
 	lua_settop(L, 2);
 	DeckImage::convert_top_of_stack(L);
-	return 1;
-}
-
-int DeckModule::_lua_create_text(lua_State* L)
-{
-	from_stack(L, 1);
-	lua_settop(L, 2);
-	DeckText::convert_top_of_stack(L);
 	return 1;
 }
 

@@ -11,6 +11,9 @@ struct IConnector
 
 	virtual char const* get_subtype_name() const = 0;
 
+	static IConnector* from_stack(lua_State* L, int idx, char const* subtype_name, bool throw_error = true);
+	inline IConnector* from_stack(lua_State* L, int idx, bool throw_error = true) const { return from_stack(L, idx, get_subtype_name(), throw_error); }
+
 	virtual void post_init(lua_State* L);
 	virtual void tick(lua_State* L, int delta_msec) = 0;
 	virtual void shutdown(lua_State* L);

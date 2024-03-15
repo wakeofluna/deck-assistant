@@ -275,6 +275,11 @@ DeckColour::DeckColour(std::string_view const& value)
 		m_colour.set_pink();
 }
 
+DeckColour::DeckColour(Colour c)
+    : m_colour(c)
+{
+}
+
 int DeckColour::index(lua_State* L, std::string_view const& key) const
 {
 	std::uint64_t result = 0;

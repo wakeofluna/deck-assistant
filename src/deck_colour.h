@@ -2,37 +2,16 @@
 #define DECK_ASSISTANT_DECK_COLOUR_H
 
 #include "lua_class.h"
-#include <cstdint>
-
-struct Colour
-{
-	constexpr inline void clear() { value = 0; }
-	constexpr inline void set_pink()
-	{
-		r = 0xEE;
-		g = 0x82;
-		b = 0xEE;
-		a = 0xFF;
-	}
-
-	union
-	{
-		struct
-		{
-			unsigned char r;
-			unsigned char g;
-			unsigned char b;
-			unsigned char a;
-		};
-		std::uint32_t value;
-	};
-};
+#include "util_colour.h"
 
 class DeckColour : public LuaClass<DeckColour>
 {
 public:
 	DeckColour();
 	DeckColour(std::string_view const& value);
+	DeckColour(Colour c);
+
+	inline Colour get_colour() const { return m_colour; }
 
 	static char const* LUA_TYPENAME;
 

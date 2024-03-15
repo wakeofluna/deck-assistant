@@ -23,6 +23,7 @@ public:
 
 	void log_message(lua_State* L, Level level, std::string_view const& message) const;
 	static void lua_log_message(lua_State* L, Level level, std::string_view const& message);
+	static void lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2);
 
 	static void init_class_table(lua_State* L);
 	void init_instance_table(lua_State* L);
