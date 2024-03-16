@@ -14,9 +14,9 @@ public:
 	DeckModule();
 
 	static char const* LUA_TYPENAME;
-	static char const* LUA_GLOBAL_INDEX_NAME;
+	static constexpr bool const LUA_IS_GLOBAL = true;
 
-	void tick(lua_State* L, int delta_msec);
+	void tick(lua_State* L, lua_Integer clock);
 	void shutdown(lua_State* L);
 
 	bool is_exit_requested() const;
@@ -29,6 +29,8 @@ public:
 	int newindex(lua_State* L);
 
 private:
+	static DeckConnectorContainer* get_connector_container(lua_State* L);
+
 	static int _lua_create_card(lua_State* L);
 	static int _lua_create_colour(lua_State* L);
 	static int _lua_create_formatter(lua_State* L);
@@ -36,9 +38,8 @@ private:
 	static int _lua_request_quit(lua_State* L);
 
 private:
-	lua_Integer m_total_delta;
+	lua_Integer m_last_clock;
 	lua_Integer m_last_delta;
-	DeckConnectorContainer* m_connector_container;
 	std::optional<int> m_exit_requested;
 };
 

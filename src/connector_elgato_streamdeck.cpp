@@ -128,12 +128,7 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 		lua_getfield(L, -1, "on_connect");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
-			if (!LuaHelpers::pcall(L, 0, 0))
-			{
-				std::stringstream buf;
-				LuaHelpers::print_error_context(buf);
-				DeckLogger::lua_log_message(L, DeckLogger::Level::Error, buf.str());
-			}
+			LuaHelpers::pcall(L, 0, 0);
 		}
 		else
 		{
@@ -164,7 +159,7 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 				{
 					lua_pushinteger(L, idx + 1);
 					lua_pushvalue(L, -3);
-					lua_pcall(L, 2, 0, 0);
+					LuaHelpers::pcall(L, 2, 0);
 				}
 				else
 				{
@@ -182,7 +177,7 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 		lua_getfield(L, -1, "on_disconnect");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
-			lua_pcall(L, 0, 0, 0);
+			LuaHelpers::pcall(L, 0, 0);
 		}
 		else
 		{
@@ -323,7 +318,7 @@ int ConnectorElgatoStreamDeck::_lua_default_on_connect(lua_State* L)
 	luaL_addlstring(&buf, serialnumber.data(), serialnumber.size());
 	luaL_pushresult(&buf);
 
-	lua_pcall(L, 1, 0, 0);
+	LuaHelpers::pcall(L, 1, 0, false);
 	return 0;
 }
 
@@ -339,7 +334,7 @@ int ConnectorElgatoStreamDeck::_lua_default_on_disconnect(lua_State* L)
 	luaL_addlstring(&buf, self->m_last_error.data(), self->m_last_error.size());
 	luaL_pushresult(&buf);
 
-	lua_pcall(L, 1, 0, 0);
+	LuaHelpers::pcall(L, 1, 0, false);
 	return 0;
 }
 
@@ -357,7 +352,7 @@ int ConnectorElgatoStreamDeck::_lua_default_on_press(lua_State* L)
 	luaL_addvalue(&buf);
 	luaL_pushresult(&buf);
 
-	lua_pcall(L, 1, 0, 0);
+	LuaHelpers::pcall(L, 1, 0, false);
 	return 0;
 }
 
@@ -375,7 +370,7 @@ int ConnectorElgatoStreamDeck::_lua_default_on_release(lua_State* L)
 	luaL_addvalue(&buf);
 	luaL_pushresult(&buf);
 
-	lua_pcall(L, 1, 0, 0);
+	LuaHelpers::pcall(L, 1, 0, false);
 	return 0;
 }
 

@@ -11,7 +11,6 @@ class DeckConnectorContainer : public LuaClass<DeckConnectorContainer>
 {
 public:
 	static char const* LUA_TYPENAME;
-	static char const* LUA_GLOBAL_INDEX_NAME;
 
 	void for_each(lua_State* L, std::function<void(lua_State* L, DeckConnector*)> const& visitor) const;
 

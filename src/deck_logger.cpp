@@ -36,48 +36,46 @@ void push_level(lua_State* L, DeckLogger::Level level)
 
 } // namespace
 
-char const* DeckLogger::LUA_TYPENAME          = "deck-assistant.DeckLogger";
-char const* DeckLogger::LUA_GLOBAL_INDEX_NAME = "DeckLoggerInstance";
+char const* DeckLogger::LUA_TYPENAME = "deck:DeckLogger";
 
 DeckLogger::DeckLogger()
     : m_block_logs(false)
 {
 }
 
-void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message) const
+void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message)
 {
 	if (message.empty())
 		return;
 
 	stream_output(std::cout, level, message);
 
-	if (!m_block_logs)
+	DeckLogger* logger = push_global_instance(L);
+	if (logger && !logger->m_block_logs)
 	{
-		m_block_logs = true;
+		logger->m_block_logs = true;
+		int const resettop   = lua_gettop(L);
 
-		int const resettop = lua_gettop(L);
-
-		push_this(L);
 		push_instance_table(L, -1);
 		lua_getfield(L, -1, "on_message");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
 			push_level(L, level);
 			lua_pushlstring(L, message.data(), message.size());
-			if (!LuaHelpers::pcall(L, 2, 0))
+			if (!LuaHelpers::pcall(L, 2, 0, false))
 			{
-				std::stringstream buf;
-				buf << "Additionally, an error occured in the Logger on_message callback: ";
-				LuaHelpers::print_error_context(buf);
-
-				stream_output(std::cerr, Level::Error, buf.str());
+				std::string buf;
+				buf.reserve(256);
+				buf  = "Additionally, an error occured in the Logger on_message callback:\n";
+				buf += LuaHelpers::get_last_error_context().message;
+				stream_output(std::cerr, Level::Error, buf);
 			}
 		}
 
 		lua_settop(L, resettop);
-
-		m_block_logs = false;
+		logger->m_block_logs = false;
 	}
+	lua_pop(L, 1);
 }
 
 void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message)
@@ -87,45 +85,15 @@ void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view con
 
 void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2)
 {
-	DeckLogger* logger = get_global_instance(L);
-	if (logger)
+	if (!part2.empty())
 	{
-		lua_Debug ar;
-		int depth       = 1;
-		bool have_stack = false;
-
-		while (lua_getstack(L, depth, &ar))
-		{
-			lua_getinfo(L, "l", &ar);
-			if (ar.currentline != -1)
-			{
-				have_stack = true;
-				break;
-			}
-			++depth;
-		}
-
-		if (have_stack)
-		{
-			lua_getinfo(L, "S", &ar);
-
-			std::stringstream full_message;
-			full_message << ar.short_src << ':' << ar.currentline << " -- " << message;
-			if (!part2.empty())
-				full_message << ": " << part2;
-
-			logger->log_message(L, level, full_message.str());
-		}
-		else if (!part2.empty())
-		{
-			std::stringstream full_message;
-			full_message << message << ": " << part2;
-			logger->log_message(L, level, full_message.str());
-		}
-		else
-		{
-			logger->log_message(L, level, message);
-		}
+		std::stringstream full_message;
+		full_message << message << ": " << part2;
+		log_message(L, level, full_message.str());
+	}
+	else
+	{
+		log_message(L, level, message);
 	}
 }
 

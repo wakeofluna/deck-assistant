@@ -35,13 +35,24 @@
  *                int newindex(lua_State *L, std::string_view const& key)
  * __call     : int call(lua_State *L)
  *
+ *
  * Additionally the class supports two tables:
+ *
  * + Class table: shared between all instances, for functions and default values
  *   Enable (and optionally pre-fill) the class table by implementing:
  *     static void init_class_table(lua_State *L)
  * + Instance table: private per instance
  *   Enable (and optionally pre-fill) the instance table by implementing:
  *     void init_instance_table(lua_State *L)
+ *
+ *
+ * Finally, you can set some static constants to control some aspects of the class
+ *
+ * + static char const* LUA_TYPENAME
+ *     Use this string as the name of the metatable and classname in print commands
+ * + static constexpr bool const LUA_IS_GLOBAL = true
+ *     If true, the first instance to be created is stored globally and will be reused on
+ *     future uses
  *
  * @tparam T Class to curiously recurringly wrap
  */
@@ -51,11 +62,8 @@ class LuaClass : public LuaHelpers
 public:
 	static char const* type_name();
 
-	static void push_global_instance(lua_State* L);
-	static T* get_global_instance(lua_State* L);
-
+	static T* push_global_instance(lua_State* L);
 	static T* from_stack(lua_State* L, int idx, bool throw_error = true);
-	static bool is_on_stack(lua_State* L, int idx);
 	static int push_metatable(lua_State* L);
 
 	static T* convert_top_of_stack(lua_State* L, bool throw_error = true);

@@ -51,23 +51,23 @@ constexpr inline char const* __typename()
 // *************************** GLOBAL INDEX *************************
 
 template <typename T>
-constexpr inline bool has_global_index_name(not_available)
+constexpr inline bool is_global(not_available)
 {
 	return false;
 }
 
 template <typename T>
-constexpr inline bool has_global_index_name(std::enable_if_t<
-                                            std::is_same_v<char const*, decltype(T::LUA_GLOBAL_INDEX_NAME)>,
-                                            is_available>)
+constexpr inline bool is_global(std::enable_if_t<
+                                std::is_same_v<bool const, decltype(T::LUA_IS_GLOBAL)>,
+                                is_available>)
 {
-	return true;
+	return T::LUA_IS_GLOBAL;
 }
 
 template <typename T>
-constexpr inline bool has_global_index_name()
+constexpr inline bool is_global()
 {
-	return has_global_index_name<T>(is_available());
+	return is_global<T>(is_available());
 }
 
 // *************************** GC FINALIZE *************************
@@ -574,14 +574,6 @@ inline bool register_newindex(lua_State* L, not_available)
 	return false;
 }
 
-// *************************** PAIRS *************************
-
-template <typename>
-constexpr inline bool register_pairs(lua_State* L, not_available)
-{
-	return false;
-}
-
 // *************************** CALL *************************
 
 template <typename T>
@@ -612,50 +604,50 @@ template <typename T>
 template <typename... ARGS>
 T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 {
-	if constexpr (has_global_index_name<T>())
+	if constexpr (is_global<T>())
 	{
-		push_global_instance(L);
-		assert(lua_type(L, -1) == LUA_TNIL && "global instance of type already exists!");
+		T* instance = push_global_instance(L);
+		if (instance)
+			return instance;
+
 		lua_pop(L, 1);
 	}
 
 	T* object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
 	new (object) T(std::forward<ARGS>(args)...);
 
-	LuaHelpers::push_userdata_container(L);
-	lua_pushlightuserdata(L, object);
-	lua_pushvalue(L, -3);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
-
 	push_metatable(L);
-	lua_setmetatable(L, -2);
 
-	if constexpr (has_global_index_name<T>())
+	if constexpr (is_global<T>())
 	{
-		lua_pushvalue(L, -1);
-		lua_setfield(L, LUA_REGISTRYINDEX, T::LUA_GLOBAL_INDEX_NAME);
+		lua_pushvalue(L, -2);
+		lua_rawseti(L, -2, IDX_META_GLOBAL_INSTANCE);
 	}
 
 	if constexpr (has_init_instance_table<T>(is_available()))
 	{
-		LuaHelpers::push_instance_table_container(L);
-		lua_pushvalue(L, -2);
+		lua_rawgeti(L, -1, IDX_META_INSTANCE_TABLES);
+		lua_pushvalue(L, -3);
 		lua_newtable(L);
 		__init_instance_table<T>(L, object);
 		lua_rawset(L, -3);
 		lua_pop(L, 1);
 	}
 
+	lua_setmetatable(L, -2);
+
 	return object;
 }
 
 template <typename T>
-void LuaClass<T>::push_global_instance(lua_State* L)
+T* LuaClass<T>::push_global_instance(lua_State* L)
 {
-	if constexpr (has_global_index_name<T>())
+	if constexpr (is_global<T>())
 	{
-		lua_getfield(L, LUA_REGISTRYINDEX, T::LUA_GLOBAL_INDEX_NAME);
+		push_metatable(L);
+		lua_rawgeti(L, -1, IDX_META_GLOBAL_INSTANCE);
+		lua_replace(L, -2);
+		return from_stack(L, -1, false);
 	}
 	else
 	{
@@ -664,21 +656,15 @@ void LuaClass<T>::push_global_instance(lua_State* L)
 }
 
 template <typename T>
-T* LuaClass<T>::get_global_instance(lua_State* L)
-{
-	push_global_instance(L);
-	T* instance = from_stack(L, -1, false);
-	lua_pop(L, 1);
-	return instance;
-}
-
-template <typename T>
 T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throw_error)
 {
-	lua_getmetatable(L, idx);
+	bool ok = false;
 
-	bool ok = (lua_type(L, -1) == LUA_TTABLE && lua_topointer(L, -1) == T::m_metatable_ptr);
-	lua_pop(L, 1);
+	if (lua_type(L, idx) == LUA_TUSERDATA && lua_getmetatable(L, idx))
+	{
+		ok = (lua_type(L, -1) == LUA_TTABLE && lua_topointer(L, -1) == T::m_metatable_ptr);
+		lua_pop(L, 1);
+	}
 
 	if (ok)
 		return reinterpret_cast<T*>(lua_touserdata(L, idx));
@@ -690,17 +676,6 @@ T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throw_error)
 	}
 
 	return nullptr;
-}
-
-template <typename T>
-bool LuaClass<T>::is_on_stack(lua_State* L, int idx)
-{
-	lua_getmetatable(L, idx);
-
-	bool ok = (lua_type(L, -1) == LUA_TTABLE && lua_topointer(L, -1) == T::m_metatable_ptr);
-	lua_pop(L, 1);
-
-	return ok;
 }
 
 template <typename T>
@@ -717,7 +692,7 @@ int LuaClass<T>::push_metatable(lua_State* L)
 	if (lua_type(L, -1) != LUA_TTABLE)
 	{
 		lua_pop(L, 1);
-		lua_createtable(L, 1, 12);
+		lua_createtable(L, 3, 12);
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, LUA_REGISTRYINDEX, tname);
@@ -736,6 +711,15 @@ int LuaClass<T>::push_metatable(lua_State* L)
 			lua_rawseti(L, -2, IDX_META_CLASSTABLE);
 		}
 
+		if constexpr (has_init_instance_table<T>(is_available()))
+		{
+			// Table to hold instance tables
+			lua_createtable(L, 0, 64);
+			push_standard_weak_key_metatable(L);
+			lua_setmetatable(L, -2);
+			lua_rawseti(L, -2, IDX_META_INSTANCE_TABLES);
+		}
+
 		register_gc<T>(L);
 		register_tostring<T>(L, is_available());
 		register_eq<T>(L, is_available());
@@ -743,7 +727,6 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		register_le<T>(L, is_available());
 		register_index<T>(L, is_available());
 		register_newindex<T>(L, is_available());
-		register_pairs<T>(L, is_available());
 		register_call<T>(L, is_available());
 
 		T::m_metatable_ptr = lua_topointer(L, -1);

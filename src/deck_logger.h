@@ -17,11 +17,11 @@ public:
 
 public:
 	static char const* LUA_TYPENAME;
-	static char const* LUA_GLOBAL_INDEX_NAME;
+	static constexpr bool const LUA_IS_GLOBAL = true;
 
 	DeckLogger();
 
-	void log_message(lua_State* L, Level level, std::string_view const& message) const;
+	static void log_message(lua_State* L, Level level, std::string_view const& message);
 	static void lua_log_message(lua_State* L, Level level, std::string_view const& message);
 	static void lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2);
 

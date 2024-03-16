@@ -67,34 +67,16 @@ TEST_CASE("LuaHelpers", "[lua]")
 {
 	lua_State* L = new_test_state();
 
-	TestClass* tc1 = TestClass::create_new(L);
+	TestClass::push_new(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, "tc1");
 
-	TestClass2* tc2 = TestClass2::create_new(L, 42);
+	TestClass2::push_new(L, 42);
 	lua_setfield(L, LUA_REGISTRYINDEX, "tc2");
 
-	TestClass2* tc3 = TestClass2::create_new(L, 69);
+	TestClass2::push_new(L, 69);
 	lua_setfield(L, LUA_REGISTRYINDEX, "tc3");
 
 	REQUIRE(lua_gettop(L) == 0);
-
-	SECTION("push_this")
-	{
-		tc1->push_this(L);
-		REQUIRE(lua_gettop(L) == 1);
-		REQUIRE(lua_type(L, -1) == LUA_TUSERDATA);
-		REQUIRE(lua_topointer(L, -1) == tc1);
-		REQUIRE(lua_touserdata(L, -1) == tc1);
-
-		tc3->push_this(L);
-		tc1->push_this(L);
-		tc2->push_this(L);
-		REQUIRE(lua_gettop(L) == 4);
-		REQUIRE(lua_touserdata(L, 2) == tc3);
-		REQUIRE(lua_touserdata(L, 3) == tc1);
-		REQUIRE(lua_touserdata(L, 4) == tc2);
-		REQUIRE(lua_rawequal(L, 1, 3));
-	}
 
 	SECTION("absidx")
 	{
@@ -147,14 +129,14 @@ TEST_CASE("LuaHelpers", "[lua]")
 
 	SECTION("push_class_table")
 	{
-		tc1->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 
 		REQUIRE_THROWS(LuaHelpers::push_class_table(L, 1));
 		REQUIRE(to_string_view(L, -1) == "Internal error: class has no class table");
 		lua_settop(L, 1);
 
-		tc2->push_this(L);
-		tc3->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc3");
 		LuaHelpers::push_class_table(L, 2);
 		LuaHelpers::push_class_table(L, 3);
 		REQUIRE(lua_gettop(L) == 5);
@@ -168,14 +150,14 @@ TEST_CASE("LuaHelpers", "[lua]")
 
 	SECTION("push_instance_table")
 	{
-		tc1->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 
 		REQUIRE_THROWS(LuaHelpers::push_instance_table(L, 1));
 		REQUIRE(to_string_view(L, -1) == "Internal error: class has no instance table");
 		lua_settop(L, 1);
 
-		tc2->push_this(L);
-		tc3->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc3");
 		LuaHelpers::push_instance_table(L, 2);
 		LuaHelpers::push_instance_table(L, 3);
 		REQUIRE(lua_gettop(L) == 5);
@@ -361,7 +343,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 
 		SECTION("Userdata with __name")
 		{
-			tc2->push_this(L);
+			lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
 			converted = LuaHelpers::push_converted_to_string(L, 1);
 			REQUIRE(lua_gettop(L) == 2);
 			REQUIRE(converted.starts_with(std::string(TestClass2::LUA_TYPENAME) + ": "));
@@ -369,7 +351,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 
 		SECTION("Userdata with __tostring")
 		{
-			tc1->push_this(L);
+			lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 			converted = LuaHelpers::push_converted_to_string(L, 1);
 			REQUIRE(lua_gettop(L) == 2);
 			REQUIRE(converted == "It's a secret (333)");
@@ -378,13 +360,13 @@ TEST_CASE("LuaHelpers", "[lua]")
 
 	SECTION("newindex_store_in_instance_table")
 	{
-		tc1->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 		lua_pushliteral(L, "value");
 		lua_pushinteger(L, 1);
 		REQUIRE_THROWS(LuaHelpers::newindex_store_in_instance_table(L));
 		lua_settop(L, 0);
 
-		tc2->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
 
 		lua_pushliteral(L, "value");
 		lua_gettable(L, -2);
@@ -417,7 +399,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 		lua_pushstring(L, "test");
 		lua_rawseti(L, 1, 1);
 		//
-		tc1->push_this(L);
+		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 		lua_rawseti(L, 1, 2);
 		//
 		lua_createtable(L, 0, 0);
@@ -483,9 +465,6 @@ value = foo(15)
 			REQUIRE(LuaHelpers::load_script_inline(L, "inline_test_chunk", script));
 			REQUIRE(lua_gettop(L) == 1);
 
-			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
-			REQUIRE(error.call_result == LUA_OK);
-
 			lua_pushvalue(L, 1);
 			REQUIRE(lua_pcall(L, 0, 0, 0) == LUA_OK);
 
@@ -510,7 +489,6 @@ value = foo(15)
 			REQUIRE(lua_gettop(L) == 0);
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
-			REQUIRE(error.call_result == LUA_ERRSYNTAX);
 			REQUIRE(error.message.find("inline_test_chunk") != std::string::npos);
 			REQUIRE(error.message.find(":3:") != std::string::npos);
 		}
@@ -551,11 +529,10 @@ value = foo(15)
 			REQUIRE(!LuaHelpers::pcall(L, 1, 1));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
-			REQUIRE(error.call_result == LUA_ERRRUN);
+			REQUIRE(error.result == LUA_ERRRUN);
 			REQUIRE(error.message == "I can't let this happen");
-			REQUIRE(error.stack.size() == 1);
-			REQUIRE(error.stack[0].source_name == "[C]");
-			REQUIRE(error.stack[0].line == -1);
+			REQUIRE(error.source_name.empty());
+			REQUIRE(error.line == 0);
 		}
 
 		SECTION("Attempt to call a table")
@@ -566,9 +543,10 @@ value = foo(15)
 			REQUIRE(!LuaHelpers::pcall(L, 1, 2));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
-			REQUIRE(error.call_result == LUA_ERRRUN);
+			REQUIRE(error.result == LUA_ERRRUN);
 			REQUIRE(error.message == "attempt to call a table value");
-			REQUIRE(error.stack.size() == 0);
+			REQUIRE(error.source_name.empty());
+			REQUIRE(error.line == 0);
 		}
 
 		SECTION("Lua-function that throws an error")
@@ -596,13 +574,10 @@ end
 			REQUIRE(!LuaHelpers::pcall(L, 0, 1));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
-			REQUIRE(error.call_result == LUA_ERRRUN);
+			REQUIRE(error.result == LUA_ERRRUN);
 			REQUIRE(error.message.find("inline_error_chunk") != std::string::npos);
-			REQUIRE(error.stack.size() == 2);
-			REQUIRE(error.stack[0].function_name == "bar");
-			REQUIRE(error.stack[0].line == 2);
-			REQUIRE(error.stack[1].function_name == "");
-			REQUIRE(error.stack[1].line == 5);
+			REQUIRE(error.source_name == "[string \"inline_error_chunk\"]");
+			REQUIRE(error.line == 2);
 		}
 
 		REQUIRE(lua_gettop(L) == 1);

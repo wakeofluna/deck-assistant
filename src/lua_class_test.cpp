@@ -195,34 +195,26 @@ TEST_CASE("LuaClass", "[lua]")
 			REQUIRE(g_clz4_constructed == 1);
 		}
 
-		SECTION("Cleanup of instance table and userdata table")
+		SECTION("Cleanup of instance tables table")
 		{
-			LuaHelpers::push_userdata_container(L);
-			LuaHelpers::push_instance_table_container(L);
-			TestClassVariant1* tc1 = TestClassVariant1::create_new(L);
+			TestClassVariant1::push_new(L);
+			LuaHelpers::push_instance_table_container(L, -1);
+			lua_insert(L, -2);
 
-			TableCountMap count_map1_before = count_elements_in_table(L, 1);
-			REQUIRE(count_map1_before[LUA_TLIGHTUSERDATA].first == 1);
-			REQUIRE(count_map1_before[LUA_TUSERDATA].second == 1);
-			TableCountMap count_map2_before = count_elements_in_table(L, 2);
-			REQUIRE(count_map2_before[LUA_TUSERDATA].first == 1);
-			REQUIRE(count_map2_before[LUA_TTABLE].second == 1);
+			TableCountMap count_map_before = count_elements_in_table(L, 1);
+			REQUIRE(count_map_before[LUA_TUSERDATA].first == 1);
+			REQUIRE(count_map_before[LUA_TTABLE].second == 1);
 
-			lua_pushlightuserdata(L, tc1);
+			lua_pushvalue(L, -1);
 			lua_gettable(L, 1);
-			REQUIRE(lua_touserdata(L, -1) == tc1);
-			lua_gettable(L, 2);
 			REQUIRE(lua_type(L, -1) == LUA_TTABLE);
 
-			lua_settop(L, 2);
+			lua_settop(L, 1);
 			lua_gc(L, LUA_GCCOLLECT, 0);
 
-			TableCountMap count_map1_after = count_elements_in_table(L, 1);
-			REQUIRE(count_map1_after[LUA_TLIGHTUSERDATA].first == 0);
-			REQUIRE(count_map1_after[LUA_TUSERDATA].second == 0);
-			TableCountMap count_map2_after = count_elements_in_table(L, 2);
-			REQUIRE(count_map2_after[LUA_TUSERDATA].first == 0);
-			REQUIRE(count_map2_after[LUA_TTABLE].second == 0);
+			TableCountMap count_map_after = count_elements_in_table(L, 1);
+			REQUIRE(count_map_after[LUA_TUSERDATA].first == 0);
+			REQUIRE(count_map_after[LUA_TTABLE].second == 0);
 		}
 	}
 

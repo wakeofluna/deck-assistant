@@ -9,16 +9,16 @@ namespace
 template <typename... ARGS>
 void run_connector_function(lua_State* L, DeckConnector* self, void (IConnector::*func)(lua_State*, ARGS...), ARGS... args)
 {
-	lua_checkstack(L, lua_gettop(L) + 20);
+	int const resettop = lua_gettop(L);
+	lua_checkstack(L, resettop + 20);
 
-	self->push_this(L);
+	assert(DeckConnector::from_stack(L, -1, false) && "DeckConnector::run_connector_function needs self on -1");
 	LuaHelpers::push_instance_table(L, -1);
 
-	int oldtop = lua_gettop(L);
 	(self->get_connector()->*func)(L, std::forward<ARGS>(args)...);
-	assert(lua_gettop(L) >= oldtop && "DeckConnector internal function was not stack balanced");
 
-	lua_settop(L, oldtop - 2);
+	assert(lua_gettop(L) > resettop && "DeckConnector internal function was not stack balanced");
+	lua_settop(L, resettop);
 }
 
 } // namespace

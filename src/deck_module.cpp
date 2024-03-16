@@ -10,29 +10,35 @@
 
 template class LuaClass<DeckModule>;
 
-char const* DeckModule::LUA_TYPENAME          = "deck-assistant.DeckModule";
-char const* DeckModule::LUA_GLOBAL_INDEX_NAME = "DeckModuleInstance";
+char const* DeckModule::LUA_TYPENAME = "deck:DeckModule";
 
 DeckModule::DeckModule()
-    : m_total_delta(0)
+    : m_last_clock(0)
     , m_last_delta(0)
 {
 }
 
-void DeckModule::tick(lua_State* L, int delta_msec)
+void DeckModule::tick(lua_State* L, lua_Integer clock)
 {
-	m_last_delta   = delta_msec;
-	m_total_delta += delta_msec;
-	m_connector_container->for_each(L, [delta_msec](lua_State* L, DeckConnector* dc) {
-		dc->tick(L, delta_msec);
+	m_last_delta = clock - m_last_clock;
+	m_last_clock = clock;
+
+	DeckConnectorContainer* container = get_connector_container(L);
+	container->for_each(L, [this](lua_State* L, DeckConnector* dc) {
+		dc->tick(L, m_last_delta);
 	});
+
+	lua_pop(L, 1);
 }
 
 void DeckModule::shutdown(lua_State* L)
 {
-	m_connector_container->for_each(L, [](lua_State* L, DeckConnector* dc) {
+	DeckConnectorContainer* container = get_connector_container(L);
+	container->for_each(L, [](lua_State* L, DeckConnector* dc) {
 		dc->shutdown(L);
 	});
+
+	lua_pop(L, 1);
 }
 
 bool DeckModule::is_exit_requested() const
@@ -69,7 +75,7 @@ void DeckModule::init_class_table(lua_State* L)
 
 void DeckModule::init_instance_table(lua_State* L)
 {
-	m_connector_container = DeckConnectorContainer::create_new(L);
+	DeckConnectorContainer::create_new(L);
 	lua_setfield(L, -2, "connectors");
 }
 
@@ -77,7 +83,7 @@ int DeckModule::index(lua_State* L, std::string_view const& key) const
 {
 	if (key == "clock")
 	{
-		lua_pushinteger(L, m_total_delta);
+		lua_pushinteger(L, m_last_clock);
 	}
 	else if (key == "delta")
 	{
@@ -94,6 +100,15 @@ int DeckModule::newindex(lua_State* L)
 {
 	luaL_error(L, "%s instance is closed for modifications", type_name());
 	return 0;
+}
+
+DeckConnectorContainer* DeckModule::get_connector_container(lua_State* L)
+{
+	assert(from_stack(L, -1, false) && "DeckModule::get_connector_container needs self on -1");
+	lua_getfield(L, -1, "connectors");
+	DeckConnectorContainer* container = DeckConnectorContainer::from_stack(L, -1, false);
+	assert(container && "DeckModule lost its connector container");
+	return container;
 }
 
 int DeckModule::_lua_create_card(lua_State* L)

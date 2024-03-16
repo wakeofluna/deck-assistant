@@ -12,25 +12,8 @@
 #include <fstream>
 #include <iostream>
 #include <lua.hpp>
-#include <memory_resource>
-#include <string>
 #include <string_view>
 #include <thread>
-
-struct ApplicationPrivate
-{
-	~ApplicationPrivate()
-	{
-		lua_close(state);
-		delete mem_resource;
-	}
-
-	std::pmr::memory_resource* mem_resource;
-	lua_State* state;
-	DeckModule* deck_module;
-	DeckLogger* deck_logger;
-	std::string deckfile_file_name;
-};
 
 namespace
 {
@@ -79,22 +62,19 @@ void* _lua_alloc(void* ud, void* ptr, size_t osize, size_t nsize)
 
 int override_print(lua_State* L)
 {
-	DeckLogger* logger = reinterpret_cast<DeckLogger*>(lua_touserdata(L, lua_upvalueindex(1)));
-	logger->push_this(L);
+	lua_pushvalue(L, lua_upvalueindex(1));
+	DeckLogger* logger = DeckLogger::from_stack(L, -1);
 	lua_insert(L, 1);
 	return logger->call(L);
 };
 
 } // namespace
 
-#define L m_private->state
-
 Application::Application()
-    : m_private(new ApplicationPrivate)
 {
-	m_private->mem_resource = new std::pmr::unsynchronized_pool_resource({ 1024, 4096 }, std::pmr::new_delete_resource());
+	m_mem_resource = new std::pmr::unsynchronized_pool_resource({ 1024, 4096 }, std::pmr::new_delete_resource());
 
-	L = lua_newstate(&_lua_alloc, m_private->mem_resource);
+	L = lua_newstate(&_lua_alloc, m_mem_resource);
 	lua_checkstack(L, 200);
 	luaL_openlibs(L);
 
@@ -103,21 +83,15 @@ Application::Application()
 	IMG_Init(0xffffffff);
 	TTF_Init();
 
-	m_private->deck_module = DeckModule::create_new(L);
+	DeckModule::create_new(L);
 	lua_setglobal(L, "deck");
 
-	m_private->deck_logger = DeckLogger::create_new(L);
+	DeckLogger::create_new(L);
 	lua_setglobal(L, "logger");
 
 	DeckFormatter::insert_enum_values(L);
 
 	install_function_overrides();
-}
-
-Application::Application(Application&& other)
-    : m_private(other.m_private)
-{
-	other.m_private = nullptr;
 }
 
 Application::~Application()
@@ -127,15 +101,8 @@ Application::~Application()
 	SDL_hid_exit();
 	SDL_Quit();
 
-	delete m_private;
-}
-
-Application& Application::operator=(Application&& other)
-{
-	delete m_private;
-	m_private       = other.m_private;
-	other.m_private = nullptr;
-	return *this;
+	lua_close(L);
+	delete m_mem_resource;
 }
 
 bool Application::init(std::vector<std::string_view>&& args)
@@ -147,16 +114,10 @@ bool Application::init(std::vector<std::string_view>&& args)
 		file_name = "deckfile.lua";
 	else
 		file_name = args[1];
-	m_private->deckfile_file_name = file_name;
+	m_deckfile_file_name = file_name;
 
-	if (!LuaHelpers::load_script(L, m_private->deckfile_file_name.c_str()))
-	{
-		std::stringstream buf;
-		LuaHelpers::print_error_context(buf);
-		m_private->deck_logger->log_message(L, DeckLogger::Level::Error, buf.str());
-
+	if (!LuaHelpers::load_script(L, m_deckfile_file_name.c_str()))
 		return false;
-	}
 
 	// TODO add safe mode by removing some dangerous stdlib functions
 
@@ -164,13 +125,7 @@ bool Application::init(std::vector<std::string_view>&& args)
 	lua_pushvalue(L, -1);
 
 	if (!LuaHelpers::pcall(L, 0, 0))
-	{
-		std::stringstream buf;
-		LuaHelpers::print_error_context(buf);
-		m_private->deck_logger->log_message(L, DeckLogger::Level::Error, buf.str());
-
 		return false;
-	}
 
 	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading and running script");
 
@@ -185,44 +140,43 @@ bool Application::init(std::vector<std::string_view>&& args)
 
 int Application::run()
 {
-	std::chrono::steady_clock::time_point clock = std::chrono::steady_clock::now();
+	auto const start_time = std::chrono::steady_clock::now();
 
-	while (!m_private->deck_module->is_exit_requested())
+	DeckModule* deck_module = DeckModule::push_global_instance(L);
+	int const resettop      = lua_gettop(L);
+
+	while (!deck_module->is_exit_requested())
 	{
-		auto const prev_clock = clock;
-		clock                 = std::chrono::steady_clock::now();
-		int const delta_msec  = std::chrono::duration_cast<std::chrono::milliseconds>(clock - prev_clock).count();
+		auto const clock             = std::chrono::steady_clock::now();
+		lua_Integer const clock_msec = std::chrono::duration_cast<std::chrono::milliseconds>(clock - start_time).count();
 
-		int const resettop = lua_gettop(L);
-		m_private->deck_module->tick(L, delta_msec);
+		deck_module->tick(L, clock_msec);
 		assert(lua_gettop(L) == resettop && "DeckModule tick function is not stack balanced");
 
 		lua_getfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
 		lua_getfield(L, -1, "tick");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
-			lua_pushinteger(L, delta_msec);
-			if (!LuaHelpers::pcall(L, 1, 0))
-			{
-				std::stringstream buf;
-				LuaHelpers::print_error_context(buf);
-				m_private->deck_logger->log_message(L, DeckLogger::Level::Error, buf.str());
-				break;
-			}
+			lua_pushinteger(L, clock_msec);
+			LuaHelpers::pcall(L, 1, 0);
 		}
-		lua_settop(L, resettop);
+		lua_pop(L, 1);
 
 		std::this_thread::sleep_until(clock + std::chrono::milliseconds(15));
 	}
 
-	m_private->deck_module->shutdown(L);
+	assert(lua_gettop(L) == resettop && "DeckModule run loop is not stack balanced");
 
-	return m_private->deck_module->get_exit_code();
+	deck_module->shutdown(L);
+	int exit_code = deck_module->get_exit_code();
+
+	lua_pop(L, 1);
+	return exit_code;
 }
 
 void Application::install_function_overrides()
 {
-	lua_pushlightuserdata(L, m_private->deck_logger);
+	DeckLogger::push_global_instance(L);
 	lua_pushcclosure(L, &override_print, 1);
 	lua_setglobal(L, "print");
 }
