@@ -1,5 +1,4 @@
 #include "application.h"
-#include "deck_connector_container.h"
 #include "deck_formatter.h"
 #include "deck_logger.h"
 #include "deck_module.h"
@@ -9,8 +8,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <fstream>
-#include <iostream>
 #include <lua.hpp>
 #include <string_view>
 #include <thread>

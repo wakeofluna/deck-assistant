@@ -3,7 +3,6 @@
 
 #include "lua_class.h"
 #include <functional>
-#include <string>
 
 class DeckConnector;
 

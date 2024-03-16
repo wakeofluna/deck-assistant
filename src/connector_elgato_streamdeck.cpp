@@ -1,17 +1,12 @@
 #include "connector_elgato_streamdeck.h"
 #include "SDL_error.h"
 #include "deck_card.h"
-#include "deck_connector.h"
 #include "deck_image.h"
-#include "deck_logger.h"
 #include <algorithm>
 #include <cassert>
 #include <codecvt>
 #include <cstring>
-#include <fstream>
-#include <iostream>
 #include <locale>
-#include <sstream>
 
 namespace
 {

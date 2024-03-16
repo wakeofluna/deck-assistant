@@ -1,11 +1,8 @@
 #include "lua_helpers.h"
 #include "deck_logger.h"
 #include <cassert>
-#include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <vector>
 
 namespace
 {

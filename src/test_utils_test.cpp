@@ -2,7 +2,6 @@
 #include "lua_helpers.h"
 #include <cassert>
 #include <catch2/catch_test_macros.hpp>
-#include <exception>
 #include <lua.hpp>
 
 int at_panic(lua_State* L)

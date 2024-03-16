@@ -5,7 +5,6 @@
 #include "deck_connector_container.h"
 #include "deck_formatter.h"
 #include "deck_image.h"
-#include "deck_text.h"
 #include "lua_class.hpp"
 
 template class LuaClass<DeckModule>;

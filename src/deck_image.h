@@ -1,7 +1,6 @@
 #ifndef DECK_ASSISTANT_DECK_IMAGE_H
 #define DECK_ASSISTANT_DECK_IMAGE_H
 
-#include "deck_colour.h"
 #include "lua_class.h"
 #include <SDL.h>
 #include <string>

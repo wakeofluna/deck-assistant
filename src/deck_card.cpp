@@ -1,8 +1,8 @@
 #include "deck_card.h"
+#include "deck_colour.h"
 #include "deck_image.h"
 #include "deck_text.h"
 #include "lua_class.hpp"
-#include <fstream>
 
 template class LuaClass<DeckCard>;
 

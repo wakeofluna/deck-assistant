@@ -1,5 +1,5 @@
 #include "deck_colour.h"
-#include "deck_logger.h"
+#include "lua_class.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <utility>
@@ -10,7 +10,7 @@ namespace
 using StandardColour = std::pair<std::string_view, std::uint32_t>;
 
 // HTML Standard Colours
-constexpr const StandardColour g_standard_colours[] = {
+constexpr StandardColour const g_standard_colours[] = {
 	{"aliceblue",             0xF0F8FF},
 	{ "antiquewhite",         0xFAEBD7},
 	{ "aqua",	             0x00FFFF},
@@ -160,7 +160,7 @@ constexpr const StandardColour g_standard_colours[] = {
 	{ "yellow",               0xFFFF00},
 	{ "yellowgreen",          0x9ACD32},
 };
-constexpr const std::size_t g_num_standard_colours = sizeof(g_standard_colours) / sizeof(*g_standard_colours);
+constexpr std::size_t const g_num_standard_colours = sizeof(g_standard_colours) / sizeof(*g_standard_colours);
 
 constexpr bool standard_colour_search(StandardColour const& colour, std::string_view const& key)
 {
@@ -259,7 +259,6 @@ bool parse_colour(std::string_view const& value, Colour& target)
 
 } // namespace
 
-#include "lua_class.hpp"
 template class LuaClass<DeckColour>;
 
 char const* DeckColour::LUA_TYPENAME = "deck:Colour";

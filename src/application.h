@@ -1,7 +1,6 @@
 #ifndef DECK_ASSISTANT_APPLICATION_H
 #define DECK_ASSISTANT_APPLICATION_H
 
-#include <cstdint>
 #include <memory_resource>
 #include <string>
 #include <string_view>

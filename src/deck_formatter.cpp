@@ -3,7 +3,6 @@
 #include "deck_colour.h"
 #include "deck_text.h"
 #include "lua_class.hpp"
-#include <cassert>
 #include <optional>
 
 template class LuaClass<DeckFormatter>;

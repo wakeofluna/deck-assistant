@@ -1,8 +1,7 @@
 #ifndef DECK_ASSISTANT_I_CONNECTOR_H
 #define DECK_ASSISTANT_I_CONNECTOR_H
 
-#include "lua_class.h"
-#include <cstdint>
+typedef struct lua_State lua_State;
 
 struct IConnector
 {

@@ -6,7 +6,7 @@
 #include <SDL_surface.h>
 #include <array>
 #include <string>
-#include <utility>
+#include <cstdint>
 #include <vector>
 
 class ConnectorElgatoStreamDeck : public IConnector

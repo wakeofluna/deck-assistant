@@ -3,8 +3,6 @@
 #include "test_utils_test.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
-#include <functional>
-#include <iostream>
 #include <string_view>
 
 namespace lua_helpers_test
