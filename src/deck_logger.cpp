@@ -1,11 +1,8 @@
 #include "deck_logger.h"
-#include "lua_class.hpp"
 #include <chrono>
 #include <format>
 #include <iostream>
 #include <sstream>
-
-template class LuaClass<DeckLogger>;
 
 namespace
 {
@@ -78,6 +75,13 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 	lua_pop(L, 1);
 }
 
+void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2)
+{
+	std::string full_message(message);
+	full_message += part2;
+	log_message(L, level, full_message);
+}
+
 void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message)
 {
 	lua_log_message(L, level, message, std::string_view());
@@ -85,16 +89,24 @@ void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view con
 
 void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2)
 {
+	std::string full_message;
+	int currentline;
+
+	full_message.reserve(64 + message.size() + part2.size());
+	lua_lineinfo(L, full_message, currentline);
+
+	full_message += ':';
+	full_message += std::to_string(currentline);
+	full_message += ": ";
+	full_message += message;
+
 	if (!part2.empty())
 	{
-		std::stringstream full_message;
-		full_message << message << ": " << part2;
-		log_message(L, level, full_message.str());
+		full_message += ": ";
+		full_message += part2;
 	}
-	else
-	{
-		log_message(L, level, message);
-	}
+
+	log_message(L, level, full_message);
 }
 
 void DeckLogger::init_class_table(lua_State* L)

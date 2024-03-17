@@ -5,10 +5,8 @@
 #include "deck_connector_container.h"
 #include "deck_font.h"
 #include "deck_logger.h"
-#include "lua_class.hpp"
 #include <SDL_image.h>
-
-template class LuaClass<DeckModule>;
+#include <cassert>
 
 char const* DeckModule::LUA_TYPENAME = "deck:DeckModule";
 
@@ -75,7 +73,7 @@ void DeckModule::init_class_table(lua_State* L)
 
 void DeckModule::init_instance_table(lua_State* L)
 {
-	DeckConnectorContainer::create_new(L);
+	DeckConnectorContainer::push_new(L);
 	lua_setfield(L, -2, "connectors");
 }
 
@@ -116,7 +114,21 @@ int DeckModule::_lua_create_card(lua_State* L)
 	from_stack(L, 1);
 	int width  = check_arg_int(L, 2);
 	int height = check_arg_int(L, 3);
-	DeckCard::create_new(L, width, height);
+
+	luaL_argcheck(L, width > 0, 2, "width must be larger than 0");
+	luaL_argcheck(L, height > 0, 3, "height must be larger than 0");
+
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(SDL_SIMD_ALIGNED, width, height, 32, SDL_PIXELFORMAT_ARGB32);
+	if (!surface)
+	{
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to allocate new card", SDL_GetError());
+		return 0;
+	}
+
+	// Fill with transparant black
+	SDL_FillRect(surface, nullptr, 0);
+
+	DeckCard::push_new(L, surface);
 	return 1;
 }
 
@@ -124,15 +136,45 @@ int DeckModule::_lua_create_colour(lua_State* L)
 {
 	from_stack(L, 1);
 	lua_settop(L, 2);
-	DeckColour::convert_top_of_stack(L);
-	return 1;
+
+	int const vtype = lua_type(L, 2);
+	if (vtype == LUA_TSTRING)
+	{
+		std::string_view value = check_arg_string(L, 2);
+
+		Colour col;
+		if (!Colour::parse_colour(value, col))
+		{
+			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "color value not understood");
+			col.set_pink();
+		}
+
+		DeckColour::push_new(L, col);
+		return 1;
+	}
+	else if (vtype == LUA_TTABLE)
+	{
+		DeckColour::push_new(L, Colour(0, 0, 0));
+		lua_pushvalue(L, 2);
+		LuaHelpers::copy_table_fields(L);
+		return 1;
+	}
+	else
+	{
+		luaL_typerror(L, 2, "string or table");
+		return 0;
+	}
 }
 
 int DeckModule::_lua_create_font(lua_State* L)
 {
 	from_stack(L, 1);
-	lua_settop(L, 2);
-	DeckFont::convert_top_of_stack(L);
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	DeckFont::push_new(L);
+	lua_pushvalue(L, 2);
+	LuaHelpers::copy_table_fields(L);
+
 	return 1;
 }
 

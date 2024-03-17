@@ -8,7 +8,6 @@ class DeckColour : public LuaClass<DeckColour>
 {
 public:
 	DeckColour();
-	DeckColour(std::string_view const& value);
 	DeckColour(Colour c);
 
 	inline Colour get_colour() const { return m_colour; }

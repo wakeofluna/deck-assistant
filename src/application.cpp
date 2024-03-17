@@ -80,10 +80,10 @@ Application::Application()
 	IMG_Init(0xffffffff);
 	TTF_Init();
 
-	DeckModule::create_new(L);
+	DeckModule::push_new(L);
 	lua_setglobal(L, "deck");
 
-	DeckLogger::create_new(L);
+	DeckLogger::push_new(L);
 	lua_setglobal(L, "logger");
 
 	DeckFont::insert_enum_values(L);

@@ -66,21 +66,23 @@ public:
 	static T* from_stack(lua_State* L, int idx, bool throw_error = true);
 	static int push_metatable(lua_State* L);
 
-	static T* convert_top_of_stack(lua_State* L, bool throw_error = true);
-	static void create_from_table(lua_State* L, int idx);
-	static void create_from_string(lua_State* L, std::string_view const& value);
-
 	template <typename... ARGS>
-	static T* create_new(lua_State* L, ARGS... args);
-
-	template <typename... ARGS>
-	static inline int push_new(lua_State* L, ARGS... args)
+	static T* push_new(lua_State* L, ARGS... args)
 	{
-		create_new(L, std::forward<ARGS>(args)...);
-		return 1;
+		T* object = check_global_instance(L);
+		if (!object)
+		{
+			object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
+			new (object) T(std::forward<ARGS>(args)...);
+			finish_initialisation(L, object);
+		}
+		return object;
 	}
 
-protected:
+private:
+	static T* check_global_instance(lua_State* L);
+	static void finish_initialisation(lua_State* L, T* object);
+
 	static void const* m_metatable_ptr;
 };
 

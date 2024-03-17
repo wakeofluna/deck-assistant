@@ -601,8 +601,7 @@ inline bool register_call(lua_State* L, std::enable_if_t<
 } // namespace
 
 template <typename T>
-template <typename... ARGS>
-T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
+T* LuaClass<T>::check_global_instance(lua_State* L)
 {
 	if constexpr (is_global<T>())
 	{
@@ -612,10 +611,12 @@ T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 
 		lua_pop(L, 1);
 	}
+	return nullptr;
+}
 
-	T* object = reinterpret_cast<T*>(lua_newuserdata(L, sizeof(T)));
-	new (object) T(std::forward<ARGS>(args)...);
-
+template <typename T>
+void LuaClass<T>::finish_initialisation(lua_State* L, T* object)
+{
 	push_metatable(L);
 
 	if constexpr (is_global<T>())
@@ -635,8 +636,6 @@ T* LuaClass<T>::create_new(lua_State* L, ARGS... args)
 	}
 
 	lua_setmetatable(L, -2);
-
-	return object;
 }
 
 template <typename T>
@@ -732,104 +731,6 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		T::m_metatable_ptr = lua_topointer(L, -1);
 	}
 	return 1;
-}
-
-template <typename T>
-constexpr inline bool has_simple_constructor(not_available)
-{
-	return false;
-}
-
-template <typename T>
-constexpr inline bool has_simple_constructor(std::enable_if_t<
-                                             std::is_same_v<T, decltype(T())>,
-                                             is_available>)
-{
-	return true;
-}
-
-template <typename T>
-constexpr inline bool has_string_constructor(not_available)
-{
-	return false;
-}
-
-template <typename T>
-constexpr inline bool has_string_constructor(std::enable_if_t<
-                                             std::is_same_v<T, decltype(T("hello"))>,
-                                             is_available>)
-{
-	return true;
-}
-
-template <typename T>
-T* LuaClass<T>::convert_top_of_stack(lua_State* L, bool throw_error)
-{
-	int const vtype    = lua_type(L, -1);
-	int const checktop = lua_gettop(L);
-
-	if (vtype == LUA_TNIL)
-	{
-		if constexpr (has_simple_constructor<T>(is_available()))
-		{
-			T::push_new(L);
-		}
-	}
-	else if (vtype == LUA_TSTRING)
-	{
-		size_t len;
-		char const* str = lua_tolstring(L, -1, &len);
-		std::string_view value(str, len);
-
-		T::create_from_string(L, value);
-	}
-	else if (vtype == LUA_TTABLE)
-	{
-		T::create_from_table(L, -1);
-	}
-
-	assert(lua_gettop(L) >= checktop);
-	assert(lua_type(L, checktop) == vtype);
-
-	T* item = from_stack(L, -1, false);
-	if (item)
-		lua_replace(L, checktop);
-
-	lua_settop(L, checktop);
-
-	if (!item && throw_error)
-		luaL_error(L, "unable to auto-convert from %s to %s", lua_typename(L, vtype), __typename<T>());
-
-	return item;
-}
-
-template <typename T>
-void LuaClass<T>::create_from_table(lua_State* L, int idx)
-{
-	if constexpr (has_simple_constructor<T>(is_available()))
-	{
-		assert(lua_type(L, idx) == LUA_TTABLE && "create_from_table called on a non-table value");
-		idx = absidx(L, idx);
-
-		T::push_new(L);
-		lua_pushvalue(L, idx);
-		copy_table_fields(L);
-	}
-}
-
-template <typename T>
-void LuaClass<T>::create_from_string(lua_State* L, std::string_view const& value)
-{
-	if constexpr (has_string_constructor<T>(is_available()))
-	{
-		T::push_new(L, value);
-	}
-	else if constexpr (has_simple_constructor<T>(is_available()))
-	{
-		T::push_new(L);
-		lua_pushlstring(L, value.data(), value.size());
-		lua_setfield(L, -2, "__init");
-	}
 }
 
 #endif // DECK_ASSISTANT_LUA_CLASS_HPP_

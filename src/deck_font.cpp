@@ -2,10 +2,7 @@
 #include "builtins.h"
 #include "deck_card.h"
 #include "deck_colour.h"
-#include "lua_class.hpp"
 #include <optional>
-
-template class LuaClass<DeckFont>;
 
 namespace
 {
@@ -411,7 +408,7 @@ int DeckFont::_lua_clone(lua_State* L)
 {
 	DeckFont* self = from_stack(L, 1);
 
-	DeckFont* new_formatter = DeckFont::create_new(L);
+	DeckFont* new_formatter = DeckFont::push_new(L);
 	*new_formatter          = *self;
 
 	if (lua_type(L, 2) == LUA_TTABLE)
@@ -476,7 +473,7 @@ int DeckFont::_lua_render_text(lua_State* L)
 		return 0;
 	}
 
-	DeckCard::create_new(L, surface);
+	DeckCard::push_new(L, surface);
 
 	// Store the text string for the user
 	lua_pushvalue(L, 2);

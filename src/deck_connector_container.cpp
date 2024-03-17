@@ -1,10 +1,7 @@
 #include "deck_connector_container.h"
 #include "connector_elgato_streamdeck.h"
 #include "deck_connector.h"
-#include "deck_module.h"
-#include "lua_class.hpp"
-
-template class LuaClass<DeckConnectorContainer>;
+#include <cassert>
 
 namespace
 {
@@ -58,7 +55,7 @@ int get_existing_or_create_new(lua_State* L)
 	{
 		lua_pop(L, 1);
 		std::unique_ptr<IConnector> new_connector = std::make_unique<T>();
-		connector                                 = DeckConnector::create_new(L, std::move(new_connector));
+		connector                                 = DeckConnector::push_new(L, std::move(new_connector));
 	}
 
 	if (do_table_init)

@@ -1,10 +1,9 @@
 #include "deck_card.h"
 #include "deck_colour.h"
-#include "lua_class.hpp"
 #include <SDL_image.h>
 #include <algorithm>
-
-template class LuaClass<DeckCard>;
+#include <array>
+#include <cassert>
 
 char const* DeckCard::LUA_TYPENAME = "deck:Card";
 
@@ -89,12 +88,6 @@ DeckCard::DeckCard(SDL_Surface* surface)
     : m_surface(surface)
 {
 	assert(m_surface && "DeckCard must be initialised with a valid surface");
-}
-
-DeckCard::DeckCard(int width, int height)
-    : m_surface(nullptr)
-{
-	m_surface = SDL_CreateRGBSurfaceWithFormat(SDL_SIMD_ALIGNED, width, height, 32, SDL_PIXELFORMAT_ARGB32);
 }
 
 DeckCard::~DeckCard()

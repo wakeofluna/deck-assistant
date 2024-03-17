@@ -9,7 +9,6 @@ class DeckCard : public LuaClass<DeckCard>
 {
 public:
 	DeckCard(SDL_Surface* surface);
-	DeckCard(int width, int height);
 	~DeckCard();
 
 	inline SDL_Surface* get_surface() const { return m_surface; }

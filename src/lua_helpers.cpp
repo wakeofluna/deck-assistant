@@ -274,7 +274,7 @@ bool LuaHelpers::load_script(lua_State* L, char const* file_name, bool log_error
 		lua_pop(L, 1);
 
 		if (log_error)
-			DeckLogger::lua_log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
+			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
 
 		return false;
 	}
@@ -294,7 +294,7 @@ bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::s
 		lua_pop(L, 1);
 
 		if (log_error)
-			DeckLogger::lua_log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
+			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
 
 		return false;
 	}
@@ -339,7 +339,7 @@ bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
 		lua_settop(L, funcidx - 1);
 
 		if (log_error)
-			DeckLogger::lua_log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
+			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
 
 		return false;
 	}

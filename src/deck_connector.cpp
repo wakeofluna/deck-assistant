@@ -1,7 +1,5 @@
 #include "deck_connector.h"
-#include "lua_class.hpp"
-
-template class LuaClass<DeckConnector>;
+#include <cassert>
 
 namespace
 {

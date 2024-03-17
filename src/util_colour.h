@@ -18,6 +18,9 @@ struct Colour
 	{
 	}
 
+	static bool parse_colour(std::string_view const& value, Colour& target);
+	std::string_view to_string(std::array<char, 10>& buffer) const;
+
 	constexpr inline void clear() { value = 0; }
 	constexpr inline void set_pink()
 	{
@@ -26,8 +29,6 @@ struct Colour
 		g = 0x82;
 		b = 0xEE;
 	}
-
-	std::string_view to_string(std::array<char, 10>& buffer) const;
 
 	constexpr inline operator SDL_Color() const
 	{

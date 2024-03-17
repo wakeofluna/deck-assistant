@@ -22,6 +22,7 @@ public:
 	DeckLogger();
 
 	static void log_message(lua_State* L, Level level, std::string_view const& message);
+	static void log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2);
 	static void lua_log_message(lua_State* L, Level level, std::string_view const& message);
 	static void lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2);
 

@@ -132,7 +132,7 @@ TEST_CASE("LuaClass", "[lua]")
 	{
 		SECTION("Trivial destructor no gc")
 		{
-			TestClassVariant1::create_new(L);
+			TestClassVariant1::push_new(L);
 			static_assert(!has_finalize<TestClassVariant1>(is_available()));
 
 			REQUIRE(g_clz1_constructed == 1);
@@ -146,7 +146,7 @@ TEST_CASE("LuaClass", "[lua]")
 		{
 			lua_pushliteral(L, "canary");
 
-			TestClassVariant2::create_new(L);
+			TestClassVariant2::push_new(L);
 			REQUIRE(g_clz2_constructed == 1);
 
 			static_assert(has_finalize<TestClassVariant2>(is_available()));
@@ -163,7 +163,7 @@ TEST_CASE("LuaClass", "[lua]")
 
 		SECTION("Non-trivial implicit destructor")
 		{
-			TestClassVariant3::create_new(L);
+			TestClassVariant3::push_new(L);
 			REQUIRE(g_clz3_constructed == 1);
 
 			static_assert(!has_finalize<TestClassVariant3>(is_available()));
@@ -180,7 +180,7 @@ TEST_CASE("LuaClass", "[lua]")
 
 		SECTION("Explicit destructor")
 		{
-			TestClassVariant4::create_new(L);
+			TestClassVariant4::push_new(L);
 			REQUIRE(g_clz4_constructed == 1);
 
 			static_assert(!has_finalize<TestClassVariant4>(is_available()));
@@ -222,8 +222,8 @@ TEST_CASE("LuaClass", "[lua]")
 	{
 		SECTION("indexing into a class and instance table")
 		{
-			TestClassVariant1::create_new(L);
-			TestClassVariant1::create_new(L);
+			TestClassVariant1::push_new(L);
+			TestClassVariant1::push_new(L);
 
 			lua_getfield(L, 1, "table");
 			REQUIRE(to_string_view(L, -1) == "TestClassVariant1:instance");
@@ -254,7 +254,7 @@ TEST_CASE("LuaClass", "[lua]")
 
 		SECTION("indexing into an instance table")
 		{
-			TestClassVariant2::create_new(L);
+			TestClassVariant2::push_new(L);
 
 			lua_getfield(L, 1, "table");
 			REQUIRE(to_string_view(L, -1) == "TestClassVariant2:instance");
@@ -268,7 +268,7 @@ TEST_CASE("LuaClass", "[lua]")
 
 		SECTION("indexing without class or instance table")
 		{
-			TestClassVariant3::create_new(L);
+			TestClassVariant3::push_new(L);
 
 			REQUIRE_THROWS(lua_getfield(L, 1, "table"));
 			REQUIRE(to_string_view(L, -1) == "attempt to index a userdata value");
@@ -276,7 +276,7 @@ TEST_CASE("LuaClass", "[lua]")
 
 		SECTION("indexing into a class table")
 		{
-			TestClassVariant4::create_new(L);
+			TestClassVariant4::push_new(L);
 
 			lua_getfield(L, 1, "table");
 			REQUIRE(to_string_view(L, -1) == "TestClassVariant4:class");
@@ -292,9 +292,9 @@ TEST_CASE("LuaClass", "[lua]")
 		}
 	}
 
-	SECTION("create_new")
+	SECTION("push_new")
 	{
-		TestClassVariant1* tc1 = TestClassVariant1::create_new(L);
+		TestClassVariant1* tc1 = TestClassVariant1::push_new(L);
 		REQUIRE(lua_gettop(L) == 1);
 		REQUIRE(lua_touserdata(L, -1) == tc1);
 
