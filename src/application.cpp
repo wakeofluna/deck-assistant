@@ -1,5 +1,5 @@
 #include "application.h"
-#include "deck_formatter.h"
+#include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
 #include <SDL.h>
@@ -86,7 +86,7 @@ Application::Application()
 	DeckLogger::create_new(L);
 	lua_setglobal(L, "logger");
 
-	DeckFormatter::insert_enum_values(L);
+	DeckFont::insert_enum_values(L);
 
 	install_function_overrides();
 }

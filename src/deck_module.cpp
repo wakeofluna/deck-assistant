@@ -3,9 +3,10 @@
 #include "deck_colour.h"
 #include "deck_connector.h"
 #include "deck_connector_container.h"
-#include "deck_formatter.h"
-#include "deck_image.h"
+#include "deck_font.h"
+#include "deck_logger.h"
 #include "lua_class.hpp"
+#include <SDL_image.h>
 
 template class LuaClass<DeckModule>;
 
@@ -60,8 +61,8 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_setfield(L, -3, "Colour");
 	lua_setfield(L, -2, "Color");
 
-	lua_pushcfunction(L, &DeckModule::_lua_create_formatter);
-	lua_setfield(L, -2, "Formatter");
+	lua_pushcfunction(L, &DeckModule::_lua_create_font);
+	lua_setfield(L, -2, "Font");
 
 	lua_pushcfunction(L, &DeckModule::_lua_create_image);
 	lua_setfield(L, -2, "Image");
@@ -127,19 +128,41 @@ int DeckModule::_lua_create_colour(lua_State* L)
 	return 1;
 }
 
-int DeckModule::_lua_create_formatter(lua_State* L)
+int DeckModule::_lua_create_font(lua_State* L)
 {
 	from_stack(L, 1);
 	lua_settop(L, 2);
-	DeckFormatter::convert_top_of_stack(L);
+	DeckFont::convert_top_of_stack(L);
 	return 1;
 }
 
 int DeckModule::_lua_create_image(lua_State* L)
 {
 	from_stack(L, 1);
-	lua_settop(L, 2);
-	DeckImage::convert_top_of_stack(L);
+	std::string_view src = check_arg_string(L, 2);
+
+	SDL_Surface* tmp_surface = IMG_Load(src.data());
+	if (!tmp_surface)
+	{
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to load image", SDL_GetError());
+		return 0;
+	}
+
+	SDL_Surface* new_surface = SDL_ConvertSurfaceFormat(tmp_surface, SDL_PIXELFORMAT_ARGB32, SDL_SIMD_ALIGNED);
+	SDL_FreeSurface(tmp_surface);
+
+	if (!new_surface)
+	{
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to convert image to rgb", SDL_GetError());
+		return 0;
+	}
+
+	DeckCard::push_new(L, new_surface);
+
+	// Store the src string for the user
+	lua_pushvalue(L, 2);
+	lua_setfield(L, -2, "src");
+
 	return 1;
 }
 

@@ -32,7 +32,7 @@ private:
 
 	static int _lua_create_card(lua_State* L);
 	static int _lua_create_colour(lua_State* L);
-	static int _lua_create_formatter(lua_State* L);
+	static int _lua_create_font(lua_State* L);
 	static int _lua_create_image(lua_State* L);
 	static int _lua_request_quit(lua_State* L);
 

@@ -1,12 +1,12 @@
-#ifndef DECK_ASSISTANT_DECK_FORMATTER_H
-#define DECK_ASSISTANT_DECK_FORMATTER_H
+#ifndef DECK_ASSISTANT_DECK_FONT_H
+#define DECK_ASSISTANT_DECK_FONT_H
 
 #include "lua_class.h"
 #include "util_colour.h"
 #include <SDL_ttf.h>
 #include <string>
 
-class DeckFormatter : public LuaClass<DeckFormatter>
+class DeckFont : public LuaClass<DeckFont>
 {
 public:
 	enum class Alignment : char
@@ -26,8 +26,8 @@ public:
 	};
 
 public:
-	DeckFormatter();
-	DeckFormatter(DeckFormatter const&);
+	DeckFont();
+	DeckFont(DeckFont const&);
 
 	static void insert_enum_values(lua_State* L);
 
@@ -58,4 +58,4 @@ private:
 	Alignment m_alignment;
 };
 
-#endif // DECK_ASSISTANT_DECK_FORMATTER_H
+#endif // DECK_ASSISTANT_DECK_FONT_H

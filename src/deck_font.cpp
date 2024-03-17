@@ -1,112 +1,112 @@
-#include "deck_formatter.h"
+#include "deck_font.h"
 #include "builtins.h"
+#include "deck_card.h"
 #include "deck_colour.h"
-#include "deck_text.h"
 #include "lua_class.hpp"
 #include <optional>
 
-template class LuaClass<DeckFormatter>;
+template class LuaClass<DeckFont>;
 
 namespace
 {
 
-constexpr DeckFormatter::Alignment const k_align_left   = DeckFormatter::Alignment::Left;
-constexpr DeckFormatter::Alignment const k_align_center = DeckFormatter::Alignment::Center;
-constexpr DeckFormatter::Alignment const k_align_right  = DeckFormatter::Alignment::Right;
+constexpr DeckFont::Alignment const k_align_left   = DeckFont::Alignment::Left;
+constexpr DeckFont::Alignment const k_align_center = DeckFont::Alignment::Center;
+constexpr DeckFont::Alignment const k_align_right  = DeckFont::Alignment::Right;
 
-constexpr DeckFormatter::Style const k_style_regular       = DeckFormatter::Style::Regular;
-constexpr DeckFormatter::Style const k_style_bold          = DeckFormatter::Style::Bold;
-constexpr DeckFormatter::Style const k_style_italic        = DeckFormatter::Style::Italic;
-constexpr DeckFormatter::Style const k_style_underline     = DeckFormatter::Style::Underline;
-constexpr DeckFormatter::Style const k_style_strikethrough = DeckFormatter::Style::Strikethrough;
+constexpr DeckFont::Style const k_style_regular       = DeckFont::Style::Regular;
+constexpr DeckFont::Style const k_style_bold          = DeckFont::Style::Bold;
+constexpr DeckFont::Style const k_style_italic        = DeckFont::Style::Italic;
+constexpr DeckFont::Style const k_style_underline     = DeckFont::Style::Underline;
+constexpr DeckFont::Style const k_style_strikethrough = DeckFont::Style::Strikethrough;
 
-constexpr std::string_view to_string(DeckFormatter::Alignment alignment)
+constexpr std::string_view to_string(DeckFont::Alignment alignment)
 {
 	switch (alignment)
 	{
-		case DeckFormatter::Alignment::Left:
+		case DeckFont::Alignment::Left:
 			return "ALIGN_LEFT";
-		case DeckFormatter::Alignment::Center:
+		case DeckFont::Alignment::Center:
 			return "ALIGN_CENTER";
-		case DeckFormatter::Alignment::Right:
+		case DeckFont::Alignment::Right:
 			return "ALIGN_RIGHT";
 	}
 	return std::string_view("INTERNAL_ERROR");
 }
 
-constexpr std::string_view to_string(DeckFormatter::Style style)
+constexpr std::string_view to_string(DeckFont::Style style)
 {
 	switch (style)
 	{
-		case DeckFormatter::Style::Regular:
+		case DeckFont::Style::Regular:
 			return "STYLE_REGULAR";
-		case DeckFormatter::Style::Bold:
+		case DeckFont::Style::Bold:
 			return "STYLE_BOLD";
-		case DeckFormatter::Style::Italic:
+		case DeckFont::Style::Italic:
 			return "STYLE_ITALIC";
-		case DeckFormatter::Style::Underline:
+		case DeckFont::Style::Underline:
 			return "STYLE_UNDERLINE";
-		case DeckFormatter::Style::Strikethrough:
+		case DeckFont::Style::Strikethrough:
 			return "STYLE_STRIKETHROUGH";
 	}
 	return std::string_view("INTERNAL_ERROR");
 }
 
-constexpr std::optional<DeckFormatter::Alignment> to_alignment(void* ptr)
+constexpr std::optional<DeckFont::Alignment> to_alignment(void* ptr)
 {
 	if (ptr == &k_align_left)
-		return DeckFormatter::Alignment::Left;
+		return DeckFont::Alignment::Left;
 	else if (ptr == &k_align_center)
-		return DeckFormatter::Alignment::Center;
+		return DeckFont::Alignment::Center;
 	else if (ptr == &k_align_right)
-		return DeckFormatter::Alignment::Right;
+		return DeckFont::Alignment::Right;
 	else
 		return std::nullopt;
 }
 
-constexpr std::optional<DeckFormatter::Style> to_style(void* ptr)
+constexpr std::optional<DeckFont::Style> to_style(void* ptr)
 {
 	if (ptr == &k_style_regular)
-		return DeckFormatter::Style::Regular;
+		return DeckFont::Style::Regular;
 	else if (ptr == &k_style_bold)
-		return DeckFormatter::Style::Bold;
+		return DeckFont::Style::Bold;
 	else if (ptr == &k_style_italic)
-		return DeckFormatter::Style::Italic;
+		return DeckFont::Style::Italic;
 	else if (ptr == &k_style_underline)
-		return DeckFormatter::Style::Underline;
+		return DeckFont::Style::Underline;
 	else if (ptr == &k_style_strikethrough)
-		return DeckFormatter::Style::Strikethrough;
+		return DeckFont::Style::Strikethrough;
 	else
 		return std::nullopt;
 }
 
-constexpr int to_ttf_alignment(DeckFormatter::Alignment alignment)
+constexpr int to_ttf_alignment(DeckFont::Alignment alignment)
 {
 	switch (alignment)
 	{
-		case DeckFormatter::Alignment::Left:
+		case DeckFont::Alignment::Left:
 			return TTF_WRAPPED_ALIGN_LEFT;
-		case DeckFormatter::Alignment::Center:
+		case DeckFont::Alignment::Center:
 			return TTF_WRAPPED_ALIGN_CENTER;
-		case DeckFormatter::Alignment::Right:
+		case DeckFont::Alignment::Right:
 			return TTF_WRAPPED_ALIGN_RIGHT;
 	}
 	return TTF_WRAPPED_ALIGN_LEFT;
 }
 
-constexpr int to_ttf_style(DeckFormatter::Style style)
+constexpr int to_ttf_style(DeckFont::Style style)
 {
 	switch (style)
 	{
-		case DeckFormatter::Style::Regular:
+		case DeckFont::Style::Regular:
 			return TTF_STYLE_NORMAL;
-		case DeckFormatter::Style::Bold:
+		case DeckFont::Style::Bold:
 			return TTF_STYLE_BOLD;
-		case DeckFormatter::Style::Italic:
+		case DeckFont::Style::Italic:
 			return TTF_STYLE_ITALIC;
-		case DeckFormatter::Style::Underline:
+		case DeckFont::Style::Underline:
 			return TTF_STYLE_UNDERLINE;
-		case DeckFormatter::Style::Strikethrough:
+		case DeckFont::Style::Strikethrough:
 			return TTF_STYLE_STRIKETHROUGH;
 	}
 	return TTF_STYLE_NORMAL;
@@ -114,9 +114,9 @@ constexpr int to_ttf_style(DeckFormatter::Style style)
 
 } // namespace
 
-char const* DeckFormatter::LUA_TYPENAME = "deck:Formatter";
+char const* DeckFont::LUA_TYPENAME = "deck:Font";
 
-DeckFormatter::DeckFormatter()
+DeckFont::DeckFont()
     : m_font(nullptr)
     , m_font_size(12)
     , m_outline_size(0)
@@ -127,7 +127,7 @@ DeckFormatter::DeckFormatter()
 {
 }
 
-DeckFormatter::DeckFormatter(DeckFormatter const& other)
+DeckFont::DeckFont(DeckFont const& other)
 {
 	m_font         = nullptr;
 	m_font_name    = other.m_font_name;
@@ -138,7 +138,7 @@ DeckFormatter::DeckFormatter(DeckFormatter const& other)
 	m_alignment    = other.m_alignment;
 }
 
-void DeckFormatter::insert_enum_values(lua_State* L)
+void DeckFont::insert_enum_values(lua_State* L)
 {
 	for (auto k : { &k_align_left, &k_align_center, &k_align_right })
 	{
@@ -157,18 +157,20 @@ void DeckFormatter::insert_enum_values(lua_State* L)
 	}
 }
 
-void DeckFormatter::init_class_table(lua_State* L)
+void DeckFont::init_class_table(lua_State* L)
 {
-	lua_pushcfunction(L, &DeckFormatter::_lua_clone);
+	lua_pushcfunction(L, &DeckFont::_lua_clone);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "clone");
 	lua_setfield(L, -2, "dup");
 
-	lua_pushcfunction(L, &DeckFormatter::_lua_render_text);
+	lua_pushcfunction(L, &DeckFont::_lua_render_text);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "Text");
 	lua_setfield(L, -2, "render");
 }
 
-int DeckFormatter::index(lua_State* L, std::string_view const& key) const
+int DeckFont::index(lua_State* L, std::string_view const& key) const
 {
 	if (key == "font")
 	{
@@ -228,12 +230,12 @@ int DeckFormatter::index(lua_State* L, std::string_view const& key) const
 	}
 	else
 	{
-		luaL_error(L, "invalid key for DeckFormatter (allowed: font, size, outline, max_width, colour, alignment, style)");
+		luaL_error(L, "invalid key for DeckFont (allowed: font, size, outline, max_width, colour, alignment, style)");
 	}
 	return 1;
 }
 
-int DeckFormatter::newindex(lua_State* L, lua_Integer key)
+int DeckFont::newindex(lua_State* L, lua_Integer key)
 {
 	int const vtype = lua_type(L, -1);
 	if (vtype == LUA_TSTRING)
@@ -272,7 +274,7 @@ int DeckFormatter::newindex(lua_State* L, lua_Integer key)
 		}
 		else
 		{
-			luaL_argerror(L, 3, "unrecognised enum value for DeckFormatter");
+			luaL_argerror(L, 3, "unrecognised enum value for DeckFont");
 		}
 	}
 	else if (DeckColour* colour = DeckColour::from_stack(L, -1, false); colour)
@@ -281,13 +283,13 @@ int DeckFormatter::newindex(lua_State* L, lua_Integer key)
 	}
 	else
 	{
-		luaL_argerror(L, 3, "invalid argument for DeckFormatter");
+		luaL_argerror(L, 3, "invalid argument for DeckFont");
 	}
 
 	return 0;
 }
 
-int DeckFormatter::newindex(lua_State* L, std::string_view const& key)
+int DeckFont::newindex(lua_State* L, std::string_view const& key)
 {
 	if (key == "font")
 	{
@@ -352,12 +354,12 @@ int DeckFormatter::newindex(lua_State* L, std::string_view const& key)
 	}
 	else
 	{
-		luaL_argerror(L, absidx(L, -2), "invalid key for DeckFormatter (allowed: font, size, outline, max_width, colour, alignment, style)");
+		luaL_argerror(L, absidx(L, -2), "invalid key for DeckFont (allowed: font, size, outline, max_width, colour, alignment, style)");
 	}
 	return 0;
 }
 
-int DeckFormatter::tostring(lua_State* L) const
+int DeckFont::tostring(lua_State* L) const
 {
 	luaL_Buffer buf;
 	luaL_buffinit(L, &buf);
@@ -382,7 +384,7 @@ int DeckFormatter::tostring(lua_State* L) const
 	return 1;
 }
 
-void DeckFormatter::load_font()
+void DeckFont::load_font()
 {
 	if (!m_font)
 	{
@@ -396,7 +398,7 @@ void DeckFormatter::load_font()
 	}
 }
 
-void DeckFormatter::release_font()
+void DeckFont::release_font()
 {
 	if (m_font)
 	{
@@ -405,12 +407,12 @@ void DeckFormatter::release_font()
 	}
 }
 
-int DeckFormatter::_lua_clone(lua_State* L)
+int DeckFont::_lua_clone(lua_State* L)
 {
-	DeckFormatter* self = from_stack(L, 1);
+	DeckFont* self = from_stack(L, 1);
 
-	DeckFormatter* new_formatter = DeckFormatter::create_new(L);
-	*new_formatter               = *self;
+	DeckFont* new_formatter = DeckFont::create_new(L);
+	*new_formatter          = *self;
 
 	if (lua_type(L, 2) == LUA_TTABLE)
 	{
@@ -421,9 +423,9 @@ int DeckFormatter::_lua_clone(lua_State* L)
 	return 1;
 }
 
-int DeckFormatter::_lua_render_text(lua_State* L)
+int DeckFont::_lua_render_text(lua_State* L)
 {
-	DeckFormatter* self   = from_stack(L, 1);
+	DeckFont* self        = from_stack(L, 1);
 	std::string_view text = check_arg_string(L, 2);
 
 	Colour colour       = self->m_colour;
@@ -461,7 +463,7 @@ int DeckFormatter::_lua_render_text(lua_State* L)
 			continue;
 		}
 
-		luaL_argerror(L, idx, "invalid override for DeckFormatter:render");
+		luaL_argerror(L, idx, "invalid override for DeckFont:render");
 	}
 
 	self->load_font();
@@ -474,6 +476,11 @@ int DeckFormatter::_lua_render_text(lua_State* L)
 		return 0;
 	}
 
-	DeckText::create_new(L, surface);
+	DeckCard::create_new(L, surface);
+
+	// Store the text string for the user
+	lua_pushvalue(L, 2);
+	lua_setfield(L, -2, "text");
+
 	return 1;
 }

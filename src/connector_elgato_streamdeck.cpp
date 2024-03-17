@@ -1,7 +1,6 @@
 #include "connector_elgato_streamdeck.h"
 #include "SDL_error.h"
 #include "deck_card.h"
-#include "deck_image.h"
 #include <algorithm>
 #include <cassert>
 #include <codecvt>
@@ -373,6 +372,7 @@ int ConnectorElgatoStreamDeck::_lua_set_button(lua_State* L)
 {
 	ConnectorElgatoStreamDeck* self = static_cast<ConnectorElgatoStreamDeck*>(from_stack(L, 1, SUBTYPE_NAME));
 	unsigned char button            = LuaHelpers::check_arg_int(L, 2);
+	DeckCard* card                  = DeckCard::from_stack(L, 3);
 
 	if (button < 1)
 	{
@@ -382,21 +382,11 @@ int ConnectorElgatoStreamDeck::_lua_set_button(lua_State* L)
 	{
 		luaL_error(L, "Device is not connected");
 	}
-	else if (DeckImage* image = DeckImage::from_stack(L, 3, false); image)
-	{
-		SDL_Surface* surface = image->get_surface();
-		if (surface)
-			self->set_button(button, surface);
-	}
-	else if (DeckCard* card = DeckCard::from_stack(L, 3, false); card)
+	else
 	{
 		SDL_Surface* surface = card->get_surface();
 		if (surface)
 			self->set_button(button, surface);
-	}
-	else
-	{
-		luaL_typerror(L, 3, "deck:Image or deck:Card");
 	}
 
 	return 0;
@@ -563,7 +553,7 @@ void ConnectorElgatoStreamDeck::set_button(unsigned char button, SDL_Surface* su
 	}
 	else
 	{
-		new_surface = DeckImage::resize_surface(surface, m_button_size, m_button_size);
+		new_surface = DeckCard::resize_surface(surface, m_button_size, m_button_size);
 
 		unsigned char* start_data = reinterpret_cast<unsigned char*>(new_surface->pixels);
 		unsigned char* end_data   = start_data + (new_surface->h * new_surface->pitch);
@@ -589,7 +579,7 @@ void ConnectorElgatoStreamDeck::set_button(unsigned char button, SDL_Surface* su
 		}
 	}
 
-	bytes = DeckImage::save_surface_as_jpeg(new_surface);
+	bytes = DeckCard::save_surface_as_jpeg(new_surface);
 	SDL_FreeSurface(new_surface);
 
 	if (!bytes.empty())
