@@ -16,7 +16,6 @@ public:
 	inline IConnector const* get_connector() const { return m_connector.get(); }
 	inline IConnector* get_connector() { return m_connector.get(); }
 
-	void post_init(lua_State* L);
 	void tick(lua_State* L, int delta_msec);
 	void shutdown(lua_State* L);
 

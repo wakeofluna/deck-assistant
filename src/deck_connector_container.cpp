@@ -1,5 +1,6 @@
 #include "deck_connector_container.h"
 #include "connector_elgato_streamdeck.h"
+#include "connector_window.h"
 #include "deck_connector.h"
 #include <cassert>
 
@@ -69,8 +70,6 @@ int get_existing_or_create_new(lua_State* L)
 	lua_rawset(L, -3);
 	lua_pop(L, 1);
 
-	connector->post_init(L);
-
 	return 1;
 }
 
@@ -114,6 +113,9 @@ void DeckConnectorContainer::init_class_table(lua_State* L)
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "ElgatoStreamDeck");
 	lua_setfield(L, -2, "StreamDeck");
+
+	lua_pushcfunction(L, &DeckConnectorContainer::_lua_create_window);
+	lua_setfield(L, -2, "Window");
 }
 
 void DeckConnectorContainer::init_instance_table(lua_State* L)
@@ -138,4 +140,9 @@ int DeckConnectorContainer::_lua_all(lua_State* L)
 int DeckConnectorContainer::_lua_create_elgato_streamdeck(lua_State* L)
 {
 	return get_existing_or_create_new<ConnectorElgatoStreamDeck>(L);
+}
+
+int DeckConnectorContainer::_lua_create_window(lua_State* L)
+{
+	return get_existing_or_create_new<ConnectorWindow>(L);
 }

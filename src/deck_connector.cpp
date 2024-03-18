@@ -21,7 +21,7 @@ void run_connector_function(lua_State* L, DeckConnector* self, void (IConnector:
 
 } // namespace
 
-char const* DeckConnector::LUA_TYPENAME = "deck-assistant.DeckConnector";
+char const* DeckConnector::LUA_TYPENAME = "deck:Connector";
 
 DeckConnector::DeckConnector(std::unique_ptr<IConnector>&& connector)
     : m_connector(std::move(connector))
@@ -30,11 +30,6 @@ DeckConnector::DeckConnector(std::unique_ptr<IConnector>&& connector)
 }
 
 DeckConnector::~DeckConnector() = default;
-
-void DeckConnector::post_init(lua_State* L)
-{
-	run_connector_function(L, this, &IConnector::post_init);
-}
 
 void DeckConnector::tick(lua_State* L, int delta_msec)
 {
@@ -69,6 +64,6 @@ int DeckConnector::newindex(lua_State* L)
 
 int DeckConnector::tostring(lua_State* L) const
 {
-	lua_pushfstring(L, "%s: %p: %s", type_name(), this, m_connector->get_subtype_name());
+	lua_pushfstring(L, "%s:%s: %p", type_name(), m_connector->get_subtype_name(), this);
 	return 1;
 }

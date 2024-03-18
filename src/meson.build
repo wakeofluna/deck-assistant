@@ -2,6 +2,7 @@ sources = files(
     'application.cpp',
     'builtins.cpp',
     'connector_elgato_streamdeck.cpp',
+    'connector_window.cpp',
     'deck_card.cpp',
     'deck_colour.cpp',
     'deck_connector.cpp',

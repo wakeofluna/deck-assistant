@@ -26,10 +26,6 @@ IConnector* IConnector::from_stack(lua_State* L, int idx, char const* subtype_na
 	return nullptr;
 }
 
-void IConnector::post_init(lua_State* L)
-{
-}
-
 void IConnector::shutdown(lua_State* L)
 {
 }
