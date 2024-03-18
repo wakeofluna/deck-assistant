@@ -5,6 +5,7 @@
 #include "deck_connector_container.h"
 #include "deck_font.h"
 #include "deck_logger.h"
+#include "deck_rectangle.h"
 #include <SDL_image.h>
 #include <cassert>
 
@@ -64,6 +65,11 @@ void DeckModule::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &DeckModule::_lua_create_image);
 	lua_setfield(L, -2, "Image");
+
+	lua_pushcfunction(L, &DeckModule::_lua_create_rectangle);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "Rectangle");
+	lua_setfield(L, -2, "Rect");
 
 	lua_pushcfunction(L, &DeckModule::_lua_request_quit);
 	lua_pushvalue(L, -1);
@@ -205,6 +211,49 @@ int DeckModule::_lua_create_image(lua_State* L)
 	lua_pushvalue(L, 2);
 	lua_setfield(L, -2, "src");
 
+	return 1;
+}
+
+int DeckModule::_lua_create_rectangle(lua_State* L)
+{
+	from_stack(L, 1);
+
+	if (lua_type(L, 2) == LUA_TTABLE)
+	{
+		DeckRectangle::push_new(L);
+		lua_pushvalue(L, 2);
+		copy_table_fields(L);
+		return 1;
+	}
+
+	int x, y, w, h;
+	if (lua_gettop(L) == 5)
+	{
+		x = check_arg_int(L, 2);
+		y = check_arg_int(L, 3);
+		w = check_arg_int(L, 4);
+		h = check_arg_int(L, 5);
+		luaL_argcheck(L, (w >= 0), 4, "WIDTH value must be zero or positive");
+		luaL_argcheck(L, (h >= 0), 5, "HEIGHT value must be zero or positive");
+	}
+	else if (lua_gettop(L) == 3)
+	{
+		x = 0;
+		y = 0;
+		w = check_arg_int(L, 2);
+		h = check_arg_int(L, 3);
+		luaL_argcheck(L, (w >= 0), 2, "WIDTH value must be zero or positive");
+		luaL_argcheck(L, (h >= 0), 3, "HEIGHT value must be zero or positive");
+	}
+	else
+	{
+		x = 0;
+		y = 0;
+		w = 0;
+		h = 0;
+	}
+
+	DeckRectangle::push_new(L, x, y, w, h);
 	return 1;
 }
 
