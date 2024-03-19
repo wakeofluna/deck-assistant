@@ -51,6 +51,7 @@ struct LuaHelpers
 	static bool pcall(lua_State* L, int nargs, int nresults, bool log_error = true);
 	static bool lua_lineinfo(lua_State* L, std::string& short_src, int& currentline);
 
+	static void install_error_context_handler(lua_State* L);
 	static ErrorContext const& get_last_error_context();
 
 	static void debug_dump_stack(std::ostream& stream, lua_State* L, char const* description = nullptr);

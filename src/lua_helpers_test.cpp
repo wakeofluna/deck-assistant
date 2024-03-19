@@ -163,8 +163,8 @@ TEST_CASE("LuaHelpers", "[lua]")
 	{
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 
-		EXPECT_ERROR(LuaHelpers::push_class_table(L, 1));
-		REQUIRE(to_string_view(L, -1) == "Internal error: class has no class table");
+		LuaHelpers::push_class_table(L, 1);
+		REQUIRE(lua_isnil(L, -1));
 		lua_settop(L, 1);
 
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
@@ -532,8 +532,7 @@ value = foo(15)
 
 	SECTION("pcall")
 	{
-		// Canary value
-		lua_pushinteger(L, 111);
+		LuaHelpers::install_error_context_handler(L);
 
 		SECTION("C-function that works correctly")
 		{
@@ -545,7 +544,7 @@ value = foo(15)
 
 			lua_pushcfunction(L, func);
 			lua_pushinteger(L, 9);
-			REQUIRE(LuaHelpers::pcall(L, 1, 1));
+			REQUIRE(LuaHelpers::pcall(L, 1, 1, false));
 
 			REQUIRE(lua_gettop(L) == 2);
 			REQUIRE(lua_tointeger(L, 2) == 11);
@@ -562,7 +561,7 @@ value = foo(15)
 
 			lua_pushcfunction(L, func);
 			lua_pushnil(L);
-			REQUIRE(!LuaHelpers::pcall(L, 1, 1));
+			REQUIRE(!LuaHelpers::pcall(L, 1, 1, false));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.result == LUA_ERRRUN);
@@ -576,7 +575,7 @@ value = foo(15)
 			lua_createtable(L, 0, 0);
 			lua_pushinteger(L, 2);
 
-			REQUIRE(!LuaHelpers::pcall(L, 1, 2));
+			REQUIRE(!LuaHelpers::pcall(L, 1, 2, false));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.result == LUA_ERRRUN);
@@ -601,13 +600,13 @@ end
 
 			lua_getfenv(L, -1);
 			lua_insert(L, -2);
-			REQUIRE(LuaHelpers::pcall(L, 0, 0));
+			REQUIRE(LuaHelpers::pcall(L, 0, 0, false));
 
 			lua_getfield(L, -1, "foo");
 			REQUIRE(lua_type(L, -1) == LUA_TFUNCTION);
 			lua_replace(L, -2);
 
-			REQUIRE(!LuaHelpers::pcall(L, 0, 1));
+			REQUIRE(!LuaHelpers::pcall(L, 0, 1, false));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.result == LUA_ERRRUN);
@@ -617,7 +616,7 @@ end
 		}
 
 		REQUIRE(lua_gettop(L) == 1);
-		REQUIRE(lua_tointeger(L, 1) == 111);
+		REQUIRE(lua_iscfunction(L, 1));
 	}
 
 	SECTION("debug_dump_stack")

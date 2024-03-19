@@ -20,6 +20,8 @@ int _lua_error_handler(lua_State* L)
 	return 0;
 }
 
+int _lua_error_index;
+
 } // namespace
 
 void LuaHelpers::ErrorContext::clear()
@@ -77,13 +79,10 @@ void LuaHelpers::push_class_table(lua_State* L, int idx)
 	{
 		lua_rawgeti(L, -1, IDX_META_CLASSTABLE);
 		lua_replace(L, -2);
-
-		if (lua_type(L, -1) != LUA_TTABLE)
-			luaL_error(L, "Internal error: class has no class table");
 	}
 	else
 	{
-		luaL_error(L, "Internal error: index not valid userdata");
+		lua_pushnil(L);
 	}
 }
 
@@ -95,7 +94,9 @@ void LuaHelpers::push_instance_table(lua_State* L, int idx)
 std::string_view LuaHelpers::check_arg_string(lua_State* L, int idx, bool allow_empty)
 {
 	idx = absidx(L, idx);
-	luaL_checktype(L, idx, LUA_TSTRING);
+
+	if (lua_type(L, idx) != LUA_TSTRING)
+		luaL_typerror(L, idx, "string");
 
 	size_t len;
 	char const* str = lua_tolstring(L, idx, &len);
@@ -128,7 +129,10 @@ std::string_view LuaHelpers::check_arg_string_or_none(lua_State* L, int idx)
 lua_Integer LuaHelpers::check_arg_int(lua_State* L, int idx)
 {
 	idx = absidx(L, idx);
-	luaL_checktype(L, idx, LUA_TNUMBER);
+
+	if (lua_type(L, idx) != LUA_TNUMBER)
+		luaL_typerror(L, idx, "integer");
+
 	return lua_tointeger(L, idx);
 }
 
@@ -302,13 +306,13 @@ void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_n
 
 bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
 {
+	// May only be called from the C++ main context
+	assert(lua_tocfunction(L, _lua_error_index) == &_lua_error_handler && "LuaHelpers::pcall not called with error handler on stack");
+
 	int const funcidx = lua_gettop(L) - nargs;
 
-	lua_pushcfunction(L, &_lua_error_handler);
-	lua_insert(L, funcidx);
-
 	g_last_error_context.clear();
-	g_last_error_context.result = lua_pcall(L, nargs, nresults, funcidx);
+	g_last_error_context.result = lua_pcall(L, nargs, nresults, _lua_error_index);
 
 	if (g_last_error_context.result != LUA_OK)
 	{
@@ -318,10 +322,6 @@ bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
 			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
 
 		return false;
-	}
-	else
-	{
-		lua_remove(L, funcidx);
 	}
 
 	return true;
@@ -346,6 +346,12 @@ bool LuaHelpers::lua_lineinfo(lua_State* L, std::string& short_src, int& current
 	}
 
 	return false;
+}
+
+void LuaHelpers::install_error_context_handler(lua_State* L)
+{
+	lua_pushcfunction(L, &_lua_error_handler);
+	_lua_error_index = lua_gettop(L);
 }
 
 LuaHelpers::ErrorContext const& LuaHelpers::get_last_error_context()

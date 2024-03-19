@@ -80,6 +80,8 @@ Application::Application()
 	IMG_Init(0xffffffff);
 	TTF_Init();
 
+	LuaHelpers::install_error_context_handler(L);
+
 	DeckModule::push_new(L);
 	lua_setglobal(L, "deck");
 
