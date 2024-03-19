@@ -237,7 +237,7 @@ int DeckFont::newindex(lua_State* L, lua_Integer key)
 	int const vtype = lua_type(L, -1);
 	if (vtype == LUA_TSTRING)
 	{
-		std::string_view value = LuaHelpers::check_arg_string(L, -1);
+		std::string_view value = LuaHelpers::to_string_view(L, -1);
 		if (value != m_font_name)
 		{
 			release_font();
@@ -246,7 +246,7 @@ int DeckFont::newindex(lua_State* L, lua_Integer key)
 	}
 	else if (vtype == LUA_TNUMBER)
 	{
-		int value = LuaHelpers::check_arg_int(L, -1);
+		int value = lua_tointeger(L, -1);
 		if (value != m_font_size)
 		{
 			release_font();
@@ -351,7 +351,7 @@ int DeckFont::newindex(lua_State* L, std::string_view const& key)
 	}
 	else
 	{
-		luaL_argerror(L, absidx(L, -2), "invalid key for DeckFont (allowed: font, size, outline, max_width, colour, alignment, style)");
+		luaL_argerror(L, 2, "invalid key for DeckFont (allowed: font, size, outline, max_width, colour, alignment, style)");
 	}
 	return 0;
 }

@@ -132,7 +132,7 @@ int DeckLogger::newindex(lua_State* L)
 {
 	if (lua_type(L, 2) == LUA_TSTRING)
 	{
-		std::string_view key = check_arg_string(L, 2);
+		std::string_view key = to_string_view(L, 2);
 		if (key == "on_message")
 		{
 			luaL_argcheck(L, lua_type(L, 3) == LUA_TFUNCTION, 3, "must be a function");

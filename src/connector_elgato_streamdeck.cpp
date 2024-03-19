@@ -221,7 +221,7 @@ int ConnectorElgatoStreamDeck::index(lua_State* L) const
 
 	if (lua_type(L, 2) == LUA_TSTRING)
 	{
-		std::string_view key = LuaHelpers::check_arg_string(L, 2, false);
+		std::string_view key = LuaHelpers::to_string_view(L, 2);
 		if (key == "brightness")
 		{
 			if (m_wanted_brightness != INVALID_BRIGHTNESS)
@@ -268,7 +268,7 @@ int ConnectorElgatoStreamDeck::newindex(lua_State* L)
 
 	if (lua_type(L, 2) == LUA_TSTRING)
 	{
-		std::string_view key = LuaHelpers::check_arg_string(L, 2, false);
+		std::string_view key = LuaHelpers::to_string_view(L, 2);
 
 		if (is_readonly(key))
 		{

@@ -139,7 +139,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 		REQUIRE(lua_toboolean(L, -1) == true);
 
 		lua_getfield(L, 1, "__mode");
-		REQUIRE(to_string_view(L, -1) == "k");
+		REQUIRE(LuaHelpers::to_string_view(L, -1) == "k");
 	}
 
 	SECTION("push_standard_weak_value_metatable")
@@ -156,7 +156,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 		REQUIRE(lua_toboolean(L, -1) == true);
 
 		lua_getfield(L, 1, "__mode");
-		REQUIRE(to_string_view(L, -1) == "v");
+		REQUIRE(LuaHelpers::to_string_view(L, -1) == "v");
 	}
 
 	SECTION("push_class_table")
@@ -175,7 +175,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 		REQUIRE(lua_rawequal(L, -2, -1));
 
 		lua_getfield(L, 4, "table");
-		REQUIRE(to_string_view(L, -1) == "TestClass2");
+		REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClass2");
 		lua_getfield(L, 4, "value");
 		REQUIRE(lua_isnil(L, -1));
 	}
@@ -196,9 +196,9 @@ TEST_CASE("LuaHelpers", "[lua]")
 		REQUIRE(!lua_rawequal(L, -2, -1));
 
 		lua_getfield(L, 4, "table");
-		REQUIRE(to_string_view(L, -1) == "INSTANCE TABLE!");
+		REQUIRE(LuaHelpers::to_string_view(L, -1) == "INSTANCE TABLE!");
 		lua_getfield(L, 5, "table");
-		REQUIRE(to_string_view(L, -1) == "INSTANCE TABLE!");
+		REQUIRE(LuaHelpers::to_string_view(L, -1) == "INSTANCE TABLE!");
 		lua_getfield(L, 4, "value");
 		REQUIRE(lua_tointeger(L, -1) == 42);
 		lua_getfield(L, 5, "value");
@@ -216,11 +216,11 @@ TEST_CASE("LuaHelpers", "[lua]")
 			{
 				int idx = push_dummy_value(L, tp);
 				EXPECT_ERROR(LuaHelpers::check_arg_string(L, idx));
-				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
+				REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
 
 				idx = push_dummy_value(L, tp);
 				EXPECT_ERROR(LuaHelpers::check_arg_string_or_none(L, idx));
-				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
+				REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
 			}
 		}
 
@@ -229,7 +229,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			REQUIRE(LuaHelpers::check_arg_string_or_none(L, 5) == "");
 			REQUIRE(lua_gettop(L) == 0);
 			EXPECT_ERROR(LuaHelpers::check_arg_string(L, 5));
-			REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
+			REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
 		}
 
 		SECTION("Valid string")
@@ -247,7 +247,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			REQUIRE(LuaHelpers::check_arg_string_or_none(L, 1) == "");
 			REQUIRE(lua_gettop(L) == 1);
 			EXPECT_ERROR(LuaHelpers::check_arg_string(L, 1));
-			REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
+			REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
 		}
 	}
 
@@ -262,7 +262,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			{
 				int idx = push_dummy_value(L, tp);
 				EXPECT_ERROR(LuaHelpers::check_arg_int(L, idx));
-				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
+				REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
 			}
 		}
 
@@ -467,7 +467,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			lua_pushvalue(L, -2);
 			lua_gettable(L, 1);
 
-			if (to_string_view(L, -3) == "mine")
+			if (LuaHelpers::to_string_view(L, -3) == "mine")
 			{
 				REQUIRE(lua_tointeger(L, -2) == 55);
 				REQUIRE(lua_isnil(L, -1));

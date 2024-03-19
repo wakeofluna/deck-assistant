@@ -91,6 +91,16 @@ void LuaHelpers::push_instance_table(lua_State* L, int idx)
 	lua_getfenv(L, idx);
 }
 
+std::string_view LuaHelpers::to_string_view(lua_State* L, int idx)
+{
+	if (lua_type(L, idx) != LUA_TSTRING)
+		return std::string_view();
+
+	std::size_t len;
+	char const* str = lua_tolstring(L, idx, &len);
+	return std::string_view(str, len);
+}
+
 std::string_view LuaHelpers::check_arg_string(lua_State* L, int idx, bool allow_empty)
 {
 	idx = absidx(L, idx);

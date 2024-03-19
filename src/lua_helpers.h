@@ -35,6 +35,7 @@ struct LuaHelpers
 	static void push_class_table(lua_State* L, int idx);
 	static void push_instance_table(lua_State* L, int idx);
 
+	static std::string_view to_string_view(lua_State* L, int idx);
 	static std::string_view check_arg_string(lua_State* L, int idx, bool allow_empty = false);
 	static std::string_view check_arg_string_or_none(lua_State* L, int idx);
 	static lua_Integer check_arg_int(lua_State* L, int idx);

@@ -204,15 +204,15 @@ TEST_CASE("LuaClass", "[lua]")
 			TestClassVariant1::push_new(L);
 
 			lua_getfield(L, 1, "table");
-			REQUIRE(to_string_view(L, -1) == "TestClassVariant1:instance");
+			REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClassVariant1:instance");
 
 			lua_pushnil(L);
 			lua_setfield(L, 1, "table");
 
 			lua_getfield(L, 1, "table");
-			REQUIRE(to_string_view(L, -1) == "TestClassVariant1:class");
+			REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClassVariant1:class");
 			lua_getfield(L, 2, "table");
-			REQUIRE(to_string_view(L, -1) == "TestClassVariant1:instance");
+			REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClassVariant1:instance");
 
 			lua_getfield(L, 1, "value");
 			REQUIRE(lua_tointeger(L, -1) == 11);
@@ -235,7 +235,7 @@ TEST_CASE("LuaClass", "[lua]")
 			TestClassVariant2::push_new(L);
 
 			lua_getfield(L, 1, "table");
-			REQUIRE(to_string_view(L, -1) == "TestClassVariant2:instance");
+			REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClassVariant2:instance");
 
 			lua_pushnil(L);
 			lua_setfield(L, 1, "table");
@@ -257,7 +257,7 @@ TEST_CASE("LuaClass", "[lua]")
 			TestClassVariant4::push_new(L);
 
 			lua_getfield(L, 1, "table");
-			REQUIRE(to_string_view(L, -1) == "TestClassVariant4:class");
+			REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClassVariant4:class");
 			lua_getfield(L, 1, "value");
 			REQUIRE(lua_tointeger(L, -1) == 44);
 
@@ -265,7 +265,7 @@ TEST_CASE("LuaClass", "[lua]")
 			lua_setfield(L, 1, "table");
 
 			lua_getfield(L, 1, "table");
-			REQUIRE(to_string_view(L, -1) == "TestClassVariant4:class");
+			REQUIRE(LuaHelpers::to_string_view(L, -1) == "TestClassVariant4:class");
 		}
 	}
 
@@ -281,7 +281,7 @@ TEST_CASE("LuaClass", "[lua]")
 		lua_pop(L, 1);
 
 		lua_getfield(L, -1, "__name");
-		REQUIRE(to_string_view(L, -1) == tc1->type_name());
+		REQUIRE(LuaHelpers::to_string_view(L, -1) == tc1->type_name());
 	}
 
 	lua_close(L);
