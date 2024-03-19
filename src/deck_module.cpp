@@ -40,6 +40,12 @@ void DeckModule::shutdown(lua_State* L)
 	lua_pop(L, 1);
 }
 
+void DeckModule::set_exit_requested(int exit_code)
+{
+	if (!m_exit_requested.has_value())
+		m_exit_requested = exit_code;
+}
+
 bool DeckModule::is_exit_requested() const
 {
 	return m_exit_requested.has_value();

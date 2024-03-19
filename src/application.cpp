@@ -149,6 +149,36 @@ int Application::run()
 		auto const clock             = std::chrono::steady_clock::now();
 		lua_Integer const clock_msec = std::chrono::duration_cast<std::chrono::milliseconds>(clock - start_time).count();
 
+		SDL_Event event;
+		while (SDL_PollEvent(&event))
+		{
+			switch (event.type)
+			{
+				case SDL_QUIT:
+					DeckLogger::log_message(L, DeckLogger::Level::Info, "Application quit requested by system");
+					deck_module->set_exit_requested(0);
+					break;
+				case SDL_WINDOWEVENT:
+					// TODO
+					break;
+				case SDL_MOUSEMOTION:
+				case SDL_MOUSEBUTTONUP:
+				case SDL_MOUSEBUTTONDOWN:
+				case SDL_MOUSEWHEEL:
+					// TODO
+					break;
+				case SDL_KEYMAPCHANGED:
+				case SDL_CLIPBOARDUPDATE:
+				case SDL_SYSWMEVENT:
+					// Ignored
+					break;
+				default:
+					DeckLogger::log_message(L, DeckLogger::Level::Debug, "Unhandled SDL event with type ", std::to_string(event.type));
+					break;
+			}
+		}
+		assert(lua_gettop(L) == resettop && "Application event loop handling is not stack balanced");
+
 		deck_module->tick(L, clock_msec);
 		assert(lua_gettop(L) == resettop && "DeckModule tick function is not stack balanced");
 

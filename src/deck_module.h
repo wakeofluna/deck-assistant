@@ -18,6 +18,7 @@ public:
 	void tick(lua_State* L, lua_Integer clock);
 	void shutdown(lua_State* L);
 
+	void set_exit_requested(int exit_code);
 	bool is_exit_requested() const;
 	int get_exit_code() const;
 
