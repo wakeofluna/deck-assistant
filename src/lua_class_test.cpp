@@ -1,5 +1,5 @@
 #include "lua_class.h"
-#include "lua_helpers.h"
+// #include "lua_helpers.h"
 #include "test_utils_test.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
@@ -194,28 +194,6 @@ TEST_CASE("LuaClass", "[lua]")
 			REQUIRE(g_clz4_destructed == 1);
 			REQUIRE(g_clz4_constructed == 1);
 		}
-
-		SECTION("Cleanup of instance tables table")
-		{
-			TestClassVariant1::push_new(L);
-			LuaHelpers::push_instance_table_container(L, -1);
-			lua_insert(L, -2);
-
-			TableCountMap count_map_before = count_elements_in_table(L, 1);
-			REQUIRE(count_map_before[LUA_TUSERDATA].first == 1);
-			REQUIRE(count_map_before[LUA_TTABLE].second == 1);
-
-			lua_pushvalue(L, -1);
-			lua_gettable(L, 1);
-			REQUIRE(lua_type(L, -1) == LUA_TTABLE);
-
-			lua_settop(L, 1);
-			lua_gc(L, LUA_GCCOLLECT, 0);
-
-			TableCountMap count_map_after = count_elements_in_table(L, 1);
-			REQUIRE(count_map_after[LUA_TUSERDATA].first == 0);
-			REQUIRE(count_map_after[LUA_TTABLE].second == 0);
-		}
 	}
 
 	SECTION("index and newindex")
@@ -270,8 +248,8 @@ TEST_CASE("LuaClass", "[lua]")
 		{
 			TestClassVariant3::push_new(L);
 
-			REQUIRE_THROWS(lua_getfield(L, 1, "table"));
-			REQUIRE(to_string_view(L, -1) == "attempt to index a userdata value");
+			lua_getfield(L, 1, "table");
+			REQUIRE(lua_isnil(L, -1));
 		}
 
 		SECTION("indexing into a class table")
@@ -284,8 +262,7 @@ TEST_CASE("LuaClass", "[lua]")
 			REQUIRE(lua_tointeger(L, -1) == 44);
 
 			lua_pushnil(L);
-			REQUIRE_THROWS(lua_setfield(L, 1, "table"));
-			REQUIRE(to_string_view(L, -1) == "attempt to index a userdata value");
+			lua_setfield(L, 1, "table");
 
 			lua_getfield(L, 1, "table");
 			REQUIRE(to_string_view(L, -1) == "TestClassVariant4:class");

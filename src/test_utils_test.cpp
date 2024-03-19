@@ -2,19 +2,37 @@
 #include "lua_helpers.h"
 #include <cassert>
 #include <catch2/catch_test_macros.hpp>
+#include <csetjmp>
 #include <lua.hpp>
+
+namespace
+{
+
+std::jmp_buf g_panic_jmp;
+std::string g_panic_msg;
 
 int at_panic(lua_State* L)
 {
-	// Only called when lua(jit) does not do its own stack unwinding using exceptions already
-	throw std::runtime_error("panic");
+	size_t len;
+	char const* str = lua_tolstring(L, -1, &len);
+	g_panic_msg.assign(str, len);
+
+	std::longjmp(g_panic_jmp, 1);
 }
+
+} // namespace
 
 lua_State* new_test_state()
 {
 	lua_State* L = luaL_newstate();
 	lua_atpanic(L, &at_panic);
 	lua_checkstack(L, 100);
+	if (setjmp(g_panic_jmp))
+	{
+		std::string full_message  = "Unhandled panic: ";
+		full_message             += g_panic_msg;
+		FAIL(full_message);
+	}
 	return L;
 }
 

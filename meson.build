@@ -8,6 +8,7 @@ project(
     default_options: ['cpp_std=c++20'],
 )
 
+buildflags = []
 feature_luajit = get_option('luajit')
 feature_test = get_option('test')
 
@@ -17,7 +18,9 @@ lua = dependency(
     required: feature_luajit,
 )
 
-if not lua.found()
+if lua.found()
+    buildflags += '-DHAVE_LUAJIT'
+else
     lua = dependency(
         'lua5.1',
         version: '>=5.1.5',

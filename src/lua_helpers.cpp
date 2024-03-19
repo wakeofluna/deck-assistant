@@ -87,33 +87,9 @@ void LuaHelpers::push_class_table(lua_State* L, int idx)
 	}
 }
 
-void LuaHelpers::push_instance_table_container(lua_State* L, int idx)
-{
-	if (lua_type(L, idx) == LUA_TUSERDATA && lua_getmetatable(L, idx))
-	{
-		lua_rawgeti(L, -1, IDX_META_INSTANCE_TABLES);
-		lua_replace(L, -2);
-
-		if (lua_type(L, -1) != LUA_TTABLE)
-			luaL_error(L, "Internal error: class has no instance table");
-	}
-	else
-	{
-		luaL_error(L, "Internal error: index not valid userdata");
-	}
-}
-
 void LuaHelpers::push_instance_table(lua_State* L, int idx)
 {
-	idx = absidx(L, idx);
-
-	push_instance_table_container(L, idx);
-	lua_pushvalue(L, idx);
-	lua_rawget(L, -2);
-	lua_replace(L, -2);
-
-	if (lua_type(L, -1) != LUA_TTABLE)
-		luaL_error(L, "Internal error: class has no instance table");
+	lua_getfenv(L, idx);
 }
 
 std::string_view LuaHelpers::check_arg_string(lua_State* L, int idx, bool allow_empty)

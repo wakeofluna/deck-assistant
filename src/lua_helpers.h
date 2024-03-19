@@ -6,10 +6,14 @@
 #include <string>
 #include <string_view>
 
+// Compatibility between luajit and lua5.1
+#ifndef LUA_OK
+#define LUA_OK 0
+#endif
+
 // Indices in class metatable
 constexpr lua_Integer const IDX_META_CLASSTABLE      = 1;
-constexpr lua_Integer const IDX_META_INSTANCE_TABLES = 2;
-constexpr lua_Integer const IDX_META_GLOBAL_INSTANCE = 3;
+constexpr lua_Integer const IDX_META_GLOBAL_INSTANCE = 2;
 
 struct LuaHelpers
 {
@@ -29,7 +33,6 @@ struct LuaHelpers
 	static void push_standard_weak_value_metatable(lua_State* L);
 
 	static void push_class_table(lua_State* L, int idx);
-	static void push_instance_table_container(lua_State* L, int idx);
 	static void push_instance_table(lua_State* L, int idx);
 
 	static std::string_view check_arg_string(lua_State* L, int idx, bool allow_empty = false);

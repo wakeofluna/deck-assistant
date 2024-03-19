@@ -9,7 +9,6 @@
 #include <vector>
 
 lua_State* new_test_state();
-int at_panic(lua_State* L);
 
 int push_dummy_value(lua_State* L, int tp);
 

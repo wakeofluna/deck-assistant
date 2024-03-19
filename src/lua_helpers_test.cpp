@@ -3,6 +3,8 @@
 #include "test_utils_test.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <csetjmp>
 #include <string_view>
 
 namespace lua_helpers_test
@@ -53,6 +55,18 @@ public:
 
 char const* TestClass2::LUA_TYPENAME = "TestClass2Type";
 
+std::jmp_buf g_panic_jmp;
+std::string g_panic_msg;
+
+int at_panic(lua_State* L)
+{
+	size_t len;
+	char const* str = lua_tolstring(L, -1, &len);
+	g_panic_msg.assign(str, len);
+
+	std::longjmp(g_panic_jmp, 1);
+}
+
 } // namespace lua_helpers_test
 
 using namespace lua_helpers_test;
@@ -61,9 +75,29 @@ using namespace lua_helpers_test;
 template class LuaClass<TestClass>;
 template class LuaClass<TestClass2>;
 
+#ifdef HAVE_LUAJIT
+#define EXPECT_ERROR(x) \
+	do \
+	{ \
+		REQUIRE_THROWS(x); \
+		g_panic_msg = lua_tostring(L, -1); \
+	} while (0)
+#else
+#define EXPECT_ERROR(x) \
+	do \
+	{ \
+		if (!setjmp(g_panic_jmp)) \
+		{ \
+			x; \
+			FAIL("Expected error did not happen"); \
+		} \
+	} while (0)
+#endif
+
 TEST_CASE("LuaHelpers", "[lua]")
 {
 	lua_State* L = new_test_state();
+	lua_atpanic(L, &at_panic);
 
 	TestClass::push_new(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, "tc1");
@@ -129,7 +163,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 	{
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 
-		REQUIRE_THROWS(LuaHelpers::push_class_table(L, 1));
+		EXPECT_ERROR(LuaHelpers::push_class_table(L, 1));
 		REQUIRE(to_string_view(L, -1) == "Internal error: class has no class table");
 		lua_settop(L, 1);
 
@@ -150,8 +184,8 @@ TEST_CASE("LuaHelpers", "[lua]")
 	{
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 
-		REQUIRE_THROWS(LuaHelpers::push_instance_table(L, 1));
-		REQUIRE(to_string_view(L, -1) == "Internal error: class has no instance table");
+		LuaHelpers::push_instance_table(L, 1);
+		REQUIRE(lua_type(L, -1) == LUA_TTABLE);
 		lua_settop(L, 1);
 
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
@@ -181,9 +215,11 @@ TEST_CASE("LuaHelpers", "[lua]")
 			DYNAMIC_SECTION("Failure test for type " << tp << ':' << lua_typename(L, tp))
 			{
 				int idx = push_dummy_value(L, tp);
-				REQUIRE_THROWS(LuaHelpers::check_arg_string(L, idx));
+				EXPECT_ERROR(LuaHelpers::check_arg_string(L, idx));
 				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
-				REQUIRE_THROWS(LuaHelpers::check_arg_string_or_none(L, 1));
+
+				idx = push_dummy_value(L, tp);
+				EXPECT_ERROR(LuaHelpers::check_arg_string_or_none(L, idx));
 				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
 			}
 		}
@@ -192,7 +228,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 		{
 			REQUIRE(LuaHelpers::check_arg_string_or_none(L, 5) == "");
 			REQUIRE(lua_gettop(L) == 0);
-			REQUIRE_THROWS(LuaHelpers::check_arg_string(L, 5));
+			EXPECT_ERROR(LuaHelpers::check_arg_string(L, 5));
 			REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
 		}
 
@@ -210,7 +246,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			REQUIRE(LuaHelpers::check_arg_string(L, 1, true) == "");
 			REQUIRE(LuaHelpers::check_arg_string_or_none(L, 1) == "");
 			REQUIRE(lua_gettop(L) == 1);
-			REQUIRE_THROWS(LuaHelpers::check_arg_string(L, 1) == "");
+			EXPECT_ERROR(LuaHelpers::check_arg_string(L, 1));
 			REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
 		}
 	}
@@ -225,7 +261,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			DYNAMIC_SECTION("Failure test for type " << tp << ':' << lua_typename(L, tp))
 			{
 				int idx = push_dummy_value(L, tp);
-				REQUIRE_THROWS(LuaHelpers::check_arg_int(L, idx));
+				EXPECT_ERROR(LuaHelpers::check_arg_int(L, idx));
 				REQUIRE(to_string_view(L, -1).starts_with("bad argument"));
 			}
 		}
@@ -344,7 +380,8 @@ TEST_CASE("LuaHelpers", "[lua]")
 			lua_getfield(L, LUA_REGISTRYINDEX, "tc2");
 			converted = LuaHelpers::push_converted_to_string(L, 1);
 			REQUIRE(lua_gettop(L) == 2);
-			REQUIRE(converted.starts_with(std::string(TestClass2::LUA_TYPENAME) + ": "));
+			std::string class_name = std::string(TestClass2::LUA_TYPENAME) + ": ";
+			REQUIRE_THAT(std::string(converted), Catch::Matchers::StartsWith(class_name));
 		}
 
 		SECTION("Userdata with __tostring")
@@ -361,7 +398,8 @@ TEST_CASE("LuaHelpers", "[lua]")
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc1");
 		lua_pushliteral(L, "value");
 		lua_pushinteger(L, 1);
-		REQUIRE_THROWS(LuaHelpers::newindex_store_in_instance_table(L));
+		LuaHelpers::newindex_store_in_instance_table(L);
+		REQUIRE(lua_gettop(L) == 3);
 		lua_settop(L, 0);
 
 		lua_getfield(L, LUA_REGISTRYINDEX, "tc2");

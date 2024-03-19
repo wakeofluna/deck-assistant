@@ -353,22 +353,18 @@ constexpr inline bool has_index(std::enable_if_t<
 template <typename T>
 int __index(lua_State* L)
 {
-	constexpr bool const hasClassTable    = has_init_class_table<T>(is_available());
-	constexpr bool const hasInstanceTable = has_init_instance_table<T>(is_available());
-	constexpr bool const hasIndexInt      = has_index_int<T>(is_available());
-	constexpr bool const hasIndexString   = has_index_string<T>(is_available());
-	constexpr bool const hasIndexFull     = has_index_full<T>(is_available());
-	constexpr bool const hasIndex         = hasIndexInt || hasIndexString || hasIndexFull;
+	constexpr bool const hasClassTable  = has_init_class_table<T>(is_available());
+	constexpr bool const hasIndexInt    = has_index_int<T>(is_available());
+	constexpr bool const hasIndexString = has_index_string<T>(is_available());
+	constexpr bool const hasIndexFull   = has_index_full<T>(is_available());
+	constexpr bool const hasIndex       = hasIndexInt || hasIndexString || hasIndexFull;
 
-	if constexpr (hasInstanceTable)
-	{
-		LuaHelpers::push_instance_table(L, 1);
-		lua_pushvalue(L, 2);
-		lua_rawget(L, -2);
-		if (lua_type(L, -1) != LUA_TNIL)
-			return 1;
-		lua_pop(L, 2);
-	}
+	LuaHelpers::push_instance_table(L, 1);
+	lua_pushvalue(L, 2);
+	lua_rawget(L, -2);
+	if (lua_type(L, -1) != LUA_TNIL)
+		return 1;
+	lua_pop(L, 2);
 
 	if constexpr (hasClassTable)
 	{
@@ -392,10 +388,8 @@ int __index(lua_State* L)
 			{
 				if (index_type == LUA_TNUMBER)
 				{
-					int isnum;
-					lua_Integer number = lua_tointegerx(L, -1, &isnum);
-					if (isnum)
-						return object->index(L, number);
+					lua_Integer number = lua_tointeger(L, -1);
+					return object->index(L, number);
 				}
 			}
 
@@ -421,20 +415,11 @@ int __index(lua_State* L)
 }
 
 template <typename T>
-inline bool register_index(lua_State* L, not_available)
+inline bool register_index(lua_State* L)
 {
-	constexpr bool hasClassTable    = has_init_class_table<T>(is_available());
-	constexpr bool hasInstanceTable = has_init_instance_table<T>(is_available());
-	constexpr bool hasIndex         = has_index<T>(is_available());
-
-	if constexpr (hasClassTable || hasInstanceTable || hasIndex)
-	{
-		lua_pushcfunction(L, &__index<T>);
-		lua_setfield(L, -2, "__index");
-		return true;
-	}
-
-	return false;
+	lua_pushcfunction(L, &__index<T>);
+	lua_setfield(L, -2, "__index");
+	return true;
 }
 
 // *************************** NEWINDEX *************************
@@ -498,11 +483,10 @@ constexpr inline bool has_newindex(std::enable_if_t<
 template <typename T>
 int __newindex(lua_State* L)
 {
-	constexpr bool const hasInstanceTable = has_init_instance_table<T>(is_available());
-	constexpr bool const hasIndexInt      = has_newindex_int<T>(is_available());
-	constexpr bool const hasIndexString   = has_newindex_string<T>(is_available());
-	constexpr bool const hasIndexFull     = has_newindex_full<T>(is_available());
-	constexpr bool const hasIndex         = hasIndexInt || hasIndexString || hasIndexFull;
+	constexpr bool const hasIndexInt    = has_newindex_int<T>(is_available());
+	constexpr bool const hasIndexString = has_newindex_string<T>(is_available());
+	constexpr bool const hasIndexFull   = has_newindex_full<T>(is_available());
+	constexpr bool const hasIndex       = hasIndexInt || hasIndexString || hasIndexFull;
 
 	if constexpr (hasIndex)
 	{
@@ -516,10 +500,8 @@ int __newindex(lua_State* L)
 			{
 				if (key_type == LUA_TNUMBER)
 				{
-					int isnum;
-					lua_Integer number = lua_tointegerx(L, -2, &isnum);
-					if (isnum)
-						return object->newindex(L, number);
+					lua_Integer number = lua_tointeger(L, -2);
+					return object->newindex(L, number);
 				}
 			}
 
@@ -540,38 +522,18 @@ int __newindex(lua_State* L)
 		}
 	}
 
-	if constexpr (hasInstanceTable)
-	{
-		LuaHelpers::push_instance_table(L, 1);
-		lua_replace(L, -4);
-		lua_rawset(L, -3);
-	}
-	else
-	{
-		if constexpr (hasIndexInt && hasIndexString)
-			luaL_typerror(L, 2, "integer or string");
-		else if constexpr (hasIndexInt)
-			luaL_typerror(L, 2, "integer");
-		else if constexpr (hasIndexString)
-			luaL_typerror(L, 2, "string");
-	}
+	LuaHelpers::push_instance_table(L, -3);
+	lua_replace(L, -4);
+	lua_rawset(L, -3);
 	return 0;
 }
 
 template <typename T>
-inline bool register_newindex(lua_State* L, not_available)
+inline bool register_newindex(lua_State* L)
 {
-	constexpr bool hasInstanceTable = has_init_instance_table<T>(is_available());
-	constexpr bool hasIndex         = has_newindex<T>(is_available());
-
-	if constexpr (hasInstanceTable || hasIndex)
-	{
-		lua_pushcfunction(L, &__newindex<T>);
-		lua_setfield(L, -2, "__newindex");
-		return true;
-	}
-
-	return false;
+	lua_pushcfunction(L, &__newindex<T>);
+	lua_setfield(L, -2, "__newindex");
+	return true;
 }
 
 // *************************** CALL *************************
@@ -625,15 +587,10 @@ void LuaClass<T>::finish_initialisation(lua_State* L, T* object)
 		lua_rawseti(L, -2, IDX_META_GLOBAL_INSTANCE);
 	}
 
+	lua_newtable(L);
 	if constexpr (has_init_instance_table<T>(is_available()))
-	{
-		lua_rawgeti(L, -1, IDX_META_INSTANCE_TABLES);
-		lua_pushvalue(L, -3);
-		lua_newtable(L);
 		__init_instance_table<T>(L, object);
-		lua_rawset(L, -3);
-		lua_pop(L, 1);
-	}
+	lua_setfenv(L, -3);
 
 	lua_setmetatable(L, -2);
 }
@@ -691,7 +648,7 @@ int LuaClass<T>::push_metatable(lua_State* L)
 	if (lua_type(L, -1) != LUA_TTABLE)
 	{
 		lua_pop(L, 1);
-		lua_createtable(L, 3, 12);
+		lua_createtable(L, 2, 12);
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, LUA_REGISTRYINDEX, tname);
@@ -710,22 +667,13 @@ int LuaClass<T>::push_metatable(lua_State* L)
 			lua_rawseti(L, -2, IDX_META_CLASSTABLE);
 		}
 
-		if constexpr (has_init_instance_table<T>(is_available()))
-		{
-			// Table to hold instance tables
-			lua_createtable(L, 0, 64);
-			push_standard_weak_key_metatable(L);
-			lua_setmetatable(L, -2);
-			lua_rawseti(L, -2, IDX_META_INSTANCE_TABLES);
-		}
-
 		register_gc<T>(L);
 		register_tostring<T>(L, is_available());
 		register_eq<T>(L, is_available());
 		register_lt<T>(L, is_available());
 		register_le<T>(L, is_available());
-		register_index<T>(L, is_available());
-		register_newindex<T>(L, is_available());
+		register_index<T>(L);
+		register_newindex<T>(L);
 		register_call<T>(L, is_available());
 
 		T::m_metatable_ptr = lua_topointer(L, -1);
