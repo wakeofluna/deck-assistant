@@ -2,7 +2,9 @@
 #include "deck_logger.h"
 #include "lua_helpers.h"
 
-char const* ConnectorWindow::SUBTYPE_NAME = "Window";
+template class ConnectorBase<ConnectorWindow>;
+
+char const* ConnectorWindow::LUA_TYPENAME = "deck:ConnectorWindow";
 
 ConnectorWindow::ConnectorWindow()
     : m_window(nullptr)
@@ -18,12 +20,17 @@ ConnectorWindow::~ConnectorWindow()
 		SDL_DestroyWindow(m_window);
 }
 
-char const* ConnectorWindow::get_subtype_name() const
+void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 {
-	return SUBTYPE_NAME;
+	bool is_window_resized = true;
+	if (m_window_resized.compare_exchange_strong(is_window_resized, false, std::memory_order_acq_rel))
+	{
+		SDL_GetWindowSurface(m_window);
+		SDL_UpdateWindowSurface(m_window);
+	}
 }
 
-void ConnectorWindow::tick(lua_State* L, int delta_msec)
+void ConnectorWindow::tick_outputs(lua_State* L)
 {
 	if (!m_window)
 	{
@@ -48,6 +55,7 @@ void ConnectorWindow::tick(lua_State* L, int delta_msec)
 		}
 		else
 		{
+			SDL_AddEventWatch(&_sdl_event_filter, this);
 			SDL_GetWindowSurface(m_window);
 			SDL_UpdateWindowSurface(m_window);
 		}
@@ -92,122 +100,171 @@ void ConnectorWindow::shutdown(lua_State* L)
 {
 	if (m_window)
 	{
+		SDL_DelEventWatch(&_sdl_event_filter, this);
 		SDL_DestroyWindow(m_window);
 		m_window = nullptr;
 	}
+}
+
+void ConnectorWindow::init_class_table(lua_State* L)
+{
+	Super::init_class_table(L);
 }
 
 void ConnectorWindow::init_instance_table(lua_State* L)
 {
 }
 
-int ConnectorWindow::index(lua_State* L) const
+int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
 {
-	lua_settop(L, 2);
-
-	lua_pushvalue(L, 2);
-	lua_rawget(L, 1);
-	if (lua_type(L, -1) != LUA_TNIL)
-		return 1;
-	lua_pop(L, 1);
-
-	if (lua_type(L, 2) == LUA_TSTRING)
+	if (key == "title")
 	{
-		std::string_view key = LuaHelpers::to_string_view(L, 2);
-		if (key == "title")
+		if (m_wanted_title.has_value())
 		{
-			if (m_wanted_title.has_value())
-			{
-				lua_pushlstring(L, m_wanted_title->data(), m_wanted_title->size());
-			}
-			else if (m_window)
-			{
-				lua_pushstring(L, SDL_GetWindowTitle(m_window));
-			}
+			lua_pushlstring(L, m_wanted_title->data(), m_wanted_title->size());
 		}
-		else if (key == "w" || key == "width")
+		else if (m_window)
 		{
-			if (m_wanted_width.has_value())
-			{
-				lua_pushinteger(L, m_wanted_width.value());
-			}
-			else if (m_window)
-			{
-				int width;
-				int height;
-				SDL_GetWindowSize(m_window, &width, &height);
-				lua_pushinteger(L, width);
-			}
+			lua_pushstring(L, SDL_GetWindowTitle(m_window));
 		}
-		else if (key == "h" || key == "height")
+	}
+	else if (key == "w" || key == "width")
+	{
+		if (m_wanted_width.has_value())
 		{
-			if (m_wanted_height.has_value())
-			{
-				lua_pushinteger(L, m_wanted_height.value());
-			}
-			else if (m_window)
-			{
-				int width;
-				int height;
-				SDL_GetWindowSize(m_window, &width, &height);
-				lua_pushinteger(L, height);
-			}
+			lua_pushinteger(L, m_wanted_width.value());
 		}
-		else if (key == "visible")
+		else if (m_window)
 		{
-			if (m_wanted_visible.has_value())
-			{
-				lua_pushboolean(L, m_wanted_visible.value());
-			}
-			else if (m_window)
-			{
-				lua_pushboolean(L, SDL_GetWindowFlags(m_window) & SDL_WINDOW_SHOWN);
-			}
+			int width;
+			int height;
+			SDL_GetWindowSize(m_window, &width, &height);
+			lua_pushinteger(L, width);
+		}
+	}
+	else if (key == "h" || key == "height")
+	{
+		if (m_wanted_height.has_value())
+		{
+			lua_pushinteger(L, m_wanted_height.value());
+		}
+		else if (m_window)
+		{
+			int width;
+			int height;
+			SDL_GetWindowSize(m_window, &width, &height);
+			lua_pushinteger(L, height);
+		}
+	}
+	else if (key == "visible")
+	{
+		if (m_wanted_visible.has_value())
+		{
+			lua_pushboolean(L, m_wanted_visible.value());
+		}
+		else if (m_window)
+		{
+			lua_pushboolean(L, SDL_GetWindowFlags(m_window) & SDL_WINDOW_SHOWN);
 		}
 	}
 
 	return lua_gettop(L) == 2 ? 0 : 1;
 }
 
-int ConnectorWindow::newindex(lua_State* L)
+int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 {
-	lua_settop(L, 3);
-
-	if (lua_type(L, 2) == LUA_TSTRING)
+	if (key == "title")
 	{
-		std::string_view key = LuaHelpers::to_string_view(L, 2);
+		std::string_view title = LuaHelpers::check_arg_string(L, 3);
+		m_wanted_title         = title;
+	}
+	else if (key == "w" || key == "width")
+	{
+		int width = LuaHelpers::check_arg_int(L, 3);
+		luaL_argcheck(L, (width > 0), 3, "width must be larger than zero");
+		m_wanted_width = width;
+	}
+	else if (key == "h" || key == "height")
+	{
+		int height = LuaHelpers::check_arg_int(L, 3);
+		luaL_argcheck(L, (height > 0), 3, "height must be larger than zero");
+		m_wanted_height = height;
+	}
+	else if (key == "visible")
+	{
+		luaL_argcheck(L, (lua_type(L, 3) == LUA_TBOOLEAN), 3, "visible must be a boolean");
+		m_wanted_visible = lua_toboolean(L, 3);
+	}
+	else
+	{
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
+	return 0;
+}
 
-		if (key == "title")
-		{
-			std::string_view title = LuaHelpers::check_arg_string(L, 3);
-			m_wanted_title         = title;
-			return 0;
-		}
+int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
+{
+	// This may run out of context, so we must catch and queue these events locally using atomics
 
-		if (key == "w" || key == "width")
+	ConnectorWindow* self = reinterpret_cast<ConnectorWindow*>(userdata);
+	if (event->type == SDL_WINDOWEVENT && event->window.windowID == SDL_GetWindowID(self->m_window))
+	{
+		switch (event->window.event)
 		{
-			int width = LuaHelpers::check_arg_int(L, 3);
-			luaL_argcheck(L, (width > 0), 3, "WIDTH must be larger than zero");
-			m_wanted_width = width;
-			return 0;
-		}
-
-		if (key == "h" || key == "height")
-		{
-			int height = LuaHelpers::check_arg_int(L, 3);
-			luaL_argcheck(L, (height > 0), 3, "HEIGHT must be larger than zero");
-			m_wanted_height = height;
-			return 0;
-		}
-
-		if (key == "visible")
-		{
-			luaL_argcheck(L, (lua_type(L, 3) == LUA_TBOOLEAN), 3, "visible must be a boolean");
-			m_wanted_visible = lua_toboolean(L, 3);
-			return 0;
+			case SDL_WINDOWEVENT_EXPOSED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window redraw requested");
+				break;
+			case SDL_WINDOWEVENT_SIZE_CHANGED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", std::to_string(event->window.data1) + "x" + std::to_string(event->window.data2));
+				self->m_window_resized.store(true, std::memory_order_release);
+				break;
+			case SDL_WINDOWEVENT_SHOWN:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became shown");
+				break;
+			case SDL_WINDOWEVENT_HIDDEN:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became hidden");
+				break;
+			case SDL_WINDOWEVENT_MOVED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", std::to_string(event->window.data1) + "x" + std::to_string(event->window.data2));
+				break;
+			case SDL_WINDOWEVENT_RESIZED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", std::to_string(event->window.data1) + "x" + std::to_string(event->window.data2));
+				break;
+			case SDL_WINDOWEVENT_MINIMIZED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became minimized");
+				break;
+			case SDL_WINDOWEVENT_MAXIMIZED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became maximized");
+				break;
+			case SDL_WINDOWEVENT_RESTORED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became restored");
+				break;
+			case SDL_WINDOWEVENT_ENTER:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window received pointer focus");
+				break;
+			case SDL_WINDOWEVENT_LEAVE:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window lost pointer focus");
+				break;
+			case SDL_WINDOWEVENT_FOCUS_GAINED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became focused");
+				break;
+			case SDL_WINDOWEVENT_FOCUS_LOST:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became unfocused");
+				break;
+			case SDL_WINDOWEVENT_CLOSE:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window got request to close");
+				break;
+			case SDL_WINDOWEVENT_TAKE_FOCUS:
+			case SDL_WINDOWEVENT_HIT_TEST:
+			case SDL_WINDOWEVENT_ICCPROF_CHANGED:
+			case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window event with type ", std::to_string(event->window.event));
+				break;
+			default:
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window UNKNOWN event with type ", std::to_string(event->window.event));
+				break;
 		}
 	}
 
-	lua_rawset(L, 1);
 	return 0;
 }

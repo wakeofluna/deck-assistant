@@ -1,13 +1,23 @@
 #include "deck_module.h"
 #include "deck_card.h"
 #include "deck_colour.h"
-#include "deck_connector.h"
 #include "deck_connector_container.h"
+#include "deck_connector_factory.h"
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_rectangle.h"
+#include "lua_helpers.h"
 #include <SDL_image.h>
 #include <cassert>
+
+namespace
+{
+
+constexpr char const* g_connector_container_name = "connectors";
+constexpr char const* g_connector_factory_name   = "connector_factory";
+constexpr int const g_connector_container_idx    = 1;
+
+} // namespace
 
 char const* DeckModule::LUA_TYPENAME = "deck:DeckModule";
 
@@ -17,25 +27,45 @@ DeckModule::DeckModule()
 {
 }
 
-void DeckModule::tick(lua_State* L, lua_Integer clock)
+void DeckModule::tick_inputs(lua_State* L, lua_Integer clock)
 {
+	assert(from_stack(L, -1, false) != nullptr);
+
 	m_last_delta = clock - m_last_clock;
 	m_last_clock = clock;
 
-	DeckConnectorContainer* container = get_connector_container(L);
-	container->for_each(L, [this](lua_State* L, DeckConnector* dc) {
-		dc->tick(L, m_last_delta);
-	});
+	LuaHelpers::push_instance_table(L, -1);
+	lua_rawgeti(L, -1, g_connector_container_idx);
+	lua_replace(L, -2);
+
+	lua_pushinteger(L, clock);
+	DeckConnectorContainer::for_each(L, "tick_inputs", 1);
+
+	lua_pop(L, 2);
+}
+
+void DeckModule::tick_outputs(lua_State* L)
+{
+	assert(from_stack(L, -1, false) != nullptr);
+
+	LuaHelpers::push_instance_table(L, -1);
+	lua_rawgeti(L, -1, g_connector_container_idx);
+	lua_replace(L, -2);
+
+	DeckConnectorContainer::for_each(L, "tick_outputs", 0);
 
 	lua_pop(L, 1);
 }
 
 void DeckModule::shutdown(lua_State* L)
 {
-	DeckConnectorContainer* container = get_connector_container(L);
-	container->for_each(L, [](lua_State* L, DeckConnector* dc) {
-		dc->shutdown(L);
-	});
+	assert(from_stack(L, -1, false) != nullptr);
+
+	LuaHelpers::push_instance_table(L, -1);
+	lua_rawgeti(L, -1, g_connector_container_idx);
+	lua_replace(L, -2);
+
+	DeckConnectorContainer::for_each(L, "shutdown", 0);
 
 	lua_pop(L, 1);
 }
@@ -66,6 +96,9 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_setfield(L, -3, "Colour");
 	lua_setfield(L, -2, "Color");
 
+	lua_pushcfunction(L, &DeckModule::_lua_create_connector);
+	lua_setfield(L, -2, "Connector");
+
 	lua_pushcfunction(L, &DeckModule::_lua_create_font);
 	lua_setfield(L, -2, "Font");
 
@@ -81,12 +114,22 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "quit");
 	lua_setfield(L, -2, "exit");
+
+	DeckConnectorContainer::push_new(L);
+	lua_setfield(L, -2, g_connector_container_name);
+
+	DeckConnectorFactory::push_new(L);
+	lua_setfield(L, -2, g_connector_factory_name);
 }
 
 void DeckModule::init_instance_table(lua_State* L)
 {
-	DeckConnectorContainer::push_new(L);
-	lua_setfield(L, -2, "connectors");
+	// Copy the connector container to the instance table for fast access
+	LuaHelpers::push_class_table(L, -2);
+	lua_getfield(L, -1, g_connector_container_name);
+	lua_replace(L, -2);
+	assert(DeckConnectorContainer::from_stack(L, -1, false) != nullptr);
+	lua_rawseti(L, -2, g_connector_container_idx);
 }
 
 int DeckModule::index(lua_State* L, std::string_view const& key) const
@@ -112,20 +155,11 @@ int DeckModule::newindex(lua_State* L)
 	return 0;
 }
 
-DeckConnectorContainer* DeckModule::get_connector_container(lua_State* L)
-{
-	assert(from_stack(L, -1, false) && "DeckModule::get_connector_container needs self on -1");
-	lua_getfield(L, -1, "connectors");
-	DeckConnectorContainer* container = DeckConnectorContainer::from_stack(L, -1, false);
-	assert(container && "DeckModule lost its connector container");
-	return container;
-}
-
 int DeckModule::_lua_create_card(lua_State* L)
 {
 	from_stack(L, 1);
-	int width  = check_arg_int(L, 2);
-	int height = check_arg_int(L, 3);
+	int width  = LuaHelpers::check_arg_int(L, 2);
+	int height = LuaHelpers::check_arg_int(L, 3);
 
 	luaL_argcheck(L, width > 0, 2, "width must be larger than 0");
 	luaL_argcheck(L, height > 0, 3, "height must be larger than 0");
@@ -152,7 +186,7 @@ int DeckModule::_lua_create_colour(lua_State* L)
 	int const vtype = lua_type(L, 2);
 	if (vtype == LUA_TSTRING)
 	{
-		std::string_view value = check_arg_string(L, 2);
+		std::string_view value = LuaHelpers::to_string_view(L, 2);
 
 		Colour col;
 		if (!Colour::parse_colour(value, col))
@@ -178,6 +212,86 @@ int DeckModule::_lua_create_colour(lua_State* L)
 	}
 }
 
+int DeckModule::_lua_create_connector(lua_State* L)
+{
+	if (lua_gettop(L) == 2)
+		lua_pushvalue(L, -1);
+
+	from_stack(L, 1);
+	luaL_checktype(L, 2, LUA_TSTRING); // class/factory name
+	luaL_checktype(L, 3, LUA_TSTRING); // connector name
+	bool const has_table = lua_type(L, 4) == LUA_TTABLE;
+
+	int const extra_args_top = lua_gettop(L);
+
+	LuaHelpers::push_instance_table(L, 1);
+	lua_rawgeti(L, -1, g_connector_container_idx);
+	lua_replace(L, -2);
+
+	// Stack:
+	// userdata: DeckModule
+	// string: clz
+	// string: name
+	// (optional args)
+	// userdata: DeckConnectorContainer
+
+	// Check that the connector does not already exist
+	lua_pushvalue(L, 3);
+	lua_gettable(L, -2);
+	if (lua_type(L, -1) == LUA_TNIL)
+	{
+		// Does not exist
+		lua_pop(L, 1);
+
+		// Get the factory function from the factory
+		lua_getfield(L, 1, g_connector_factory_name);
+		lua_pushvalue(L, 2);
+		lua_gettable(L, -2);
+		lua_replace(L, -2);
+
+		if (lua_type(L, -1) != LUA_TFUNCTION)
+		{
+			luaL_argerror(L, 2, "no constructor function for connector class");
+			return 0;
+		}
+
+		// Run the factory function with all arguments
+		for (int i = 2; i <= extra_args_top; ++i)
+			lua_pushvalue(L, i);
+
+		if (lua_pcall(L, extra_args_top - 1, 1, 0) != LUA_OK)
+		{
+			lua_pushfstring(L, "connector construction failed: %s", lua_tostring(L, -1));
+			lua_error(L);
+			return 0;
+		}
+
+		if (lua_type(L, -1) == LUA_TNIL)
+		{
+			luaL_error(L, "factory function failed to provide a valid return object");
+			return 0;
+		}
+
+		// Insert the object into the container
+		// This may also throw an error if the type is not good
+		lua_pushvalue(L, -2);
+		lua_pushvalue(L, 3);
+		lua_pushvalue(L, -3);
+		lua_settable(L, -3);
+		lua_pop(L, 1);
+	}
+
+	// Now apply the table argument to the object (either old or new)
+	if (has_table)
+	{
+		lua_pushvalue(L, 4);
+		LuaHelpers::copy_table_fields(L);
+	}
+
+	// Finally done!
+	return 1;
+}
+
 int DeckModule::_lua_create_font(lua_State* L)
 {
 	from_stack(L, 1);
@@ -193,7 +307,7 @@ int DeckModule::_lua_create_font(lua_State* L)
 int DeckModule::_lua_create_image(lua_State* L)
 {
 	from_stack(L, 1);
-	std::string_view src = check_arg_string(L, 2);
+	std::string_view src = LuaHelpers::check_arg_string(L, 2);
 
 	SDL_Surface* tmp_surface = IMG_Load(src.data());
 	if (!tmp_surface)
@@ -228,17 +342,17 @@ int DeckModule::_lua_create_rectangle(lua_State* L)
 	{
 		DeckRectangle::push_new(L);
 		lua_pushvalue(L, 2);
-		copy_table_fields(L);
+		LuaHelpers::copy_table_fields(L);
 		return 1;
 	}
 
 	int x, y, w, h;
 	if (lua_gettop(L) == 5)
 	{
-		x = check_arg_int(L, 2);
-		y = check_arg_int(L, 3);
-		w = check_arg_int(L, 4);
-		h = check_arg_int(L, 5);
+		x = LuaHelpers::check_arg_int(L, 2);
+		y = LuaHelpers::check_arg_int(L, 3);
+		w = LuaHelpers::check_arg_int(L, 4);
+		h = LuaHelpers::check_arg_int(L, 5);
 		luaL_argcheck(L, (w >= 0), 4, "WIDTH value must be zero or positive");
 		luaL_argcheck(L, (h >= 0), 5, "HEIGHT value must be zero or positive");
 	}
@@ -246,13 +360,16 @@ int DeckModule::_lua_create_rectangle(lua_State* L)
 	{
 		x = 0;
 		y = 0;
-		w = check_arg_int(L, 2);
-		h = check_arg_int(L, 3);
+		w = LuaHelpers::check_arg_int(L, 2);
+		h = LuaHelpers::check_arg_int(L, 3);
 		luaL_argcheck(L, (w >= 0), 2, "WIDTH value must be zero or positive");
 		luaL_argcheck(L, (h >= 0), 3, "HEIGHT value must be zero or positive");
 	}
 	else
 	{
+		if (lua_gettop(L) != 1)
+			luaL_error(L, "incorrect number of arguments (expected 0, 2 or 4)");
+
 		x = 0;
 		y = 0;
 		w = 0;
@@ -265,7 +382,7 @@ int DeckModule::_lua_create_rectangle(lua_State* L)
 
 int DeckModule::_lua_request_quit(lua_State* L)
 {
-	DeckModule* self       = from_stack(L, 1);
-	self->m_exit_requested = lua_tointeger(L, 2);
+	DeckModule* self = from_stack(L, 1);
+	self->set_exit_requested(lua_tointeger(L, 2));
 	return 0;
 }

@@ -2,6 +2,7 @@
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
+#include "lua_helpers.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
@@ -158,29 +159,15 @@ int Application::run()
 					DeckLogger::log_message(L, DeckLogger::Level::Info, "Application quit requested by system");
 					deck_module->set_exit_requested(0);
 					break;
-				case SDL_WINDOWEVENT:
-					// TODO
-					break;
-				case SDL_MOUSEMOTION:
-				case SDL_MOUSEBUTTONUP:
-				case SDL_MOUSEBUTTONDOWN:
-				case SDL_MOUSEWHEEL:
-					// TODO
-					break;
-				case SDL_KEYMAPCHANGED:
-				case SDL_CLIPBOARDUPDATE:
-				case SDL_SYSWMEVENT:
-					// Ignored
-					break;
 				default:
-					DeckLogger::log_message(L, DeckLogger::Level::Debug, "Unhandled SDL event with type ", std::to_string(event.type));
+					// DeckLogger::log_message(L, DeckLogger::Level::Debug, "Unhandled SDL event with type ", std::to_string(event.type));
 					break;
 			}
 		}
 		assert(lua_gettop(L) == resettop && "Application event loop handling is not stack balanced");
 
-		deck_module->tick(L, clock_msec);
-		assert(lua_gettop(L) == resettop && "DeckModule tick function is not stack balanced");
+		deck_module->tick_inputs(L, clock_msec);
+		assert(lua_gettop(L) == resettop && "DeckModule tick_inputs function is not stack balanced");
 
 		lua_getfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
 		lua_getfield(L, -1, "tick");
@@ -191,12 +178,17 @@ int Application::run()
 		}
 		lua_pop(L, 1);
 
+		deck_module->tick_outputs(L);
+		assert(lua_gettop(L) == resettop && "DeckModule tick_outputs function is not stack balanced");
+
 		std::this_thread::sleep_until(clock + std::chrono::milliseconds(15));
 	}
 
 	assert(lua_gettop(L) == resettop && "DeckModule run loop is not stack balanced");
 
 	deck_module->shutdown(L);
+	assert(lua_gettop(L) == resettop && "DeckModule shutdown function is not stack balanced");
+
 	int exit_code = deck_module->get_exit_code();
 
 	lua_pop(L, 1);

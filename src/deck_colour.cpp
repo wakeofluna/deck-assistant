@@ -1,4 +1,5 @@
 #include "deck_colour.h"
+#include "lua_helpers.h"
 
 char const* DeckColour::LUA_TYPENAME = "deck:Colour";
 
@@ -45,7 +46,7 @@ int DeckColour::index(lua_State* L, std::string_view const& key) const
 
 int DeckColour::newindex(lua_State* L, std::string_view const& key)
 {
-	lua_Integer given_value = check_arg_int(L, 3);
+	lua_Integer given_value = LuaHelpers::check_arg_int(L, 3);
 	if (given_value < 0)
 		luaL_argerror(L, 3, "colour value cannot be negative");
 

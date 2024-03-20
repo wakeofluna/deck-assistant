@@ -1,5 +1,6 @@
 #include "deck_card.h"
 #include "deck_colour.h"
+#include "lua_helpers.h"
 #include <SDL_image.h>
 #include <algorithm>
 #include <array>
@@ -130,11 +131,11 @@ int DeckCard::newindex(lua_State* L, std::string_view const& key)
 {
 	if (key == "w" || key == "width" || key == "h" || key == "height")
 	{
-		luaL_error(L, "key is readonly for DeckCard");
+		luaL_error(L, "key %s is readonly for %s", key.data(), LUA_TYPENAME);
 	}
 	else
 	{
-		newindex_store_in_instance_table(L);
+		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	return 0;
 }

@@ -1,7 +1,7 @@
 #ifndef DECK_ASSISTANT_LUA_CLASS_H_
 #define DECK_ASSISTANT_LUA_CLASS_H_
 
-#include "lua_helpers.h"
+#include <lua.hpp>
 #include <new>
 #include <string_view>
 #include <utility>
@@ -50,17 +50,23 @@
  *
  * + static char const* LUA_TYPENAME
  *     Use this string as the name of the metatable and classname in print commands
+ * + static constexpr bool const LUA_ENABLE_PUSH_THIS = true
+ *     If true, keeps track of a mapping of pointers to userdata
  * + static constexpr bool const LUA_IS_GLOBAL = true
  *     If true, the first instance to be created is stored globally and will be reused on
- *     future uses
+ *     future uses. Implies LUA_ENABLE_PUSH_THIS = true
  *
  * @tparam T Class to curiously recurringly wrap
  */
 template <typename T>
-class LuaClass : public LuaHelpers
+class LuaClass
 {
 public:
 	static char const* type_name();
+
+	static void push_instance_list_table(lua_State* L);
+	void push_this(lua_State* L);
+	inline int get_lua_ref_id() const { return m_lua_ref_id; }
 
 	static T* push_global_instance(lua_State* L);
 	static T* from_stack(lua_State* L, int idx, bool throw_error = true);
@@ -84,6 +90,7 @@ private:
 	static void finish_initialisation(lua_State* L, T* object);
 
 	static void const* m_metatable_ptr;
+	int m_lua_ref_id;
 };
 
 template <typename T>

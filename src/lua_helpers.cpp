@@ -47,7 +47,7 @@ void LuaHelpers::push_standard_weak_key_metatable(lua_State* L)
 		lua_createtable(L, 0, 2);
 		lua_pushliteral(L, "k");
 		lua_setfield(L, -2, "__mode");
-		lua_pushboolean(L, true);
+		lua_pushstring(L, k_weak_key_metatable_key);
 		lua_setfield(L, -2, "__metatable");
 
 		lua_pushvalue(L, -1);
@@ -65,7 +65,7 @@ void LuaHelpers::push_standard_weak_value_metatable(lua_State* L)
 		lua_createtable(L, 0, 2);
 		lua_pushliteral(L, "v");
 		lua_setfield(L, -2, "__mode");
-		lua_pushboolean(L, true);
+		lua_pushstring(L, k_weak_key_metatable_key);
 		lua_setfield(L, -2, "__metatable");
 
 		lua_pushvalue(L, -1);
@@ -89,6 +89,19 @@ void LuaHelpers::push_class_table(lua_State* L, int idx)
 void LuaHelpers::push_instance_table(lua_State* L, int idx)
 {
 	lua_getfenv(L, idx);
+}
+
+void LuaHelpers::push_instance_list_table(lua_State* L, int idx)
+{
+	if (lua_type(L, idx) == LUA_TUSERDATA && lua_getmetatable(L, idx))
+	{
+		lua_rawgeti(L, -1, IDX_META_INSTANCELIST);
+		lua_replace(L, -2);
+	}
+	else
+	{
+		lua_pushnil(L);
+	}
 }
 
 std::string_view LuaHelpers::to_string_view(lua_State* L, int idx)
@@ -316,16 +329,17 @@ void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_n
 
 bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
 {
-	// May only be called from the C++ main context
-	assert(lua_tocfunction(L, _lua_error_index) == &_lua_error_handler && "LuaHelpers::pcall not called with error handler on stack");
-
-	int const funcidx = lua_gettop(L) - nargs;
+	bool const use_lua_error_handler = lua_tocfunction(L, _lua_error_index) == _lua_error_handler;
+	int const funcidx                = lua_gettop(L) - nargs;
 
 	g_last_error_context.clear();
-	g_last_error_context.result = lua_pcall(L, nargs, nresults, _lua_error_index);
+	g_last_error_context.result = lua_pcall(L, nargs, nresults, use_lua_error_handler ? _lua_error_index : 0);
 
 	if (g_last_error_context.result != LUA_OK)
 	{
+		if (!use_lua_error_handler)
+			g_last_error_context.message = LuaHelpers::to_string_view(L, -1);
+
 		lua_settop(L, funcidx - 1);
 
 		if (log_error)

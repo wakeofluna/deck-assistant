@@ -2,6 +2,7 @@
 #include "builtins.h"
 #include "deck_card.h"
 #include "deck_colour.h"
+#include "lua_helpers.h"
 #include <optional>
 
 namespace
@@ -423,7 +424,7 @@ int DeckFont::_lua_clone(lua_State* L)
 int DeckFont::_lua_render_text(lua_State* L)
 {
 	DeckFont* self        = from_stack(L, 1);
-	std::string_view text = check_arg_string(L, 2);
+	std::string_view text = LuaHelpers::check_arg_string(L, 2);
 
 	Colour colour       = self->m_colour;
 	Alignment alignment = self->m_alignment;

@@ -1,121 +1,57 @@
 #include "deck_connector_container.h"
-#include "connector_elgato_streamdeck.h"
-#include "connector_window.h"
-#include "deck_connector.h"
+#include "deck_logger.h"
+#include "lua_helpers.h"
 #include <cassert>
 
-namespace
+char const* DeckConnectorContainer::LUA_TYPENAME = "deck:ConnectorContainer";
+
+void DeckConnectorContainer::for_each(lua_State* L, char const* function_name, int nargs)
 {
+	assert(nargs >= 0);
+	int const arg_end   = lua_gettop(L);
+	int const arg_start = arg_end - nargs + 1;
+	assert(from_stack(L, arg_start - 1, false) != nullptr);
 
-bool create_connector_arg_check(lua_State* L)
-{
-	DeckConnectorContainer::from_stack(L, 1, true);
-	LuaHelpers::check_arg_string(L, 2, false);
+	// For repeated access
+	lua_pushstring(L, function_name);
 
-	int const vtype3 = lua_type(L, 3);
-	if (vtype3 != LUA_TTABLE && vtype3 != LUA_TNONE)
-		luaL_typerror(L, 3, "table or none");
-
-	lua_settop(L, vtype3 == LUA_TTABLE ? 3 : 2);
-	return vtype3 == LUA_TTABLE;
-}
-
-int connector_not_available(lua_State* L, char const* message)
-{
-	create_connector_arg_check(L);
-	luaL_error(L, message);
-	return 0;
-}
-
-template <typename T>
-int get_existing_or_create_new(lua_State* L)
-{
-	bool do_table_init = create_connector_arg_check(L);
-
-	LuaHelpers::push_instance_table(L, 1);
-	lua_pushvalue(L, 2);
-	lua_pushvalue(L, 2);
-	lua_rawget(L, -3);
-
-	DeckConnector* connector = nullptr;
-
-	if (lua_type(L, -1) == LUA_TUSERDATA)
-	{
-		DeckConnector* old_connector = DeckConnector::from_stack(L, -1, false);
-		IConnector const* existing   = old_connector ? old_connector->get_connector() : nullptr;
-		if (existing)
-		{
-			std::string_view type1 = existing->get_subtype_name();
-			std::string_view type2 = T::SUBTYPE_NAME;
-			if (type1 == type2)
-				connector = old_connector;
-		}
-	}
-
-	if (!connector)
-	{
-		lua_pop(L, 1);
-		std::unique_ptr<IConnector> new_connector = std::make_unique<T>();
-		connector                                 = DeckConnector::push_new(L, std::move(new_connector));
-	}
-
-	if (do_table_init)
-	{
-		lua_pushvalue(L, 3);
-		LuaHelpers::copy_table_fields(L);
-	}
-
-	lua_pushvalue(L, -1);
-	lua_insert(L, -4);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
-
-	return 1;
-}
-
-} // namespace
-
-char const* DeckConnectorContainer::LUA_TYPENAME = "deck:DeckConnectorContainer";
-
-void DeckConnectorContainer::for_each(lua_State* L, std::function<void(lua_State* L, DeckConnector*)> const& visitor) const
-{
-	int const resettop = lua_gettop(L);
-	lua_checkstack(L, resettop + 24);
-
-	assert(DeckConnectorContainer::from_stack(L, -1, false) && "DeckConnectorContainer::for_each needs self on -1");
-	push_instance_table(L, -1);
-
+	LuaHelpers::push_instance_table(L, arg_start - 1);
 	lua_pushnil(L);
-	while (lua_next(L, -2) != 0)
+	while (lua_next(L, -2))
 	{
-		int const checktop = lua_gettop(L);
+		lua_pushvalue(L, -4);
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TFUNCTION)
+		{
+			lua_pushvalue(L, -2);
+			for (int i = arg_start; i <= arg_end; ++i)
+				lua_pushvalue(L, i);
 
-		DeckConnector* connector = DeckConnector::from_stack(L, -1, false);
-		if (connector)
-			visitor(L, connector);
-
-		assert(lua_gettop(L) >= checktop && "DeckConnector visitor function was not stack balanced");
-		lua_settop(L, checktop - 1);
+			if (lua_pcall(L, nargs + 1, 0, 0) != LUA_OK)
+			{
+				std::string msg;
+				msg.reserve(128);
+				msg  = "Error during Connector \"";
+				msg += LuaHelpers::to_string_view(L, -3);
+				msg += "\" function \"";
+				msg += function_name;
+				msg += "\": ";
+				msg += LuaHelpers::to_string_view(L, -1);
+				DeckLogger::log_message(L, DeckLogger::Level::Error, msg);
+				// Pop the error message
+				lua_pop(L, 1);
+			}
+		}
+		else
+		{
+			// Pop the not-a-function
+			lua_pop(L, 1);
+		}
+		// Pop the lua_next value for the next iteration
+		lua_pop(L, 1);
 	}
-
-	lua_settop(L, resettop);
-}
-
-void DeckConnectorContainer::init_class_table(lua_State* L)
-{
-	// Prevent possible unused warnings
-	(void)connector_not_available;
-
-	lua_pushcfunction(L, &DeckConnectorContainer::_lua_all);
-	lua_setfield(L, -2, "all");
-
-	lua_pushcfunction(L, &DeckConnectorContainer::_lua_create_elgato_streamdeck);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -3, "ElgatoStreamDeck");
-	lua_setfield(L, -2, "StreamDeck");
-
-	lua_pushcfunction(L, &DeckConnectorContainer::_lua_create_window);
-	lua_setfield(L, -2, "Window");
+	// Pop the instance table and the function name
+	lua_pop(L, 2);
 }
 
 void DeckConnectorContainer::init_instance_table(lua_State* L)
@@ -126,23 +62,24 @@ void DeckConnectorContainer::init_instance_table(lua_State* L)
 
 int DeckConnectorContainer::newindex(lua_State* L)
 {
-	luaL_error(L, "%s instance is closed for modifications", type_name());
+	from_stack(L, 1);
+	luaL_checktype(L, 2, LUA_TSTRING);
+
+	// Check validity of the connector
+	for (char const* const key : { "tick_inputs", "tick_outputs", "shutdown" })
+	{
+		lua_getfield(L, 3, key);
+		if (lua_type(L, -1) != LUA_TFUNCTION)
+			luaL_error(L, "Candidate connector does not have a function called \"%s\"", key);
+		lua_pop(L, 1);
+	}
+
+	LuaHelpers::newindex_store_in_instance_table(L);
 	return 0;
 }
 
-int DeckConnectorContainer::_lua_all(lua_State* L)
+int DeckConnectorContainer::tostring(lua_State* L) const
 {
-	from_stack(L, 1);
-	push_instance_table(L, 1);
+	lua_pushfstring(L, "%s: %p", LUA_TYPENAME, this);
 	return 1;
-}
-
-int DeckConnectorContainer::_lua_create_elgato_streamdeck(lua_State* L)
-{
-	return get_existing_or_create_new<ConnectorElgatoStreamDeck>(L);
-}
-
-int DeckConnectorContainer::_lua_create_window(lua_State* L)
-{
-	return get_existing_or_create_new<ConnectorWindow>(L);
 }

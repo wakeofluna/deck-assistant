@@ -1,26 +1,30 @@
 #ifndef DECK_ASSISTANT_CONNECTOR_WINDOW_H
 #define DECK_ASSISTANT_CONNECTOR_WINDOW_H
 
-#include "i_connector.h"
+#include "connector_base.h"
 #include <SDL.h>
+#include <atomic>
 #include <optional>
 #include <string>
 
-class ConnectorWindow : public IConnector
+class ConnectorWindow : public ConnectorBase<ConnectorWindow>
 {
 public:
 	ConnectorWindow();
 	~ConnectorWindow();
 
-	static char const* SUBTYPE_NAME;
-	char const* get_subtype_name() const override;
-
-	void tick(lua_State* L, int delta_msec) override;
+	void tick_inputs(lua_State* L, lua_Integer clock) override;
+	void tick_outputs(lua_State* L) override;
 	void shutdown(lua_State* L) override;
 
-	void init_instance_table(lua_State* L) override;
-	int index(lua_State* L) const override;
-	int newindex(lua_State* L) override;
+	static char const* LUA_TYPENAME;
+	static void init_class_table(lua_State* L);
+	void init_instance_table(lua_State* L);
+	int index(lua_State* L, std::string_view const& key) const;
+	int newindex(lua_State* L, std::string_view const& key);
+
+private:
+	static int _sdl_event_filter(void* userdata, SDL_Event* event);
 
 private:
 	SDL_Window* m_window;
@@ -28,6 +32,8 @@ private:
 	std::optional<int> m_wanted_width;
 	std::optional<int> m_wanted_height;
 	std::optional<bool> m_wanted_visible;
+
+	std::atomic_bool m_window_resized;
 };
 
 #endif // DECK_ASSISTANT_CONNECTOR_WINDOW_H

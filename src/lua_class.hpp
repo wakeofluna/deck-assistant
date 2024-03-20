@@ -2,6 +2,7 @@
 #define DECK_ASSISTANT_LUA_CLASS_HPP_
 
 #include "lua_class.h"
+#include "lua_helpers.h"
 #include <cassert>
 #include <lua.hpp>
 #include <new>
@@ -70,6 +71,26 @@ constexpr inline bool is_global()
 	return is_global<T>(is_available());
 }
 
+template <typename T>
+constexpr inline bool is_push_this_enabled(not_available)
+{
+	return is_global<T>(is_available());
+}
+
+template <typename T>
+constexpr inline bool is_push_this_enabled(std::enable_if_t<
+                                           std::is_same_v<bool const, decltype(T::LUA_ENABLE_PUSH_THIS)>,
+                                           is_available>)
+{
+	return is_global<T>(is_available()) || T::LUA_ENABLE_PUSH_THIS;
+}
+
+template <typename T>
+constexpr inline bool is_push_this_enabled()
+{
+	return is_push_this_enabled<T>(is_available());
+}
+
 // *************************** GC FINALIZE *************************
 
 template <typename T>
@@ -86,11 +107,25 @@ constexpr inline bool has_finalize(std::enable_if_t<std::is_same_v<void, decltyp
 }
 
 template <typename T>
+constexpr inline bool has_finalize()
+{
+	return has_finalize<T>(is_available());
+}
+
+template <typename T>
 int __gc(lua_State* L)
 {
 	T* object = reinterpret_cast<T*>(lua_touserdata(L, 1));
-	if constexpr (has_finalize<T>(is_available()))
+	if constexpr (has_finalize<T>())
 		object->finalize(L);
+
+	if constexpr (is_push_this_enabled<T>())
+	{
+		lua_getmetatable(L, 1);
+		lua_rawgeti(L, -1, LuaHelpers::IDX_META_INSTANCELIST);
+		luaL_unref(L, -1, object->get_lua_ref_id());
+		lua_pop(L, 2);
+	}
 
 	object->~T();
 	return 0;
@@ -99,7 +134,7 @@ int __gc(lua_State* L)
 template <typename T>
 void register_gc(lua_State* L)
 {
-	if constexpr (has_finalize<T>(is_available()) || !std::is_trivially_destructible_v<T>)
+	if constexpr (has_finalize<T>() || !std::is_trivially_destructible_v<T> || is_push_this_enabled<T>())
 	{
 		lua_pushcfunction(L, &__gc<T>);
 		lua_setfield(L, -2, "__gc");
@@ -483,10 +518,26 @@ constexpr inline bool has_newindex(std::enable_if_t<
 template <typename T>
 int __newindex(lua_State* L)
 {
+	constexpr bool const hasClassTable  = has_init_class_table<T>(is_available());
 	constexpr bool const hasIndexInt    = has_newindex_int<T>(is_available());
 	constexpr bool const hasIndexString = has_newindex_string<T>(is_available());
 	constexpr bool const hasIndexFull   = has_newindex_full<T>(is_available());
 	constexpr bool const hasIndex       = hasIndexInt || hasIndexString || hasIndexFull;
+
+	if constexpr (hasClassTable)
+	{
+		// If the value exists in the class table, this new value must be of the same type
+
+		LuaHelpers::push_class_table(L, 1);
+		lua_pushvalue(L, 2);
+		lua_rawget(L, -2);
+
+		int const class_type = lua_type(L, -1);
+		if (class_type != LUA_TNIL && lua_type(L, 3) != class_type)
+			luaL_typerror(L, 3, lua_typename(L, class_type));
+
+		lua_pop(L, 2);
+	}
 
 	if constexpr (hasIndex)
 	{
@@ -581,18 +632,49 @@ void LuaClass<T>::finish_initialisation(lua_State* L, T* object)
 {
 	push_metatable(L);
 
+	if constexpr (is_push_this_enabled<T>())
+	{
+		lua_rawgeti(L, -1, LuaHelpers::IDX_META_INSTANCELIST);
+		lua_pushvalue(L, -3);
+		object->m_lua_ref_id = luaL_ref(L, -2);
+		lua_pop(L, 1);
+	}
+
 	if constexpr (is_global<T>())
 	{
 		lua_pushvalue(L, -2);
-		lua_rawseti(L, -2, IDX_META_GLOBAL_INSTANCE);
+		lua_rawseti(L, -2, LuaHelpers::IDX_META_GLOBAL_INSTANCE);
 	}
+
+	lua_setmetatable(L, -2);
 
 	lua_newtable(L);
 	if constexpr (has_init_instance_table<T>(is_available()))
 		__init_instance_table<T>(L, object);
-	lua_setfenv(L, -3);
+	lua_setfenv(L, -2);
+}
 
-	lua_setmetatable(L, -2);
+template <typename T>
+void LuaClass<T>::push_instance_list_table(lua_State* L)
+{
+	push_metatable(L);
+	lua_rawgeti(L, -1, LuaHelpers::IDX_META_INSTANCELIST);
+	lua_replace(L, -2);
+}
+
+template <typename T>
+void LuaClass<T>::push_this(lua_State* L)
+{
+	if constexpr (is_push_this_enabled<T>())
+	{
+		push_instance_list_table(L);
+		lua_rawgeti(L, -1, m_lua_ref_id);
+		lua_replace(L, -2);
+	}
+	else
+	{
+		assert(false && "attempted to push_this of non-push-this-enabled class");
+	}
 }
 
 template <typename T>
@@ -601,7 +683,7 @@ T* LuaClass<T>::push_global_instance(lua_State* L)
 	if constexpr (is_global<T>())
 	{
 		push_metatable(L);
-		lua_rawgeti(L, -1, IDX_META_GLOBAL_INSTANCE);
+		lua_rawgeti(L, -1, LuaHelpers::IDX_META_GLOBAL_INSTANCE);
 		lua_replace(L, -2);
 		return from_stack(L, -1, false);
 	}
@@ -627,7 +709,7 @@ T* LuaClass<T>::from_stack(lua_State* L, int idx, bool throw_error)
 
 	if (throw_error)
 	{
-		idx = absidx(L, idx);
+		idx = LuaHelpers::absidx(L, idx);
 		luaL_typerror(L, idx, __typename<T>());
 	}
 
@@ -654,9 +736,8 @@ int LuaClass<T>::push_metatable(lua_State* L)
 		lua_setfield(L, LUA_REGISTRYINDEX, tname);
 
 		lua_pushstring(L, tname);
-		lua_setfield(L, -2, "__name");
-
-		lua_pushboolean(L, true);
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -3, "__name");
 		lua_setfield(L, -2, "__metatable");
 
 		if constexpr (has_init_class_table<T>(is_available()))
@@ -664,7 +745,21 @@ int LuaClass<T>::push_metatable(lua_State* L)
 			// Class table
 			lua_createtable(L, 0, 8);
 			__init_class_table<T>(L);
-			lua_rawseti(L, -2, IDX_META_CLASSTABLE);
+			lua_rawseti(L, -2, LuaHelpers::IDX_META_CLASSTABLE);
+		}
+
+		if constexpr (is_push_this_enabled<T>())
+		{
+			// Instance list table
+			if constexpr (is_global<T>())
+				lua_createtable(L, 1, 0);
+			else
+				lua_createtable(L, 32, 0);
+
+			LuaHelpers::push_standard_weak_value_metatable(L);
+			lua_setmetatable(L, -2);
+
+			lua_rawseti(L, -2, LuaHelpers::IDX_META_INSTANCELIST);
 		}
 
 		register_gc<T>(L);

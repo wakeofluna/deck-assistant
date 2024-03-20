@@ -1,0 +1,6 @@
+#include "connector_base.hpp"
+#include "connector_elgato_streamdeck.h"
+#include "connector_window.h"
+
+template class ConnectorBase<ConnectorElgatoStreamDeck>;
+template class ConnectorBase<ConnectorWindow>;

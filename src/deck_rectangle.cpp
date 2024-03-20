@@ -1,4 +1,5 @@
 #include "deck_rectangle.h"
+#include "lua_helpers.h"
 
 char const* DeckRectangle::LUA_TYPENAME = "deck:Rectangle";
 
@@ -45,7 +46,7 @@ int DeckRectangle::index(lua_State* L, std::string_view const& key) const
 
 int DeckRectangle::newindex(lua_State* L, std::string_view const& key)
 {
-	int value = check_arg_int(L, 3);
+	int value = LuaHelpers::check_arg_int(L, 3);
 
 	if (key == "x" || key == "left")
 	{

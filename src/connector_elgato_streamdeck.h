@@ -1,29 +1,30 @@
 #ifndef DECK_ASSISTANT_CONNECTOR_ELGATO_STREAMDECK_H
 #define DECK_ASSISTANT_CONNECTOR_ELGATO_STREAMDECK_H
 
-#include "i_connector.h"
+#include "connector_base.h"
 #include <SDL_hidapi.h>
 #include <SDL_surface.h>
 #include <array>
-#include <string>
 #include <cstdint>
+#include <memory>
+#include <string>
 #include <vector>
 
-class ConnectorElgatoStreamDeck : public IConnector
+class ConnectorElgatoStreamDeck : public ConnectorBase<ConnectorElgatoStreamDeck>
 {
 public:
 	ConnectorElgatoStreamDeck();
 	~ConnectorElgatoStreamDeck();
 
-	static char const* SUBTYPE_NAME;
-	char const* get_subtype_name() const override;
-
-	void tick(lua_State* L, int delta_msec) override;
+	void tick_inputs(lua_State* L, lua_Integer clock) override;
+	void tick_outputs(lua_State* L) override;
 	void shutdown(lua_State* L) override;
 
-	void init_instance_table(lua_State* L) override;
-	int index(lua_State* L) const override;
-	int newindex(lua_State* L) override;
+	static char const* LUA_TYPENAME;
+	static void init_class_table(lua_State* L);
+	void init_instance_table(lua_State* L);
+	int index(lua_State* L, std::string_view const& key) const;
+	int newindex(lua_State* L, std::string_view const& key);
 
 private:
 	static int _lua_default_on_connect(lua_State* L);
@@ -56,6 +57,7 @@ private:
 	std::array<unsigned char, 1024> m_buffer;
 	std::vector<bool> m_buttons_state;
 	std::vector<bool> m_buttons_new_state;
+	std::vector<std::pair<unsigned char, std::vector<unsigned char>>> m_buttons_image;
 };
 
 #endif // DECK_ASSISTANT_CONNECTOR_ELGATO_STREAMDECK_H

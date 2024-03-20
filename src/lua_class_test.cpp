@@ -104,6 +104,18 @@ public:
 	}
 };
 
+class TestClassVariant5 : public LuaClass<TestClassVariant5>
+{
+public:
+	static constexpr bool const LUA_ENABLE_PUSH_THIS = true;
+};
+
+class TestClassVariant6 : public LuaClass<TestClassVariant6>
+{
+public:
+	static constexpr bool const LUA_IS_GLOBAL = true;
+};
+
 } // namespace lua_class_test
 
 using namespace lua_class_test;
@@ -113,6 +125,8 @@ template class LuaClass<TestClassVariant1>;
 template class LuaClass<TestClassVariant2>;
 template class LuaClass<TestClassVariant3>;
 template class LuaClass<TestClassVariant4>;
+template class LuaClass<TestClassVariant5>;
+template class LuaClass<TestClassVariant6>;
 
 TEST_CASE("LuaClass", "[lua]")
 {
@@ -282,6 +296,105 @@ TEST_CASE("LuaClass", "[lua]")
 
 		lua_getfield(L, -1, "__name");
 		REQUIRE(LuaHelpers::to_string_view(L, -1) == tc1->type_name());
+	}
+
+	SECTION("push_this")
+	{
+		for (int i = 0; i < 10; ++i)
+		{
+			int const top = lua_gettop(L);
+
+			TestClassVariant5* tc5 = TestClassVariant5::push_new(L);
+			REQUIRE(lua_gettop(L) == top + 1);
+			tc5->push_this(L);
+			REQUIRE(lua_gettop(L) == top + 2);
+			REQUIRE(lua_touserdata(L, -2) == tc5);
+			REQUIRE(lua_touserdata(L, -1) == tc5);
+			REQUIRE(lua_rawequal(L, -2, -1));
+			lua_pop(L, 1);
+
+			TestClassVariant6* tc6 = TestClassVariant6::push_new(L);
+			REQUIRE(lua_gettop(L) == top + 2);
+			tc6->push_this(L);
+			REQUIRE(lua_gettop(L) == top + 3);
+			REQUIRE(lua_touserdata(L, -2) == tc6);
+			REQUIRE(lua_touserdata(L, -1) == tc6);
+			REQUIRE(lua_rawequal(L, -2, -1));
+			lua_pop(L, 1);
+		}
+	}
+
+	SECTION("push_global_instance")
+	{
+		TestClassVariant6* tc6 = TestClassVariant6::push_new(L);
+		REQUIRE(lua_gettop(L) == 1);
+		REQUIRE(lua_touserdata(L, -1) == tc6);
+		TestClassVariant6::push_global_instance(L);
+		REQUIRE(lua_gettop(L) == 2);
+		REQUIRE(lua_touserdata(L, -1) == tc6);
+		REQUIRE(lua_rawequal(L, -2, -1));
+
+		TestClassVariant6* tc6_2 = TestClassVariant6::push_new(L);
+		REQUIRE(tc6_2 == tc6);
+		REQUIRE(lua_gettop(L) == 3);
+		REQUIRE(lua_touserdata(L, -1) == tc6);
+		REQUIRE(lua_rawequal(L, -2, -1));
+		TestClassVariant6::push_global_instance(L);
+		REQUIRE(lua_gettop(L) == 4);
+		REQUIRE(lua_touserdata(L, -1) == tc6);
+		REQUIRE(lua_rawequal(L, -2, -1));
+	}
+
+	SECTION("Cleanup of instancelist table after garbage collection")
+	{
+		static int const NUM_INSTANCES = 5;
+		static int const DEL_INSTANCE  = 2;
+
+		TestClassVariant5* tc5[NUM_INSTANCES];
+
+		for (int i = 0; i < NUM_INSTANCES; ++i)
+			tc5[i] = TestClassVariant5::push_new(L);
+
+		for (int i = 0; i < NUM_INSTANCES; ++i)
+			REQUIRE(tc5[i]->get_lua_ref_id() == i + 1);
+
+		TestClassVariant5::push_instance_list_table(L);
+		REQUIRE(lua_type(L, -1) == LUA_TTABLE);
+		REQUIRE(lua_objlen(L, -1) == NUM_INSTANCES);
+
+		lua_gc(L, LUA_GCCOLLECT, 0);
+
+		for (int i = 0; i < NUM_INSTANCES; ++i)
+		{
+			lua_rawgeti(L, -1, i + 1);
+			REQUIRE(lua_touserdata(L, -1) == tc5[i]);
+			lua_pop(L, 1);
+		}
+
+		lua_remove(L, DEL_INSTANCE + 1);
+		lua_gc(L, LUA_GCCOLLECT, 0);
+
+		for (int i = 0; i < NUM_INSTANCES; ++i)
+		{
+			lua_rawgeti(L, -1, i + 1);
+			if (i == DEL_INSTANCE)
+				REQUIRE(lua_isnil(L, -1));
+			else
+				REQUIRE(lua_touserdata(L, -1) == tc5[i]);
+			lua_pop(L, 1);
+		}
+
+		TestClassVariant5* tc5_last = TestClassVariant5::push_new(L);
+		REQUIRE(tc5_last->get_lua_ref_id() == DEL_INSTANCE + 1);
+		tc5[DEL_INSTANCE] = tc5_last;
+		lua_insert(L, -2);
+
+		for (int i = 0; i < NUM_INSTANCES; ++i)
+		{
+			lua_rawgeti(L, -1, i + 1);
+			REQUIRE(lua_touserdata(L, -1) == tc5[i]);
+			lua_pop(L, 1);
+		}
 	}
 
 	lua_close(L);

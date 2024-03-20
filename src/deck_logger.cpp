@@ -1,4 +1,5 @@
 #include "deck_logger.h"
+#include "lua_helpers.h"
 #include <chrono>
 #include <format>
 #include <iostream>
@@ -47,13 +48,16 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 
 	stream_output(std::cout, level, message);
 
+	if (!L)
+		return;
+
 	DeckLogger* logger = push_global_instance(L);
 	if (logger && !logger->m_block_logs)
 	{
 		logger->m_block_logs = true;
 		int const resettop   = lua_gettop(L);
 
-		push_instance_table(L, -1);
+		LuaHelpers::push_instance_table(L, -1);
 		lua_getfield(L, -1, "on_message");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
@@ -93,7 +97,7 @@ void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view con
 	int currentline;
 
 	full_message.reserve(64 + message.size() + part2.size());
-	lua_lineinfo(L, full_message, currentline);
+	LuaHelpers::lua_lineinfo(L, full_message, currentline);
 
 	full_message += ':';
 	full_message += std::to_string(currentline);
@@ -132,16 +136,16 @@ int DeckLogger::newindex(lua_State* L)
 {
 	if (lua_type(L, 2) == LUA_TSTRING)
 	{
-		std::string_view key = to_string_view(L, 2);
+		std::string_view key = LuaHelpers::to_string_view(L, 2);
 		if (key == "on_message")
 		{
 			luaL_argcheck(L, lua_type(L, 3) == LUA_TFUNCTION, 3, "must be a function");
-			newindex_store_in_instance_table(L);
+			LuaHelpers::newindex_store_in_instance_table(L);
 			return 0;
 		}
 	}
 
-	luaL_argerror(L, absidx(L, 2), "invalid key for DeckLogger (allowed: on_message)");
+	luaL_argerror(L, LuaHelpers::absidx(L, 2), "invalid key for DeckLogger (allowed: on_message)");
 	return 0;
 }
 

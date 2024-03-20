@@ -521,7 +521,7 @@ value = foo(15)
 		{
 			std::string_view const script = "a = 1\nb = 2\nc = 3 = 4\nd = 5";
 
-			REQUIRE(!LuaHelpers::load_script_inline(L, "inline_test_chunk", script));
+			REQUIRE(!LuaHelpers::load_script_inline(L, "inline_test_chunk", script, false));
 			REQUIRE(lua_gettop(L) == 0);
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();

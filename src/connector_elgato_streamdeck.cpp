@@ -1,6 +1,8 @@
 #include "connector_elgato_streamdeck.h"
 #include "SDL_error.h"
 #include "deck_card.h"
+#include "deck_logger.h"
+#include "lua_helpers.h"
 #include <algorithm>
 #include <cassert>
 #include <codecvt>
@@ -11,24 +13,6 @@ namespace
 {
 
 constexpr unsigned char const INVALID_BRIGHTNESS = 255;
-
-constexpr std::string_view const READONLY_KEYS[] = {
-	"connected",
-	"error",
-	"vid",
-	"pid",
-	"model",
-	"serialnumber",
-};
-constexpr std::size_t const READONLY_KEYS_SIZE = sizeof(READONLY_KEYS) / sizeof(*READONLY_KEYS);
-
-bool is_readonly(std::string_view const& key)
-{
-	for (std::size_t idx = 0; idx < READONLY_KEYS_SIZE; ++idx)
-		if (READONLY_KEYS[idx] == key)
-			return true;
-	return false;
-}
 
 constexpr std::pair<int, std::string_view> const MODELS[] = {
 	{0x0060,  "Stream Deck Original"},
@@ -84,7 +68,7 @@ void convert_button_table(lua_State* L, int idx)
 
 } // namespace
 
-char const* ConnectorElgatoStreamDeck::SUBTYPE_NAME = "Elgato StreamDeck";
+char const* ConnectorElgatoStreamDeck::LUA_TYPENAME = "deck:ConnectorElgatoStreamDeck";
 
 ConnectorElgatoStreamDeck::ConnectorElgatoStreamDeck()
     : m_hid_device(nullptr)
@@ -100,12 +84,7 @@ ConnectorElgatoStreamDeck::~ConnectorElgatoStreamDeck()
 		SDL_hid_close(m_hid_device);
 }
 
-char const* ConnectorElgatoStreamDeck::get_subtype_name() const
-{
-	return SUBTYPE_NAME;
-}
-
-void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
+void ConnectorElgatoStreamDeck::tick_inputs(lua_State* L, lua_Integer clock)
 {
 	if (!m_hid_device)
 	{
@@ -122,16 +101,14 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 		lua_getfield(L, -1, "on_connect");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
-			LuaHelpers::pcall(L, 0, 0);
+			push_this(L);
+			LuaHelpers::pcall(L, 1, 0);
 		}
 		else
 		{
 			lua_pop(L, 1);
 		}
 	}
-
-	if (m_actual_brightness != m_wanted_brightness && m_wanted_brightness != INVALID_BRIGHTNESS)
-		write_brightness(m_wanted_brightness);
 
 	if (update_button_state())
 	{
@@ -151,9 +128,10 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 				lua_getfield(L, -2, m_buttons_new_state[idx] ? "on_press" : "on_release");
 				if (lua_type(L, -1) == LUA_TFUNCTION)
 				{
+					push_this(L);
 					lua_pushinteger(L, idx + 1);
 					lua_pushvalue(L, -3);
-					LuaHelpers::pcall(L, 2, 0);
+					LuaHelpers::pcall(L, 3, 0);
 				}
 				else
 				{
@@ -171,7 +149,35 @@ void ConnectorElgatoStreamDeck::tick(lua_State* L, int delta_msec)
 		lua_getfield(L, -1, "on_disconnect");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
-			LuaHelpers::pcall(L, 0, 0);
+			push_this(L);
+			LuaHelpers::pcall(L, 1, 0);
+		}
+		else
+		{
+			lua_pop(L, 1);
+		}
+	}
+}
+
+void ConnectorElgatoStreamDeck::tick_outputs(lua_State* L)
+{
+	if (!m_hid_device)
+		return;
+
+	if (m_actual_brightness != m_wanted_brightness && m_wanted_brightness != INVALID_BRIGHTNESS)
+		write_brightness(m_wanted_brightness);
+
+	for (auto const& todo : m_buttons_image)
+		write_image_data(todo.first, todo.second);
+	m_buttons_image.clear();
+
+	if (!m_hid_device)
+	{
+		lua_getfield(L, -1, "on_disconnect");
+		if (lua_type(L, -1) == LUA_TFUNCTION)
+		{
+			push_this(L);
+			LuaHelpers::pcall(L, 1, 0);
 		}
 		else
 		{
@@ -189,14 +195,20 @@ void ConnectorElgatoStreamDeck::shutdown(lua_State* L)
 	}
 }
 
+void ConnectorElgatoStreamDeck::init_class_table(lua_State* L)
+{
+	Super::init_class_table(L);
+
+	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_set_button);
+	lua_setfield(L, -2, "set_button");
+}
+
 void ConnectorElgatoStreamDeck::init_instance_table(lua_State* L)
 {
-	lua_pushlightuserdata(L, this);
-	lua_pushcclosure(L, &ConnectorElgatoStreamDeck::_lua_default_on_connect, 1);
+	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_default_on_connect);
 	lua_setfield(L, -2, "on_connect");
 
-	lua_pushlightuserdata(L, this);
-	lua_pushcclosure(L, &ConnectorElgatoStreamDeck::_lua_default_on_disconnect, 1);
+	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_default_on_disconnect);
 	lua_setfield(L, -2, "on_disconnect");
 
 	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_default_on_press);
@@ -204,101 +216,78 @@ void ConnectorElgatoStreamDeck::init_instance_table(lua_State* L)
 
 	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_default_on_release);
 	lua_setfield(L, -2, "on_release");
-
-	lua_pushcfunction(L, &ConnectorElgatoStreamDeck::_lua_set_button);
-	lua_setfield(L, -2, "set_button");
 }
 
-int ConnectorElgatoStreamDeck::index(lua_State* L) const
+int ConnectorElgatoStreamDeck::index(lua_State* L, std::string_view const& key) const
 {
-	lua_settop(L, 2);
-
-	lua_pushvalue(L, 2);
-	lua_rawget(L, 1);
-	if (lua_type(L, -1) != LUA_TNIL)
-		return 1;
-	lua_pop(L, 1);
-
-	if (lua_type(L, 2) == LUA_TSTRING)
+	if (key == "brightness")
 	{
-		std::string_view key = LuaHelpers::to_string_view(L, 2);
-		if (key == "brightness")
-		{
-			if (m_wanted_brightness != INVALID_BRIGHTNESS)
-				lua_pushinteger(L, m_wanted_brightness);
-		}
-		else if (key == "connected")
-		{
-			lua_pushboolean(L, m_hid_device != nullptr);
-		}
-		else if (key == "error")
-		{
-			if (!m_last_error.empty())
-				lua_pushlstring(L, m_last_error.data(), m_last_error.size());
-		}
-		else if (key == "vid")
-		{
-			if (m_vid)
-				lua_pushinteger(L, m_vid);
-		}
-		else if (key == "pid")
-		{
-			if (m_pid)
-				lua_pushinteger(L, m_pid);
-		}
-		else if (key == "model")
-		{
-			std::string_view model = get_model(m_pid);
-			if (!model.empty())
-				lua_pushlstring(L, model.data(), model.size());
-		}
-		else if (key == "serialnumber")
-		{
-			if (!m_serialnumber.empty())
-				lua_pushlstring(L, m_serialnumber.data(), m_serialnumber.size());
-		}
+		if (m_wanted_brightness != INVALID_BRIGHTNESS)
+			lua_pushinteger(L, m_wanted_brightness);
+	}
+	else if (key == "connected")
+	{
+		lua_pushboolean(L, m_hid_device != nullptr);
+	}
+	else if (key == "error")
+	{
+		if (!m_last_error.empty())
+			lua_pushlstring(L, m_last_error.data(), m_last_error.size());
+	}
+	else if (key == "vid")
+	{
+		if (m_vid)
+			lua_pushinteger(L, m_vid);
+	}
+	else if (key == "pid")
+	{
+		if (m_pid)
+			lua_pushinteger(L, m_pid);
+	}
+	else if (key == "model")
+	{
+		std::string_view model = get_model(m_pid);
+		if (!model.empty())
+			lua_pushlstring(L, model.data(), model.size());
+	}
+	else if (key == "serialnumber")
+	{
+		if (!m_serialnumber.empty())
+			lua_pushlstring(L, m_serialnumber.data(), m_serialnumber.size());
 	}
 
 	return lua_gettop(L) == 2 ? 0 : 1;
 }
 
-int ConnectorElgatoStreamDeck::newindex(lua_State* L)
+int ConnectorElgatoStreamDeck::newindex(lua_State* L, std::string_view const& key)
 {
-	lua_settop(L, 3);
-
-	if (lua_type(L, 2) == LUA_TSTRING)
+	if (key == "connected" || key == "error" || key == "vid" || key == "pid" || key == "model" || key == "serialnumber")
 	{
-		std::string_view key = LuaHelpers::to_string_view(L, 2);
-
-		if (is_readonly(key))
-		{
-			luaL_error(L, "Connector \"%s\" key \"%s\" is readonly", SUBTYPE_NAME, key.data());
-			return 0;
-		}
-		else if (key == "brightness")
-		{
-			lua_Integer value   = LuaHelpers::check_arg_int(L, 3);
-			m_wanted_brightness = std::clamp<int>(value, 0, 100);
-			return 0;
-		}
-		else if (key.starts_with("on_"))
-		{
-			int const vtype = lua_type(L, 3);
-			if (vtype != LUA_TFUNCTION && vtype != LUA_TNIL)
-				luaL_typerror(L, 3, "event handlers must be functions");
-
-			lua_rawset(L, 1);
-			return 0;
-		}
+		luaL_error(L, "key %s is readonly for %s", key.data(), LUA_TYPENAME);
 	}
+	else if (key == "brightness")
+	{
+		lua_Integer value   = LuaHelpers::check_arg_int(L, 3);
+		m_wanted_brightness = std::clamp<int>(value, 0, 100);
+	}
+	else if (key.starts_with("on_"))
+	{
+		int const vtype = lua_type(L, 3);
+		if (vtype != LUA_TFUNCTION && vtype != LUA_TNIL)
+			luaL_typerror(L, 3, "event handlers must be functions");
 
-	lua_rawset(L, 1);
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
+	else
+	{
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
 	return 0;
 }
 
 int ConnectorElgatoStreamDeck::_lua_default_on_connect(lua_State* L)
 {
-	ConnectorElgatoStreamDeck* self = reinterpret_cast<ConnectorElgatoStreamDeck*>(lua_touserdata(L, lua_upvalueindex(1)));
+	ConnectorElgatoStreamDeck* self = from_stack(L, 1);
 	std::string_view model          = get_model(self->m_pid);
 	std::string_view serialnumber   = self->m_serialnumber;
 
@@ -318,7 +307,7 @@ int ConnectorElgatoStreamDeck::_lua_default_on_connect(lua_State* L)
 
 int ConnectorElgatoStreamDeck::_lua_default_on_disconnect(lua_State* L)
 {
-	ConnectorElgatoStreamDeck* self = reinterpret_cast<ConnectorElgatoStreamDeck*>(lua_touserdata(L, lua_upvalueindex(1)));
+	ConnectorElgatoStreamDeck* self = from_stack(L, 1);
 
 	lua_getglobal(L, "print");
 
@@ -334,15 +323,19 @@ int ConnectorElgatoStreamDeck::_lua_default_on_disconnect(lua_State* L)
 
 int ConnectorElgatoStreamDeck::_lua_default_on_press(lua_State* L)
 {
+	from_stack(L, 1);
+	luaL_checktype(L, 2, LUA_TNUMBER);
+	luaL_checktype(L, 3, LUA_TTABLE);
+
 	lua_getglobal(L, "print");
 
 	luaL_Buffer buf;
 	luaL_buffinit(L, &buf);
 	luaL_addstring(&buf, "Elgato StreamDeck on_press(): ");
-	lua_pushvalue(L, 1);
+	lua_pushvalue(L, 2);
 	luaL_addvalue(&buf);
 	luaL_addchar(&buf, ' ');
-	convert_button_table(L, 2);
+	convert_button_table(L, 3);
 	luaL_addvalue(&buf);
 	luaL_pushresult(&buf);
 
@@ -352,15 +345,19 @@ int ConnectorElgatoStreamDeck::_lua_default_on_press(lua_State* L)
 
 int ConnectorElgatoStreamDeck::_lua_default_on_release(lua_State* L)
 {
+	from_stack(L, 1);
+	luaL_checktype(L, 2, LUA_TNUMBER);
+	luaL_checktype(L, 3, LUA_TTABLE);
+
 	lua_getglobal(L, "print");
 
 	luaL_Buffer buf;
 	luaL_buffinit(L, &buf);
 	luaL_addstring(&buf, "Elgato StreamDeck on_release(): ");
-	lua_pushvalue(L, 1);
+	lua_pushvalue(L, 2);
 	luaL_addvalue(&buf);
 	luaL_addchar(&buf, ' ');
-	convert_button_table(L, 2);
+	convert_button_table(L, 3);
 	luaL_addvalue(&buf);
 	luaL_pushresult(&buf);
 
@@ -370,7 +367,7 @@ int ConnectorElgatoStreamDeck::_lua_default_on_release(lua_State* L)
 
 int ConnectorElgatoStreamDeck::_lua_set_button(lua_State* L)
 {
-	ConnectorElgatoStreamDeck* self = static_cast<ConnectorElgatoStreamDeck*>(from_stack(L, 1, SUBTYPE_NAME));
+	ConnectorElgatoStreamDeck* self = from_stack(L, 1);
 	unsigned char button            = LuaHelpers::check_arg_int(L, 2);
 	DeckCard* card                  = DeckCard::from_stack(L, 3);
 
@@ -380,7 +377,7 @@ int ConnectorElgatoStreamDeck::_lua_set_button(lua_State* L)
 	}
 	else if (!self->m_hid_device)
 	{
-		luaL_error(L, "Device is not connected");
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "Device is not connected");
 	}
 	else
 	{
@@ -583,7 +580,22 @@ void ConnectorElgatoStreamDeck::set_button(unsigned char button, SDL_Surface* su
 	SDL_FreeSurface(new_surface);
 
 	if (!bytes.empty())
-		write_image_data(button - 1, bytes);
+	{
+		--button;
+
+		bool found = false;
+		for (auto& todo : m_buttons_image)
+		{
+			if (todo.first == button)
+			{
+				todo.second.swap(bytes);
+				found = true;
+			}
+		}
+
+		if (!found)
+			m_buttons_image.emplace_back(std::make_pair(button, std::move(bytes)));
+	}
 }
 
 bool ConnectorElgatoStreamDeck::update_button_state()
