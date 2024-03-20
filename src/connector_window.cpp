@@ -51,7 +51,7 @@ void ConnectorWindow::tick_outputs(lua_State* L)
 
 		if (!m_window)
 		{
-			DeckLogger::log_message(L, DeckLogger::Level::Error, "Failed to create window", SDL_GetError());
+			DeckLogger::log_message(L, DeckLogger::Level::Error, "failed to create window: ", SDL_GetError());
 		}
 		else
 		{
@@ -215,7 +215,7 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window redraw requested");
 				break;
 			case SDL_WINDOWEVENT_SIZE_CHANGED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", std::to_string(event->window.data1) + "x" + std::to_string(event->window.data2));
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", event->window.data1, 'x', event->window.data2);
 				self->m_window_resized.store(true, std::memory_order_release);
 				break;
 			case SDL_WINDOWEVENT_SHOWN:
@@ -225,10 +225,10 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became hidden");
 				break;
 			case SDL_WINDOWEVENT_MOVED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", std::to_string(event->window.data1) + "x" + std::to_string(event->window.data2));
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", event->window.data1, 'x', event->window.data2);
 				break;
 			case SDL_WINDOWEVENT_RESIZED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", std::to_string(event->window.data1) + "x" + std::to_string(event->window.data2));
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event->window.data1, 'x', event->window.data2);
 				break;
 			case SDL_WINDOWEVENT_MINIMIZED:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became minimized");
@@ -258,10 +258,10 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 			case SDL_WINDOWEVENT_HIT_TEST:
 			case SDL_WINDOWEVENT_ICCPROF_CHANGED:
 			case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window event with type ", std::to_string(event->window.event));
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window event with type ", event->window.event);
 				break;
 			default:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window UNKNOWN event with type ", std::to_string(event->window.event));
+				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window UNKNOWN event with type ", event->window.event);
 				break;
 		}
 	}

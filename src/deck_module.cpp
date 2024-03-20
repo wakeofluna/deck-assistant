@@ -167,7 +167,7 @@ int DeckModule::_lua_create_card(lua_State* L)
 	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(SDL_SIMD_ALIGNED, width, height, 32, SDL_PIXELFORMAT_ARGB32);
 	if (!surface)
 	{
-		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to allocate new card", SDL_GetError());
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to allocate new surface: ", SDL_GetError());
 		return 0;
 	}
 
@@ -312,7 +312,7 @@ int DeckModule::_lua_create_image(lua_State* L)
 	SDL_Surface* tmp_surface = IMG_Load(src.data());
 	if (!tmp_surface)
 	{
-		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to load image", SDL_GetError());
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to load image: ", SDL_GetError());
 		return 0;
 	}
 
@@ -321,7 +321,7 @@ int DeckModule::_lua_create_image(lua_State* L)
 
 	if (!new_surface)
 	{
-		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to convert image to rgb", SDL_GetError());
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to convert image to rgb: ", SDL_GetError());
 		return 0;
 	}
 

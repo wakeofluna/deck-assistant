@@ -29,15 +29,7 @@ void DeckConnectorContainer::for_each(lua_State* L, char const* function_name, i
 
 			if (lua_pcall(L, nargs + 1, 0, 0) != LUA_OK)
 			{
-				std::string msg;
-				msg.reserve(128);
-				msg  = "Error during Connector \"";
-				msg += LuaHelpers::to_string_view(L, -3);
-				msg += "\" function \"";
-				msg += function_name;
-				msg += "\": ";
-				msg += LuaHelpers::to_string_view(L, -1);
-				DeckLogger::log_message(L, DeckLogger::Level::Error, msg);
+				DeckLogger::log_message(L, DeckLogger::Level::Error, "Error during Connector \"", LuaHelpers::to_string_view(L, -3), "\" function \"", function_name, "\": ", LuaHelpers::to_string_view(L, -1));
 				// Pop the error message
 				lua_pop(L, 1);
 			}

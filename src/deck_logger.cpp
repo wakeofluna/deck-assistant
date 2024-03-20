@@ -79,40 +79,6 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 	lua_pop(L, 1);
 }
 
-void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2)
-{
-	std::string full_message(message);
-	full_message += part2;
-	log_message(L, level, full_message);
-}
-
-void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message)
-{
-	lua_log_message(L, level, message, std::string_view());
-}
-
-void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, std::string_view const& part2)
-{
-	std::string full_message;
-	int currentline;
-
-	full_message.reserve(64 + message.size() + part2.size());
-	LuaHelpers::lua_lineinfo(L, full_message, currentline);
-
-	full_message += ':';
-	full_message += std::to_string(currentline);
-	full_message += ": ";
-	full_message += message;
-
-	if (!part2.empty())
-	{
-		full_message += ": ";
-		full_message += part2;
-	}
-
-	log_message(L, level, full_message);
-}
-
 void DeckLogger::init_class_table(lua_State* L)
 {
 	push_level(L, Level::Debug);
