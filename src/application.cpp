@@ -182,6 +182,8 @@ int Application::run()
 		deck_module->tick_outputs(L);
 		assert(lua_gettop(L) == resettop && "DeckModule tick_outputs function is not stack balanced");
 
+		lua_gc(L, LUA_GCSTEP, 1);
+
 		auto const lower_limit = std::chrono::steady_clock::now();
 		while (clock_tick < lower_limit)
 			clock_tick += std::chrono::milliseconds(10);
