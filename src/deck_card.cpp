@@ -1,5 +1,6 @@
 #include "deck_card.h"
 #include "deck_colour.h"
+#include "deck_logger.h"
 #include "lua_helpers.h"
 #include <SDL_image.h>
 #include <algorithm>
@@ -104,6 +105,9 @@ void DeckCard::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_clear);
 	lua_setfield(L, -2, "clear");
+
+	lua_pushcfunction(L, &_lua_resize);
+	lua_setfield(L, -2, "resize");
 }
 
 void DeckCard::init_instance_table(lua_State* L)
@@ -192,7 +196,7 @@ SDL_Surface* DeckCard::resize_surface(SDL_Surface* surface, int new_width, int n
 	if (!new_surface)
 		return nullptr;
 
-	SDL_SetSurfaceBlendMode(new_surface, SDL_BLENDMODE_NONE);
+	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
 	SDL_BlitScaled(surface, nullptr, new_surface, nullptr);
 	return new_surface;
 }
@@ -233,10 +237,12 @@ int DeckCard::_lua_blit(lua_State* L)
 
 	if (lua_gettop(L) >= 6)
 	{
-		luaL_argcheck(L, lua_type(L, 5) == LUA_TNUMBER, 3, "WIDTH must be an integer");
-		luaL_argcheck(L, lua_type(L, 6) == LUA_TNUMBER, 4, "HEIGHT must be an integer");
+		luaL_argcheck(L, lua_type(L, 5) == LUA_TNUMBER, 5, "WIDTH must be an integer");
+		luaL_argcheck(L, lua_type(L, 6) == LUA_TNUMBER, 6, "HEIGHT must be an integer");
 		w = lua_tointeger(L, 5);
 		h = lua_tointeger(L, 6);
+		luaL_argcheck(L, (w > 0), 5, "WIDTH must be larger than zero");
+		luaL_argcheck(L, (h > 0), 6, "HEIGHT must be larger than zero");
 	}
 
 	if (source)
@@ -247,7 +253,7 @@ int DeckCard::_lua_blit(lua_State* L)
 			h = source->h;
 
 		SDL_Rect dstrect { x, y, w, h };
-		SDL_SetSurfaceBlendMode(self->m_surface, SDL_BLENDMODE_BLEND);
+		SDL_SetSurfaceBlendMode(source, SDL_BLENDMODE_BLEND);
 		SDL_BlitScaled(source, nullptr, self->m_surface, &dstrect);
 	}
 
@@ -259,5 +265,30 @@ int DeckCard::_lua_clear(lua_State* L)
 	DeckCard* self     = from_stack(L, 1);
 	DeckColour* colour = DeckColour::from_stack(L, 2);
 	SDL_FillRect(self->m_surface, nullptr, colour->get_colour().value);
+	return 0;
+}
+
+int DeckCard::_lua_resize(lua_State* L)
+{
+	DeckCard* self = from_stack(L, 1);
+	int new_width  = LuaHelpers::check_arg_int(L, 2);
+	int new_height = LuaHelpers::check_arg_int(L, 3);
+	luaL_argcheck(L, (new_width > 0), 2, "WIDTH must be larger than zero");
+	luaL_argcheck(L, (new_height > 0), 3, "HEIGHT must be larger than zero");
+
+	if (new_width != self->m_surface->w || new_height != self->m_surface->h)
+	{
+		SDL_Surface* new_surface = resize_surface(self->m_surface, new_width, new_height);
+		if (!new_surface)
+		{
+			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "deck:Card resize failed");
+		}
+		else
+		{
+			SDL_FreeSurface(self->m_surface);
+			self->m_surface = new_surface;
+		}
+	}
+
 	return 0;
 }

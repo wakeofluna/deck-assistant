@@ -28,6 +28,7 @@ public:
 private:
 	static int _lua_blit(lua_State* L);
 	static int _lua_clear(lua_State* L);
+	static int _lua_resize(lua_State* L);
 
 private:
 	SDL_Surface* m_surface;
