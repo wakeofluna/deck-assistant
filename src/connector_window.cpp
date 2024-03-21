@@ -107,7 +107,11 @@ void ConnectorWindow::init_instance_table(lua_State* L)
 
 int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
 {
-	if (key == "title")
+	if (key == "connected")
+	{
+		lua_pushboolean(L, m_window ? 1 : 0);
+	}
+	else if (key == "title")
 	{
 		if (m_wanted_title.has_value())
 		{
@@ -146,6 +150,26 @@ int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
 			lua_pushinteger(L, height);
 		}
 	}
+	else if (key == "pixel_width")
+	{
+		if (m_window)
+		{
+			int width;
+			int height;
+			SDL_GetWindowSizeInPixels(m_window, &width, &height);
+			lua_pushinteger(L, width);
+		}
+	}
+	else if (key == "pixel_height")
+	{
+		if (m_window)
+		{
+			int width;
+			int height;
+			SDL_GetWindowSizeInPixels(m_window, &width, &height);
+			lua_pushinteger(L, height);
+		}
+	}
 	else if (key == "visible")
 	{
 		if (m_wanted_visible.has_value())
@@ -163,6 +187,12 @@ int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
 
 int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 {
+	if (key == "connected" || key == "pixel_width" || key == "pixel_height")
+	{
+		luaL_error(L, "key %s is readonly for %s", key.data(), LUA_TYPENAME);
+		return 0;
+	}
+
 	if (key == "title")
 	{
 		std::string_view title = LuaHelpers::check_arg_string(L, 3);
@@ -206,6 +236,7 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 	{
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
+
 	return 0;
 }
 
@@ -218,7 +249,7 @@ bool ConnectorWindow::attempt_create_window(lua_State* L)
 		int height        = m_wanted_height.value_or(900);
 		bool visible      = m_wanted_visible.value_or(true);
 
-		Uint32 flags = SDL_WINDOW_RESIZABLE;
+		Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
 		if (!visible)
 			flags |= SDL_WINDOW_HIDDEN;
 
@@ -235,7 +266,7 @@ bool ConnectorWindow::attempt_create_window(lua_State* L)
 		else
 		{
 			SDL_AddEventWatch(&_sdl_event_filter, this);
-			m_window_size_is_ok.test_and_set(std::memory_order_acq_rel);
+			m_window_size_is_ok.clear(std::memory_order_release);
 			m_window_surface_is_ok.clear(std::memory_order_release);
 		}
 	}
