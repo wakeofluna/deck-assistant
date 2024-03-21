@@ -7,6 +7,8 @@
 #include <optional>
 #include <string>
 
+class DeckCard;
+
 class ConnectorWindow : public ConnectorBase<ConnectorWindow>
 {
 public:
@@ -24,16 +26,25 @@ public:
 	int newindex(lua_State* L, std::string_view const& key);
 
 private:
+	bool attempt_create_window(lua_State* L);
+	void emit_event(lua_State* L, char const* func_name);
+
 	static int _sdl_event_filter(void* userdata, SDL_Event* event);
 
 private:
+	// Window physicals
 	SDL_Window* m_window;
 	std::optional<std::string> m_wanted_title;
 	std::optional<int> m_wanted_width;
 	std::optional<int> m_wanted_height;
 	std::optional<bool> m_wanted_visible;
 
-	std::atomic_bool m_window_resized;
+	// Event signalling flags - naming is a bit funky because of how they work
+	std::atomic_flag m_window_size_is_ok;
+	std::atomic_flag m_window_surface_is_ok;
+
+	// Deck-related
+	DeckCard* m_card;
 };
 
 #endif // DECK_ASSISTANT_CONNECTOR_WINDOW_H

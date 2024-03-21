@@ -316,6 +316,7 @@ int DeckModule::_lua_create_image(lua_State* L)
 		return 0;
 	}
 
+#if 0
 	SDL_Surface* new_surface = SDL_ConvertSurfaceFormat(tmp_surface, SDL_PIXELFORMAT_ARGB32, SDL_SIMD_ALIGNED);
 	SDL_FreeSurface(tmp_surface);
 
@@ -326,6 +327,9 @@ int DeckModule::_lua_create_image(lua_State* L)
 	}
 
 	DeckCard::push_new(L, new_surface);
+#else
+	DeckCard::push_new(L, tmp_surface);
+#endif
 
 	// Store the src string for the user
 	lua_pushvalue(L, 2);

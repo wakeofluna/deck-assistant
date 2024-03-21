@@ -1,4 +1,5 @@
 #include "connector_window.h"
+#include "deck_card.h"
 #include "deck_logger.h"
 #include "lua_helpers.h"
 
@@ -11,7 +12,12 @@ ConnectorWindow::ConnectorWindow()
     , m_wanted_width(1600)
     , m_wanted_height(900)
     , m_wanted_visible(true)
+    , m_window_size_is_ok(ATOMIC_FLAG_INIT)
+    , m_window_surface_is_ok(ATOMIC_FLAG_INIT)
+    , m_card(nullptr)
 {
+	m_window_size_is_ok.test_and_set(std::memory_order_relaxed);
+	m_window_surface_is_ok.test_and_set(std::memory_order_relaxed);
 }
 
 ConnectorWindow::~ConnectorWindow()
@@ -22,45 +28,18 @@ ConnectorWindow::~ConnectorWindow()
 
 void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 {
-	bool is_window_resized = true;
-	if (m_window_resized.compare_exchange_strong(is_window_resized, false, std::memory_order_acq_rel))
+	if (!m_window && !attempt_create_window(L))
+		return;
+
+	if (!m_window_size_is_ok.test_and_set(std::memory_order_acq_rel))
 	{
-		SDL_GetWindowSurface(m_window);
-		SDL_UpdateWindowSurface(m_window);
+		m_window_surface_is_ok.clear(std::memory_order_release);
+		emit_event(L, "on_resize");
 	}
 }
 
 void ConnectorWindow::tick_outputs(lua_State* L)
 {
-	if (!m_window)
-	{
-		char const* title = m_wanted_title.has_value() ? m_wanted_title->c_str() : "Deck Assistant";
-		int width         = m_wanted_width.value_or(1600);
-		int height        = m_wanted_height.value_or(900);
-		bool visible      = m_wanted_visible.value_or(true);
-
-		Uint32 flags = SDL_WINDOW_RESIZABLE;
-		if (!visible)
-			flags |= SDL_WINDOW_HIDDEN;
-
-		m_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
-		m_wanted_title.reset();
-		m_wanted_width.reset();
-		m_wanted_height.reset();
-		m_wanted_visible.reset();
-
-		if (!m_window)
-		{
-			DeckLogger::log_message(L, DeckLogger::Level::Error, "failed to create window: ", SDL_GetError());
-		}
-		else
-		{
-			SDL_AddEventWatch(&_sdl_event_filter, this);
-			SDL_GetWindowSurface(m_window);
-			SDL_UpdateWindowSurface(m_window);
-		}
-	}
-
 	if (!m_window)
 		return;
 
@@ -93,6 +72,17 @@ void ConnectorWindow::tick_outputs(lua_State* L)
 			SDL_HideWindow(m_window);
 
 		m_wanted_visible.reset();
+	}
+
+	if (!m_window_surface_is_ok.test_and_set(std::memory_order_acq_rel))
+	{
+		SDL_Surface* surface      = SDL_GetWindowSurface(m_window);
+		SDL_Surface* card_surface = m_card ? m_card->get_surface() : nullptr;
+
+		if (card_surface)
+			SDL_BlitScaled(card_surface, nullptr, surface, nullptr);
+
+		SDL_UpdateWindowSurface(m_window);
 	}
 }
 
@@ -195,11 +185,76 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 		luaL_argcheck(L, (lua_type(L, 3) == LUA_TBOOLEAN), 3, "visible must be a boolean");
 		m_wanted_visible = lua_toboolean(L, 3);
 	}
+	else if (key == "card")
+	{
+		DeckCard* card;
+
+		if (lua_type(L, 3) == LUA_TNIL)
+			card = nullptr;
+		else
+			card = DeckCard::from_stack(L, 3);
+
+		m_card = card;
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
+	else if (key.starts_with("on_"))
+	{
+		luaL_argcheck(L, (lua_type(L, 3) == LUA_TFUNCTION), 3, "event handlers must be functions");
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
 	else
 	{
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	return 0;
+}
+
+bool ConnectorWindow::attempt_create_window(lua_State* L)
+{
+	if (!m_window)
+	{
+		char const* title = m_wanted_title.has_value() ? m_wanted_title->c_str() : "Deck Assistant";
+		int width         = m_wanted_width.value_or(1600);
+		int height        = m_wanted_height.value_or(900);
+		bool visible      = m_wanted_visible.value_or(true);
+
+		Uint32 flags = SDL_WINDOW_RESIZABLE;
+		if (!visible)
+			flags |= SDL_WINDOW_HIDDEN;
+
+		m_window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+		m_wanted_title.reset();
+		m_wanted_width.reset();
+		m_wanted_height.reset();
+		m_wanted_visible.reset();
+
+		if (!m_window)
+		{
+			DeckLogger::log_message(L, DeckLogger::Level::Error, "failed to create window: ", SDL_GetError());
+		}
+		else
+		{
+			SDL_AddEventWatch(&_sdl_event_filter, this);
+			m_window_size_is_ok.test_and_set(std::memory_order_acq_rel);
+			m_window_surface_is_ok.clear(std::memory_order_release);
+		}
+	}
+
+	return m_window;
+}
+
+void ConnectorWindow::emit_event(lua_State* L, char const* func_name)
+{
+	lua_getfield(L, 1, func_name);
+	if (lua_type(L, -1) == LUA_TFUNCTION)
+	{
+		lua_pushvalue(L, 1);
+		LuaHelpers::pcall(L, 1, 0);
+	}
+	else
+	{
+		lua_pop(L, 1);
+	}
 }
 
 int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
@@ -216,10 +271,11 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 				break;
 			case SDL_WINDOWEVENT_SIZE_CHANGED:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", event->window.data1, 'x', event->window.data2);
-				self->m_window_resized.store(true, std::memory_order_release);
+				self->m_window_size_is_ok.clear(std::memory_order_release);
 				break;
 			case SDL_WINDOWEVENT_SHOWN:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became shown");
+				self->m_window_surface_is_ok.clear(std::memory_order_release);
 				break;
 			case SDL_WINDOWEVENT_HIDDEN:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became hidden");
@@ -228,7 +284,7 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", event->window.data1, 'x', event->window.data2);
 				break;
 			case SDL_WINDOWEVENT_RESIZED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event->window.data1, 'x', event->window.data2);
+				// DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event->window.data1, 'x', event->window.data2);
 				break;
 			case SDL_WINDOWEVENT_MINIMIZED:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became minimized");
@@ -238,6 +294,7 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 				break;
 			case SDL_WINDOWEVENT_RESTORED:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became restored");
+				self->m_window_surface_is_ok.clear(std::memory_order_release);
 				break;
 			case SDL_WINDOWEVENT_ENTER:
 				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window received pointer focus");
