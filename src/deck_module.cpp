@@ -164,15 +164,12 @@ int DeckModule::_lua_create_card(lua_State* L)
 	luaL_argcheck(L, width > 0, 2, "width must be larger than 0");
 	luaL_argcheck(L, height > 0, 3, "height must be larger than 0");
 
-	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(SDL_SIMD_ALIGNED, width, height, 32, SDL_PIXELFORMAT_ARGB32);
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
 	if (!surface)
 	{
 		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to allocate new surface: ", SDL_GetError());
 		return 0;
 	}
-
-	// Fill with transparant black
-	SDL_FillRect(surface, nullptr, 0);
 
 	DeckCard::push_new(L, surface);
 	return 1;
@@ -317,27 +314,34 @@ int DeckModule::_lua_create_image(lua_State* L)
 	from_stack(L, 1);
 	std::string_view src = LuaHelpers::check_arg_string(L, 2);
 
-	SDL_Surface* tmp_surface = IMG_Load(src.data());
-	if (!tmp_surface)
+	SDL_Surface* new_surface = IMG_Load(src.data());
+	if (!new_surface)
 	{
 		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to load image: ", SDL_GetError());
 		return 0;
 	}
 
-#if 0
-	SDL_Surface* new_surface = SDL_ConvertSurfaceFormat(tmp_surface, SDL_PIXELFORMAT_ARGB32, SDL_SIMD_ALIGNED);
-	SDL_FreeSurface(tmp_surface);
-
-	if (!new_surface)
+	// Optimization for blitting
+	if (new_surface->format->format != SDL_PIXELFORMAT_ARGB8888)
 	{
-		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to convert image to rgb: ", SDL_GetError());
-		return 0;
+		SDL_Surface* tmp_surface = SDL_ConvertSurfaceFormat(new_surface, SDL_PIXELFORMAT_ARGB8888, 0);
+		if (!tmp_surface)
+		{
+			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "failed to optimize image to ARGB: ", SDL_GetError());
+		}
+		else
+		{
+			bool const has_alpha = new_surface->format->Amask;
+
+			SDL_FreeSurface(new_surface);
+			new_surface = tmp_surface;
+
+			SDL_BlendMode blend_mode = has_alpha ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE;
+			SDL_SetSurfaceBlendMode(new_surface, blend_mode);
+		}
 	}
 
 	DeckCard::push_new(L, new_surface);
-#else
-	DeckCard::push_new(L, tmp_surface);
-#endif
 
 	// Store the src string for the user
 	lua_pushvalue(L, 2);

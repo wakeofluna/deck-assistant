@@ -10,42 +10,29 @@
 struct Colour
 {
 	constexpr Colour() = default;
-	constexpr Colour(unsigned char _r, unsigned char _g, unsigned char _b, unsigned char _a = 255)
-	    : a(_a)
-	    , r(_r)
-	    , g(_g)
-	    , b(_b)
+	constexpr Colour(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255)
+	    : color { r, g, b, a }
 	{
 	}
 
 	static bool parse_colour(std::string_view const& value, Colour& target);
 	std::string_view to_string(std::array<char, 10>& buffer) const;
 
-	constexpr inline void clear() { value = 0; }
+	constexpr inline void clear() { color = SDL_Color {}; }
 	constexpr inline void set_pink()
 	{
-		a = 0xFF;
-		r = 0xEE;
-		g = 0x82;
-		b = 0xEE;
+		color.r = 0xEE;
+		color.g = 0x82;
+		color.b = 0xEE;
+		color.a = 0xFF;
 	}
 
 	constexpr inline operator SDL_Color() const
 	{
-		return SDL_Color { .r = r, .g = g, .b = b, .a = a };
+		return color;
 	}
 
-	union
-	{
-		struct
-		{
-			unsigned char a;
-			unsigned char r;
-			unsigned char g;
-			unsigned char b;
-		};
-		std::uint32_t value;
-	};
+	SDL_Color color;
 };
 
 // Ensure compatibility with SDL

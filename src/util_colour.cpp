@@ -205,26 +205,26 @@ bool parse_hex(std::string_view const& value, Colour& target)
 {
 	if (value.size() == 3)
 	{
-		target.r = hex_to_nibble(value[0]) << 4;
-		target.g = hex_to_nibble(value[1]) << 4;
-		target.b = hex_to_nibble(value[2]) << 4;
-		target.a = 255;
+		target.color.r = hex_to_nibble(value[0]) << 4;
+		target.color.g = hex_to_nibble(value[1]) << 4;
+		target.color.b = hex_to_nibble(value[2]) << 4;
+		target.color.a = 255;
 		return true;
 	}
 	else if (value.size() == 6)
 	{
-		target.r = hex_to_char(&value[0]);
-		target.g = hex_to_char(&value[2]);
-		target.b = hex_to_char(&value[4]);
-		target.a = 255;
+		target.color.r = hex_to_char(&value[0]);
+		target.color.g = hex_to_char(&value[2]);
+		target.color.b = hex_to_char(&value[4]);
+		target.color.a = 255;
 		return true;
 	}
 	else if (value.size() == 8)
 	{
-		target.r = hex_to_char(&value[0]);
-		target.g = hex_to_char(&value[2]);
-		target.b = hex_to_char(&value[4]);
-		target.a = hex_to_char(&value[6]);
+		target.color.r = hex_to_char(&value[0]);
+		target.color.g = hex_to_char(&value[2]);
+		target.color.b = hex_to_char(&value[4]);
+		target.color.a = hex_to_char(&value[6]);
 		return true;
 	}
 	else
@@ -254,10 +254,10 @@ bool Colour::parse_colour(std::string_view const& value, Colour& target)
 	StandardColour const* found = std::lower_bound(first, last, lc_value, &standard_colour_search);
 	if (found != last && found->first == lc_value)
 	{
-		target.r = (found->second >> 16) & 0xff;
-		target.g = (found->second >> 8) & 0xff;
-		target.b = (found->second >> 0) & 0xff;
-		target.a = 255;
+		target.color.r = (found->second >> 16) & 0xff;
+		target.color.g = (found->second >> 8) & 0xff;
+		target.color.b = (found->second >> 0) & 0xff;
+		target.color.a = 255;
 		return true;
 	}
 	else
@@ -269,21 +269,21 @@ bool Colour::parse_colour(std::string_view const& value, Colour& target)
 std::string_view Colour::to_string(std::array<char, 10>& buffer) const
 {
 	buffer[0] = '#';
-	buffer[1] = nibble_to_hex(r >> 4);
-	buffer[2] = nibble_to_hex(r & 15);
-	buffer[3] = nibble_to_hex(g >> 4);
-	buffer[4] = nibble_to_hex(g & 15);
-	buffer[5] = nibble_to_hex(b >> 4);
-	buffer[6] = nibble_to_hex(b & 15);
+	buffer[1] = nibble_to_hex(color.r >> 4);
+	buffer[2] = nibble_to_hex(color.r & 15);
+	buffer[3] = nibble_to_hex(color.g >> 4);
+	buffer[4] = nibble_to_hex(color.g & 15);
+	buffer[5] = nibble_to_hex(color.b >> 4);
+	buffer[6] = nibble_to_hex(color.b & 15);
 
-	if (a == 255)
+	if (color.a == 255)
 	{
 		buffer[7] = 0;
 		return std::string_view(buffer.data(), 7);
 	}
 
-	buffer[7] = nibble_to_hex(a >> 4);
-	buffer[8] = nibble_to_hex(a & 15);
+	buffer[7] = nibble_to_hex(color.a >> 4);
+	buffer[8] = nibble_to_hex(color.a & 15);
 	buffer[9] = 0;
 	return std::string_view(buffer.data(), 9);
 }

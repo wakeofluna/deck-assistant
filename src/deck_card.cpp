@@ -192,12 +192,17 @@ SDL_Surface* DeckCard::resize_surface(SDL_Surface* surface, int new_width, int n
 	if (new_height <= 0)
 		new_height = (surface->h * new_width) / surface->w;
 
-	SDL_Surface* new_surface = SDL_CreateRGBSurfaceWithFormat(SDL_SIMD_ALIGNED, new_width, new_height, 32, SDL_PIXELFORMAT_ARGB32);
+	SDL_Surface* new_surface = SDL_CreateRGBSurfaceWithFormat(0, new_width, new_height, 32, SDL_PIXELFORMAT_ARGB8888);
 	if (!new_surface)
 		return nullptr;
 
+	SDL_BlendMode old_blend_mode;
+	SDL_GetSurfaceBlendMode(surface, &old_blend_mode);
 	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
 	SDL_BlitScaled(surface, nullptr, new_surface, nullptr);
+	SDL_SetSurfaceBlendMode(surface, old_blend_mode);
+	SDL_SetSurfaceBlendMode(new_surface, old_blend_mode);
+
 	return new_surface;
 }
 
@@ -253,7 +258,6 @@ int DeckCard::_lua_blit(lua_State* L)
 			h = source->h;
 
 		SDL_Rect dstrect { x, y, w, h };
-		SDL_SetSurfaceBlendMode(source, SDL_BLENDMODE_BLEND);
 		SDL_BlitScaled(source, nullptr, self->m_surface, &dstrect);
 	}
 
@@ -264,7 +268,14 @@ int DeckCard::_lua_clear(lua_State* L)
 {
 	DeckCard* self     = from_stack(L, 1);
 	DeckColour* colour = DeckColour::from_stack(L, 2);
-	SDL_FillRect(self->m_surface, nullptr, colour->get_colour().value);
+
+	SDL_Color color = colour->get_colour();
+	SDL_FillRect(self->m_surface, nullptr, SDL_MapRGBA(self->m_surface->format, color.r, color.g, color.b, color.a));
+
+	// When the surface is fully opaque we don't need alpha blending
+	SDL_BlendMode blend_mode = (color.a != 255) ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE;
+	SDL_SetSurfaceBlendMode(self->m_surface, blend_mode);
+
 	return 0;
 }
 

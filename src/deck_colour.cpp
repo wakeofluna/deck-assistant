@@ -23,16 +23,16 @@ int DeckColour::index(lua_State* L, std::string_view const& key) const
 		switch (ch)
 		{
 			case 'r':
-				result += m_colour.r;
+				result += m_colour.color.r;
 				break;
 			case 'g':
-				result += m_colour.g;
+				result += m_colour.color.g;
 				break;
 			case 'b':
-				result += m_colour.b;
+				result += m_colour.color.b;
 				break;
 			case 'a':
-				result += m_colour.a;
+				result += m_colour.color.a;
 				break;
 			default:
 				luaL_argerror(L, 2, "invalid colour key index");
@@ -57,16 +57,16 @@ int DeckColour::newindex(lua_State* L, std::string_view const& key)
 		switch (ch)
 		{
 			case 'r':
-				m_colour.r = value & 0xff;
+				m_colour.color.r = value & 0xff;
 				break;
 			case 'g':
-				m_colour.g = value & 0xff;
+				m_colour.color.g = value & 0xff;
 				break;
 			case 'b':
-				m_colour.b = value & 0xff;
+				m_colour.color.b = value & 0xff;
 				break;
 			case 'a':
-				m_colour.a = value & 0xff;
+				m_colour.color.a = value & 0xff;
 				break;
 			default:
 				luaL_argerror(L, 2, "invalid colour key index");
@@ -80,6 +80,6 @@ int DeckColour::newindex(lua_State* L, std::string_view const& key)
 
 int DeckColour::tostring(lua_State* L) const
 {
-	lua_pushfstring(L, "%s { r=%d, g=%d, b=%d, a=%d }", LUA_TYPENAME, int(m_colour.r), int(m_colour.g), int(m_colour.b), int(m_colour.a));
+	lua_pushfstring(L, "%s { r=%d, g=%d, b=%d, a=%d }", LUA_TYPENAME, int(m_colour.color.r), int(m_colour.color.g), int(m_colour.color.b), int(m_colour.color.a));
 	return 1;
 }
