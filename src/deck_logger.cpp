@@ -32,9 +32,28 @@ void push_level(lua_State* L, DeckLogger::Level level)
 	}
 }
 
+bool to_level(lua_State* L, int idx, DeckLogger::Level& level)
+{
+	bool valid_level = true;
+	void const* ud   = lua_touserdata(L, idx);
+	if (ud == &g_DEBUG)
+		level = DeckLogger::Level::Debug;
+	else if (ud == &g_INFO)
+		level = DeckLogger::Level::Info;
+	else if (ud == &g_WARNING)
+		level = DeckLogger::Level::Warning;
+	else if (ud == &g_ERROR)
+		level = DeckLogger::Level::Error;
+	else
+		valid_level = false;
+	return valid_level;
+}
+
 } // namespace
 
 char const* DeckLogger::LUA_TYPENAME = "deck:DeckLogger";
+
+DeckLogger::Level DeckLogger::m_min_level = DeckLogger::Level::Info;
 
 DeckLogger::DeckLogger()
     : m_block_logs(false)
@@ -44,6 +63,9 @@ DeckLogger::DeckLogger()
 void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message)
 {
 	if (message.empty())
+		return;
+
+	if (int(level) < int(m_min_level))
 		return;
 
 	stream_output(std::cout, level, message);
@@ -96,6 +118,8 @@ void DeckLogger::init_class_table(lua_State* L)
 
 void DeckLogger::init_instance_table(lua_State* L)
 {
+	push_level(L, m_min_level);
+	lua_setfield(L, -2, "min_level");
 }
 
 int DeckLogger::newindex(lua_State* L)
@@ -109,9 +133,16 @@ int DeckLogger::newindex(lua_State* L)
 			LuaHelpers::newindex_store_in_instance_table(L);
 			return 0;
 		}
+		if (key == "min_level")
+		{
+			if (!to_level(L, 3, m_min_level))
+				luaL_argerror(L, 3, "not a valid loglevel");
+			LuaHelpers::newindex_store_in_instance_table(L);
+			return 0;
+		}
 	}
 
-	luaL_argerror(L, LuaHelpers::absidx(L, 2), "invalid key for DeckLogger (allowed: on_message)");
+	luaL_argerror(L, LuaHelpers::absidx(L, 2), "invalid key for DeckLogger (allowed: on_message, min_level)");
 	return 0;
 }
 
@@ -177,21 +208,7 @@ int DeckLogger::_lua_logger(lua_State* L)
 
 	if (lua_type(L, next_idx) == LUA_TLIGHTUSERDATA)
 	{
-		bool valid_level = true;
-
-		void const* ud = lua_touserdata(L, 2);
-		if (ud == &g_DEBUG)
-			level = Level::Debug;
-		else if (ud == &g_INFO)
-			level = Level::Info;
-		else if (ud == &g_WARNING)
-			level = Level::Warning;
-		else if (ud == &g_ERROR)
-			level = Level::Error;
-		else
-			valid_level = false;
-
-		if (valid_level)
+		if (to_level(L, next_idx, level))
 			++next_idx;
 	}
 

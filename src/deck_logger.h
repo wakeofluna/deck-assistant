@@ -46,6 +46,7 @@ private:
 
 private:
 	mutable bool m_block_logs;
+	static Level m_min_level;
 };
 
 template <typename T, typename... ARGS>
