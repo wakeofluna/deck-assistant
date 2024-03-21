@@ -141,14 +141,15 @@ bool Application::init(std::vector<std::string_view>&& args)
 int Application::run()
 {
 	auto const start_time = std::chrono::steady_clock::now();
+	auto clock_tick       = start_time;
 
 	DeckModule* deck_module = DeckModule::push_global_instance(L);
 	int const resettop      = lua_gettop(L);
 
 	while (!deck_module->is_exit_requested())
 	{
-		auto const clock             = std::chrono::steady_clock::now();
-		lua_Integer const clock_msec = std::chrono::duration_cast<std::chrono::milliseconds>(clock - start_time).count();
+		auto const real_clock        = std::chrono::steady_clock::now();
+		lua_Integer const clock_msec = std::chrono::duration_cast<std::chrono::milliseconds>(real_clock - start_time).count();
 
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
@@ -181,7 +182,11 @@ int Application::run()
 		deck_module->tick_outputs(L);
 		assert(lua_gettop(L) == resettop && "DeckModule tick_outputs function is not stack balanced");
 
-		std::this_thread::sleep_until(clock + std::chrono::milliseconds(15));
+		auto const lower_limit = std::chrono::steady_clock::now();
+		while (clock_tick < lower_limit)
+			clock_tick += std::chrono::milliseconds(10);
+
+		std::this_thread::sleep_until(clock_tick);
 	}
 
 	assert(lua_gettop(L) == resettop && "DeckModule run loop is not stack balanced");
