@@ -526,14 +526,15 @@ int __newindex(lua_State* L)
 
 	if constexpr (hasClassTable)
 	{
-		// If the value exists in the class table, this new value must be of the same type
+		// If the value exists in the class table, this new value must be of the same type or nil
 
 		LuaHelpers::push_class_table(L, 1);
 		lua_pushvalue(L, 2);
 		lua_rawget(L, -2);
 
 		int const class_type = lua_type(L, -1);
-		if (class_type != LUA_TNIL && lua_type(L, 3) != class_type)
+		int const value_type = lua_type(L, 3);
+		if (value_type != LUA_TNIL && class_type != LUA_TNIL && value_type != class_type)
 			luaL_typerror(L, 3, lua_typename(L, class_type));
 
 		lua_pop(L, 2);
