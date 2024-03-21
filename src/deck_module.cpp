@@ -214,11 +214,15 @@ int DeckModule::_lua_create_colour(lua_State* L)
 
 int DeckModule::_lua_create_connector(lua_State* L)
 {
-	if (lua_gettop(L) == 2)
-		lua_pushvalue(L, -1);
-
 	from_stack(L, 1);
 	luaL_checktype(L, 2, LUA_TSTRING); // class/factory name
+
+	if (lua_type(L, 3) != LUA_TSTRING)
+	{
+		lua_pushvalue(L, 2);
+		lua_insert(L, 3);
+	}
+
 	luaL_checktype(L, 3, LUA_TSTRING); // connector name
 	bool const has_table = lua_type(L, 4) == LUA_TTABLE;
 
@@ -271,6 +275,10 @@ int DeckModule::_lua_create_connector(lua_State* L)
 			luaL_error(L, "factory function failed to provide a valid return object");
 			return 0;
 		}
+
+		// Store the name for the convenience of the user
+		lua_pushvalue(L, 3);
+		lua_setfield(L, -2, "name");
 
 		// Insert the object into the container
 		// This may also throw an error if the type is not good
