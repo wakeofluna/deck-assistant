@@ -11,6 +11,8 @@ public:
 	DeckRectangle(int w, int h);
 	DeckRectangle(int x, int y, int w, int h);
 
+	inline bool contains(int x, int y) const { return contains(m_rectangle, x, y); }
+
 	inline SDL_Rect const& get_rectangle() const { return m_rectangle; }
 	inline SDL_Rect& get_rectangle() { return m_rectangle; }
 	inline operator SDL_Rect*() const { return const_cast<SDL_Rect*>(&m_rectangle); }
@@ -22,6 +24,7 @@ public:
 	int tostring(lua_State* L) const;
 
 	static SDL_Rect clip(SDL_Rect const& lhs, SDL_Rect const& rhs);
+	static bool contains(SDL_Rect const& rect, int x, int y);
 
 private:
 	static int _lua_contains(lua_State* L);

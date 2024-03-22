@@ -165,18 +165,23 @@ SDL_Rect DeckRectangle::clip(SDL_Rect const& lhs, SDL_Rect const& rhs)
 	return rect;
 }
 
+bool DeckRectangle::contains(SDL_Rect const& rect, int x, int y)
+{
+	return (x >= rect.x
+	        && y >= rect.y
+	        && x < rect.x + rect.w
+	        && y < rect.y + rect.h);
+}
+
 int DeckRectangle::_lua_contains(lua_State* L)
 {
 	DeckRectangle* self = from_stack(L, 1);
 	int x               = LuaHelpers::check_arg_int(L, 2);
 	int y               = LuaHelpers::check_arg_int(L, 3);
 
-	bool contains = (x >= self->m_rectangle.x
-	                 && y >= self->m_rectangle.y
-	                 && x < self->m_rectangle.x + self->m_rectangle.w
-	                 && y < self->m_rectangle.y + self->m_rectangle.h);
+	bool result = contains(self->m_rectangle, x, y);
 
-	lua_pushboolean(L, contains ? 1 : 0);
+	lua_pushboolean(L, result);
 	return 1;
 }
 

@@ -12,6 +12,7 @@ sources = files(
     'deck_logger.cpp',
     'deck_module.cpp',
     'deck_rectangle.cpp',
+    'deck_rectangle_list.cpp',
     'lua_class.cpp',
     'lua_helpers.cpp',
     'util_colour.cpp',

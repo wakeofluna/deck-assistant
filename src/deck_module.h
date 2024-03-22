@@ -35,6 +35,7 @@ private:
 	static int _lua_create_font(lua_State* L);
 	static int _lua_create_image(lua_State* L);
 	static int _lua_create_rectangle(lua_State* L);
+	static int _lua_create_rectangle_list(lua_State* L);
 	static int _lua_request_quit(lua_State* L);
 
 private:

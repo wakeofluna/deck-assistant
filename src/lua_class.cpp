@@ -9,6 +9,7 @@
 #include "deck_logger.h"
 #include "deck_module.h"
 #include "deck_rectangle.h"
+#include "deck_rectangle_list.h"
 
 template class LuaClass<ConnectorElgatoStreamDeck>;
 template class LuaClass<ConnectorWindow>;
@@ -20,3 +21,4 @@ template class LuaClass<DeckFont>;
 template class LuaClass<DeckLogger>;
 template class LuaClass<DeckModule>;
 template class LuaClass<DeckRectangle>;
+template class LuaClass<DeckRectangleList>;

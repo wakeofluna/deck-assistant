@@ -6,6 +6,7 @@
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_rectangle.h"
+#include "deck_rectangle_list.h"
 #include "lua_helpers.h"
 #include <SDL_image.h>
 #include <cassert>
@@ -109,6 +110,11 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "Rectangle");
 	lua_setfield(L, -2, "Rect");
+
+	lua_pushcfunction(L, &DeckModule::_lua_create_rectangle_list);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "RectangleList");
+	lua_setfield(L, -2, "RectList");
 
 	lua_pushcfunction(L, &DeckModule::_lua_request_quit);
 	lua_pushvalue(L, -1);
@@ -393,6 +399,13 @@ int DeckModule::_lua_create_rectangle(lua_State* L)
 	}
 
 	DeckRectangle::push_new(L, x, y, w, h);
+	return 1;
+}
+
+int DeckModule::_lua_create_rectangle_list(lua_State* L)
+{
+	from_stack(L, 1);
+	DeckRectangleList::push_new(L);
 	return 1;
 }
 
