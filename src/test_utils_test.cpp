@@ -2,11 +2,7 @@
 #include "lua_helpers.h"
 #include <cassert>
 #include <catch2/catch_test_macros.hpp>
-#include <csetjmp>
 #include <lua.hpp>
-
-namespace
-{
 
 std::jmp_buf g_panic_jmp;
 std::string g_panic_msg;
@@ -16,11 +12,8 @@ int at_panic(lua_State* L)
 	size_t len;
 	char const* str = lua_tolstring(L, -1, &len);
 	g_panic_msg.assign(str, len);
-
 	std::longjmp(g_panic_jmp, 1);
 }
-
-} // namespace
 
 lua_State* new_test_state()
 {
@@ -97,16 +90,6 @@ TableCountMap count_elements_in_table(lua_State* L, int idx)
 	return count_map;
 }
 
-std::string to_string(lua_State* L, int idx)
-{
-	if (lua_type(L, idx) != LUA_TSTRING)
-		return std::string();
-
-	size_t len;
-	char const* str = lua_tolstring(L, idx, &len);
-	return std::string(str, len);
-}
-
 std::vector<std::string_view> split_string(std::string_view const& text, char split_char)
 {
 	std::vector<std::string_view> result;
@@ -128,4 +111,12 @@ std::vector<std::string_view> split_string(std::string_view const& text, char sp
 	}
 
 	return result;
+}
+
+std::optional<int> to_int(lua_State* L, int idx)
+{
+	if (lua_type(L, idx) == LUA_TNUMBER)
+		return lua_tointeger(L, idx);
+	else
+		return std::nullopt;
 }

@@ -18,6 +18,7 @@ sources = files(
 )
 
 test_sources = files(
+    'deck_rectangle_test.cpp',
     'lua_class_test.cpp',
     'lua_helpers_test.cpp',
     'test_utils_test.cpp',
@@ -41,7 +42,7 @@ tests = executable(
     'testdeck',
     sources: test_sources,
     link_with: [slib],
-    dependencies: [catch2, lua],
+    dependencies: [catch2, lua, sdl],
     cpp_args: buildflags,
 )
 

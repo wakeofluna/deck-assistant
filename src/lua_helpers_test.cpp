@@ -55,18 +55,6 @@ public:
 
 char const* TestClass2::LUA_TYPENAME = "TestClass2Type";
 
-std::jmp_buf g_panic_jmp;
-std::string g_panic_msg;
-
-int at_panic(lua_State* L)
-{
-	size_t len;
-	char const* str = lua_tolstring(L, -1, &len);
-	g_panic_msg.assign(str, len);
-
-	std::longjmp(g_panic_jmp, 1);
-}
-
 } // namespace lua_helpers_test
 
 using namespace lua_helpers_test;
@@ -75,29 +63,9 @@ using namespace lua_helpers_test;
 template class LuaClass<TestClass>;
 template class LuaClass<TestClass2>;
 
-#ifdef HAVE_LUAJIT
-#define EXPECT_ERROR(x) \
-	do \
-	{ \
-		REQUIRE_THROWS(x); \
-		g_panic_msg = lua_tostring(L, -1); \
-	} while (0)
-#else
-#define EXPECT_ERROR(x) \
-	do \
-	{ \
-		if (!setjmp(g_panic_jmp)) \
-		{ \
-			x; \
-			FAIL("Expected error did not happen"); \
-		} \
-	} while (0)
-#endif
-
 TEST_CASE("LuaHelpers", "[lua]")
 {
 	lua_State* L = new_test_state();
-	lua_atpanic(L, &at_panic);
 
 	TestClass::push_new(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, "tc1");
@@ -216,11 +184,11 @@ TEST_CASE("LuaHelpers", "[lua]")
 			{
 				int idx = push_dummy_value(L, tp);
 				EXPECT_ERROR(LuaHelpers::check_arg_string(L, idx));
-				REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
+				REQUIRE_THAT(g_panic_msg, Catch::Matchers::StartsWith("bad argument"));
 
 				idx = push_dummy_value(L, tp);
 				EXPECT_ERROR(LuaHelpers::check_arg_string_or_none(L, idx));
-				REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
+				REQUIRE_THAT(g_panic_msg, Catch::Matchers::StartsWith("bad argument"));
 			}
 		}
 
@@ -229,7 +197,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			REQUIRE(LuaHelpers::check_arg_string_or_none(L, 5) == "");
 			REQUIRE(lua_gettop(L) == 0);
 			EXPECT_ERROR(LuaHelpers::check_arg_string(L, 5));
-			REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
+			REQUIRE_THAT(g_panic_msg, Catch::Matchers::StartsWith("bad argument"));
 		}
 
 		SECTION("Valid string")
@@ -247,7 +215,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			REQUIRE(LuaHelpers::check_arg_string_or_none(L, 1) == "");
 			REQUIRE(lua_gettop(L) == 1);
 			EXPECT_ERROR(LuaHelpers::check_arg_string(L, 1));
-			REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
+			REQUIRE_THAT(g_panic_msg, Catch::Matchers::StartsWith("bad argument"));
 		}
 	}
 
@@ -262,7 +230,7 @@ TEST_CASE("LuaHelpers", "[lua]")
 			{
 				int idx = push_dummy_value(L, tp);
 				EXPECT_ERROR(LuaHelpers::check_arg_int(L, idx));
-				REQUIRE_THAT(to_string(L, -1), Catch::Matchers::StartsWith("bad argument"));
+				REQUIRE_THAT(g_panic_msg, Catch::Matchers::StartsWith("bad argument"));
 			}
 		}
 
