@@ -1,6 +1,7 @@
 #include "deck_card.h"
 #include "deck_colour.h"
 #include "deck_logger.h"
+#include "deck_rectangle.h"
 #include "lua_helpers.h"
 #include <SDL_image.h>
 #include <algorithm>
@@ -88,14 +89,40 @@ std::vector<unsigned char> save_surface_as(SDL_Surface* surface, Format format)
 
 DeckCard::DeckCard(SDL_Surface* surface)
     : m_surface(surface)
+    , m_parent_surface(nullptr)
 {
 	assert(m_surface && "DeckCard must be initialised with a valid surface");
+}
+
+DeckCard::DeckCard(SDL_Surface* surface, SDL_Surface* parent_surface)
+    : m_surface(surface)
+    , m_parent_surface(parent_surface)
+{
+	assert(m_surface && "DeckCard must be initialised with a valid surface");
+	assert(m_parent_surface && "DeckCard must be initialised with a valid parent_surface");
+	assert(m_surface->format == m_parent_surface->format && "DeckCard surface and parent_surface can't possible be related");
+
+	unsigned char const* surface_pixels_start = reinterpret_cast<unsigned char const*>(m_surface->pixels);
+	unsigned char const* surface_pixels_end   = surface_pixels_start + (m_surface->h - 1) * m_surface->pitch + m_surface->w * m_surface->format->BytesPerPixel;
+	unsigned char const* parent_pixels_start  = reinterpret_cast<unsigned char const*>(m_parent_surface->pixels);
+	unsigned char const* parent_pixels_end    = parent_pixels_start + (m_parent_surface->h - 1) * m_parent_surface->pitch + m_parent_surface->w * m_parent_surface->format->BytesPerPixel;
+	assert(surface_pixels_start >= parent_pixels_start && surface_pixels_end <= parent_pixels_end && "DeckCard surface must be contained within the parent_surface");
+
+	// Avoid warnings in some builds
+	(void)surface_pixels_start;
+	(void)surface_pixels_end;
+	(void)parent_pixels_start;
+	(void)parent_pixels_end;
+
+	++m_parent_surface->refcount;
 }
 
 DeckCard::~DeckCard()
 {
 	if (m_surface)
 		SDL_FreeSurface(m_surface);
+	if (m_parent_surface)
+		SDL_FreeSurface(m_parent_surface);
 }
 
 void DeckCard::init_class_table(lua_State* L)
@@ -108,6 +135,11 @@ void DeckCard::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_resize);
 	lua_setfield(L, -2, "resize");
+
+	lua_pushcfunction(L, &_lua_subcard);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "sub_area");
+	lua_setfield(L, -2, "sub_card");
 }
 
 void DeckCard::init_instance_table(lua_State* L)
@@ -118,11 +150,20 @@ int DeckCard::index(lua_State* L, std::string_view const& key) const
 {
 	if (key == "w" || key == "width")
 	{
-		lua_pushinteger(L, m_surface ? m_surface->w : 0);
+		lua_pushinteger(L, m_surface->w);
 	}
 	else if (key == "h" || key == "height")
 	{
-		lua_pushinteger(L, m_surface ? m_surface->h : 0);
+		lua_pushinteger(L, m_surface->h);
+	}
+	else if (key == "dup")
+	{
+		m_surface->refcount++;
+		push_new(L, m_surface);
+	}
+	else if (key == "rect" || key == "rectangle")
+	{
+		DeckRectangle::push_new(L, m_surface->w, m_surface->h);
 	}
 	else
 	{
@@ -133,7 +174,7 @@ int DeckCard::index(lua_State* L, std::string_view const& key) const
 
 int DeckCard::newindex(lua_State* L, std::string_view const& key)
 {
-	if (key == "w" || key == "width" || key == "h" || key == "height")
+	if (key == "w" || key == "width" || key == "h" || key == "height" || key == "rect" || key == "rectangle")
 	{
 		luaL_error(L, "key %s is readonly for %s", key.data(), LUA_TYPENAME);
 	}
@@ -227,41 +268,36 @@ int DeckCard::_lua_blit(lua_State* L)
 	DeckCard* card = from_stack(L, 2);
 
 	SDL_Surface* source = card->get_surface();
-	int x               = 0;
-	int y               = 0;
-	int w               = 0;
-	int h               = 0;
+	SDL_Rect dstrect { 0, 0, source->w, source->h };
 
-	if (lua_gettop(L) >= 4)
+	DeckRectangle* rect = DeckRectangle::from_stack(L, 3, false);
+	if (rect)
+	{
+		dstrect = rect->get_rectangle();
+	}
+	else if (lua_gettop(L) >= 4)
 	{
 		luaL_argcheck(L, lua_type(L, 3) == LUA_TNUMBER, 3, "X coordinate must be an integer");
 		luaL_argcheck(L, lua_type(L, 4) == LUA_TNUMBER, 4, "Y coordinate must be an integer");
-		x = lua_tointeger(L, 3);
-		y = lua_tointeger(L, 4);
+		dstrect.x = lua_tointeger(L, 3);
+		dstrect.y = lua_tointeger(L, 4);
+
+		if (lua_gettop(L) >= 6)
+		{
+			luaL_argcheck(L, lua_type(L, 5) == LUA_TNUMBER, 5, "WIDTH must be an integer");
+			luaL_argcheck(L, lua_type(L, 6) == LUA_TNUMBER, 6, "HEIGHT must be an integer");
+			dstrect.w = lua_tointeger(L, 5);
+			dstrect.h = lua_tointeger(L, 6);
+			luaL_argcheck(L, (dstrect.w > 0), 5, "WIDTH must be larger than zero");
+			luaL_argcheck(L, (dstrect.h > 0), 6, "HEIGHT must be larger than zero");
+		}
 	}
 
-	if (lua_gettop(L) >= 6)
-	{
-		luaL_argcheck(L, lua_type(L, 5) == LUA_TNUMBER, 5, "WIDTH must be an integer");
-		luaL_argcheck(L, lua_type(L, 6) == LUA_TNUMBER, 6, "HEIGHT must be an integer");
-		w = lua_tointeger(L, 5);
-		h = lua_tointeger(L, 6);
-		luaL_argcheck(L, (w > 0), 5, "WIDTH must be larger than zero");
-		luaL_argcheck(L, (h > 0), 6, "HEIGHT must be larger than zero");
-	}
-
-	if (source)
-	{
-		if (!w)
-			w = source->w;
-		if (!h)
-			h = source->h;
-
-		SDL_Rect dstrect { x, y, w, h };
+	if (dstrect.w > 0 && dstrect.h > 0)
 		SDL_BlitScaled(source, nullptr, self->m_surface, &dstrect);
-	}
 
-	return 0;
+	lua_settop(L, 1);
+	return 1;
 }
 
 int DeckCard::_lua_clear(lua_State* L)
@@ -276,7 +312,8 @@ int DeckCard::_lua_clear(lua_State* L)
 	SDL_BlendMode blend_mode = (color.a != 255) ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE;
 	SDL_SetSurfaceBlendMode(self->m_surface, blend_mode);
 
-	return 0;
+	lua_settop(L, 1);
+	return 1;
 }
 
 int DeckCard::_lua_resize(lua_State* L)
@@ -301,5 +338,53 @@ int DeckCard::_lua_resize(lua_State* L)
 		}
 	}
 
-	return 0;
+	lua_settop(L, 1);
+	return 1;
+}
+
+int DeckCard::_lua_subcard(lua_State* L)
+{
+	DeckCard* self = from_stack(L, 1);
+	SDL_Rect self_rect { 0, 0, self->m_surface->w, self->m_surface->h };
+	SDL_Rect sub_rect;
+
+	if (lua_gettop(L) == 5)
+	{
+		sub_rect.x = LuaHelpers::check_arg_int(L, 2);
+		sub_rect.y = LuaHelpers::check_arg_int(L, 3);
+		sub_rect.w = LuaHelpers::check_arg_int(L, 4);
+		sub_rect.h = LuaHelpers::check_arg_int(L, 5);
+	}
+	else
+	{
+		DeckRectangle* rect = DeckRectangle::from_stack(L, 2);
+		sub_rect            = rect->get_rectangle();
+	}
+
+	SDL_Rect clip_rect = DeckRectangle::clip(self_rect, sub_rect);
+	if (clip_rect.w <= 0 || clip_rect.h <= 0)
+	{
+		luaL_error(L, "provided area is not within the card dimensions");
+		return 0;
+	}
+
+	unsigned char const* surface_pixels  = reinterpret_cast<unsigned char const*>(self->m_surface->pixels);
+	surface_pixels                      += clip_rect.y * self->m_surface->pitch + clip_rect.x * self->m_surface->format->BytesPerPixel;
+
+	SDL_Surface* new_surface = SDL_CreateRGBSurfaceWithFormatFrom((void*)surface_pixels, clip_rect.w, clip_rect.h, 0, self->m_surface->pitch, self->m_surface->format->format);
+	if (!new_surface)
+	{
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "deck:Card creation of subcard failed");
+		return 0;
+	}
+
+	DeckCard::push_new(L, new_surface, self->m_parent_surface ? self->m_parent_surface : self->m_surface);
+
+	// Store the master card for the users reference
+	LuaHelpers::push_instance_table(L, -1);
+	lua_pushvalue(L, -2);
+	lua_setfield(L, -2, "master");
+	lua_pop(L, 1);
+
+	return 1;
 }
