@@ -130,6 +130,9 @@ void DeckCard::init_class_table(lua_State* L)
 	lua_pushcfunction(L, &_lua_blit);
 	lua_setfield(L, -2, "blit");
 
+	lua_pushcfunction(L, &_lua_centered);
+	lua_setfield(L, -2, "centered");
+
 	lua_pushcfunction(L, &_lua_clear);
 	lua_setfield(L, -2, "clear");
 
@@ -293,10 +296,34 @@ int DeckCard::_lua_blit(lua_State* L)
 		}
 	}
 
-	if (dstrect.w > 0 && dstrect.h > 0)
+	SDL_Rect const surface_rect = SDL_Rect { 0, 0, self->m_surface->w, self->m_surface->h };
+	SDL_Rect const target_rect  = DeckRectangle::clip(surface_rect, dstrect);
+
+	if (target_rect.w > 0 && target_rect.h > 0)
 		SDL_BlitScaled(source, nullptr, self->m_surface, &dstrect);
 
-	lua_settop(L, 1);
+	DeckRectangle::push_new(L, target_rect);
+	return 1;
+}
+
+int DeckCard::_lua_centered(lua_State* L)
+{
+	DeckCard* self = from_stack(L, 1);
+
+	if (DeckRectangle* other_rect = DeckRectangle::from_stack(L, 2, false); other_rect)
+	{
+		SDL_Rect self_rect { 0, 0, self->m_surface->w, self->m_surface->h };
+		SDL_Rect result = DeckRectangle::centered(self_rect, other_rect->get_rectangle());
+		DeckRectangle::push_new(L, result);
+	}
+	else
+	{
+		DeckCard* other_card = from_stack(L, 2);
+		SDL_Rect self_rect { 0, 0, self->m_surface->w, self->m_surface->h };
+		SDL_Rect card_rect { 0, 0, other_card->m_surface->w, other_card->m_surface->h };
+		SDL_Rect result = DeckRectangle::centered(self_rect, card_rect);
+		DeckRectangle::push_new(L, result);
+	}
 	return 1;
 }
 

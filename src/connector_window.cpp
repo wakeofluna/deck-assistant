@@ -1,6 +1,7 @@
 #include "connector_window.h"
 #include "deck_card.h"
 #include "deck_logger.h"
+#include "deck_rectangle_list.h"
 #include "lua_helpers.h"
 
 template class ConnectorBase<ConnectorWindow>;
@@ -12,12 +13,11 @@ ConnectorWindow::ConnectorWindow()
     , m_wanted_width(1600)
     , m_wanted_height(900)
     , m_wanted_visible(true)
-    , m_window_size_is_ok(ATOMIC_FLAG_INIT)
-    , m_window_surface_is_ok(ATOMIC_FLAG_INIT)
+    , m_event_size_changed(false)
+    , m_event_surface_dirty(false)
     , m_card(nullptr)
+    , m_hotspots(nullptr)
 {
-	m_window_size_is_ok.test_and_set(std::memory_order_relaxed);
-	m_window_surface_is_ok.test_and_set(std::memory_order_relaxed);
 }
 
 ConnectorWindow::~ConnectorWindow()
@@ -28,14 +28,36 @@ ConnectorWindow::~ConnectorWindow()
 
 void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 {
+	std::lock_guard guard(m_mutex);
+
 	if (!m_window && !attempt_create_window(L))
 		return;
 
-	if (!m_window_size_is_ok.test_and_set(std::memory_order_acq_rel))
+	if (m_event_size_changed)
 	{
-		m_window_surface_is_ok.clear(std::memory_order_release);
+		m_event_size_changed  = false;
+		m_event_surface_dirty = true;
 		emit_event(L, "on_resize");
 	}
+
+	for (SDL_Event const& event : m_pending_events)
+	{
+		switch (event.type)
+		{
+			case SDL_WINDOWEVENT:
+				handle_window_event(L, event);
+				break;
+			case SDL_MOUSEMOTION:
+				handle_motion_event(L, event);
+				break;
+			case SDL_MOUSEBUTTONUP:
+			case SDL_MOUSEBUTTONDOWN:
+				handle_button_event(L, event);
+				break;
+		}
+	}
+
+	m_pending_events.clear();
 }
 
 void ConnectorWindow::tick_outputs(lua_State* L)
@@ -74,8 +96,10 @@ void ConnectorWindow::tick_outputs(lua_State* L)
 		m_wanted_visible.reset();
 	}
 
-	if (!m_window_surface_is_ok.test_and_set(std::memory_order_acq_rel))
+	if (m_event_surface_dirty)
 	{
+		m_event_surface_dirty = false;
+
 		SDL_Surface* surface      = SDL_GetWindowSurface(m_window);
 		SDL_Surface* card_surface = m_card ? m_card->get_surface() : nullptr;
 
@@ -103,6 +127,8 @@ void ConnectorWindow::init_class_table(lua_State* L)
 
 void ConnectorWindow::init_instance_table(lua_State* L)
 {
+	m_hotspots = DeckRectangleList::push_new(L);
+	lua_setfield(L, -2, "hotspots");
 }
 
 int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
@@ -227,6 +253,18 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 		m_card = card;
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
+	else if (key == "hotspots")
+	{
+		DeckRectangleList* rect_list;
+
+		if (lua_type(L, 3) == LUA_TNIL)
+			rect_list = nullptr;
+		else
+			rect_list = DeckRectangleList::from_stack(L, 3);
+
+		m_hotspots = rect_list;
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
 	else if (key.starts_with("on_"))
 	{
 		luaL_argcheck(L, (lua_type(L, 3) == LUA_TFUNCTION), 3, "event handlers must be functions");
@@ -266,8 +304,8 @@ bool ConnectorWindow::attempt_create_window(lua_State* L)
 		else
 		{
 			SDL_AddEventWatch(&_sdl_event_filter, this);
-			m_window_size_is_ok.clear(std::memory_order_release);
-			m_window_surface_is_ok.clear(std::memory_order_release);
+			m_event_size_changed  = true;
+			m_event_surface_dirty = true;
 		}
 	}
 
@@ -292,67 +330,155 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 {
 	// This may run out of context, so we must catch and queue these events locally using atomics
 
-	ConnectorWindow* self = reinterpret_cast<ConnectorWindow*>(userdata);
-	if (event->type == SDL_WINDOWEVENT && event->window.windowID == SDL_GetWindowID(self->m_window))
+	ConnectorWindow* self  = reinterpret_cast<ConnectorWindow*>(userdata);
+	Uint32 const window_id = self->m_window ? SDL_GetWindowID(self->m_window) : -1;
+
+	if (event->type == SDL_MOUSEMOTION && event->motion.windowID == window_id)
 	{
-		switch (event->window.event)
-		{
-			case SDL_WINDOWEVENT_EXPOSED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window redraw requested");
-				break;
-			case SDL_WINDOWEVENT_SIZE_CHANGED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", event->window.data1, 'x', event->window.data2);
-				self->m_window_size_is_ok.clear(std::memory_order_release);
-				break;
-			case SDL_WINDOWEVENT_SHOWN:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became shown");
-				self->m_window_surface_is_ok.clear(std::memory_order_release);
-				break;
-			case SDL_WINDOWEVENT_HIDDEN:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became hidden");
-				break;
-			case SDL_WINDOWEVENT_MOVED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", event->window.data1, 'x', event->window.data2);
-				break;
-			case SDL_WINDOWEVENT_RESIZED:
-				// DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event->window.data1, 'x', event->window.data2);
-				break;
-			case SDL_WINDOWEVENT_MINIMIZED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became minimized");
-				break;
-			case SDL_WINDOWEVENT_MAXIMIZED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became maximized");
-				break;
-			case SDL_WINDOWEVENT_RESTORED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became restored");
-				self->m_window_surface_is_ok.clear(std::memory_order_release);
-				break;
-			case SDL_WINDOWEVENT_ENTER:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window received pointer focus");
-				break;
-			case SDL_WINDOWEVENT_LEAVE:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window lost pointer focus");
-				break;
-			case SDL_WINDOWEVENT_FOCUS_GAINED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became focused");
-				break;
-			case SDL_WINDOWEVENT_FOCUS_LOST:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became unfocused");
-				break;
-			case SDL_WINDOWEVENT_CLOSE:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window got request to close");
-				break;
-			case SDL_WINDOWEVENT_TAKE_FOCUS:
-			case SDL_WINDOWEVENT_HIT_TEST:
-			case SDL_WINDOWEVENT_ICCPROF_CHANGED:
-			case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window event with type ", event->window.event);
-				break;
-			default:
-				DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window UNKNOWN event with type ", event->window.event);
-				break;
-		}
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse motion at ", event->motion.x, ',', event->motion.y);
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
+	else if (event->type == SDL_MOUSEBUTTONDOWN && event->button.windowID == window_id)
+	{
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse button ", int(event->button.button), " down at ", event->button.x, ',', event->button.y);
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
+	else if (event->type == SDL_MOUSEBUTTONUP && event->button.windowID == window_id)
+	{
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse button ", int(event->button.button), " up at ", event->button.x, ',', event->button.y);
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
+	else if (event->type == SDL_WINDOWEVENT && event->window.windowID == window_id)
+	{
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
 	}
 
 	return 0;
+}
+
+void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
+{
+	switch (event.window.event)
+	{
+		case SDL_WINDOWEVENT_EXPOSED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window redraw requested");
+			m_event_surface_dirty = true;
+			break;
+		case SDL_WINDOWEVENT_SIZE_CHANGED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", event.window.data1, 'x', event.window.data2);
+			m_event_surface_dirty = true;
+			emit_event(L, "on_resize");
+			break;
+		case SDL_WINDOWEVENT_SHOWN:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became shown");
+			m_event_surface_dirty = true;
+			break;
+		case SDL_WINDOWEVENT_HIDDEN:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became hidden");
+			break;
+		case SDL_WINDOWEVENT_MOVED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", event.window.data1, 'x', event.window.data2);
+			break;
+		case SDL_WINDOWEVENT_RESIZED:
+			// DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event.window.data1, 'x', event.window.data2);
+			break;
+		case SDL_WINDOWEVENT_MINIMIZED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became minimized");
+			break;
+		case SDL_WINDOWEVENT_MAXIMIZED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became maximized");
+			break;
+		case SDL_WINDOWEVENT_RESTORED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became restored");
+			m_event_surface_dirty = true;
+			break;
+		case SDL_WINDOWEVENT_ENTER:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window received pointer focus");
+			break;
+		case SDL_WINDOWEVENT_LEAVE:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window lost pointer focus");
+			break;
+		case SDL_WINDOWEVENT_FOCUS_GAINED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became focused");
+			break;
+		case SDL_WINDOWEVENT_FOCUS_LOST:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became unfocused");
+			break;
+		case SDL_WINDOWEVENT_CLOSE:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window got request to close");
+			break;
+		case SDL_WINDOWEVENT_TAKE_FOCUS:
+		case SDL_WINDOWEVENT_HIT_TEST:
+		case SDL_WINDOWEVENT_ICCPROF_CHANGED:
+		case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window event with type ", event.window.event);
+			break;
+		default:
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window UNKNOWN event with type ", event.window.event);
+			break;
+	}
+}
+
+void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
+{
+	lua_getfield(L, 1, "on_mouse_motion");
+	if (lua_type(L, -1) == LUA_TFUNCTION)
+	{
+		lua_pushvalue(L, 1);
+		lua_pushinteger(L, event.motion.x);
+		lua_pushinteger(L, event.motion.y);
+
+		lua_getfield(L, 1, "hotspots");
+		if (DeckRectangleList* rect_list = DeckRectangleList::from_stack(L, -1, false); rect_list)
+		{
+			rect_list->push_any_contains(L, event.motion.x, event.motion.y);
+			lua_replace(L, -2);
+		}
+		else
+		{
+			lua_pop(L, 1);
+			lua_pushnil(L);
+		}
+
+		LuaHelpers::pcall(L, 4, 0);
+	}
+	else
+	{
+		lua_pop(L, 1);
+	}
+}
+
+void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
+{
+	lua_getfield(L, 1, "on_mouse_button");
+	if (lua_type(L, -1) == LUA_TFUNCTION)
+	{
+		lua_pushvalue(L, 1);
+		lua_pushinteger(L, event.button.x);
+		lua_pushinteger(L, event.button.y);
+		lua_pushinteger(L, event.button.button);
+		lua_pushboolean(L, event.type == SDL_MOUSEBUTTONDOWN);
+
+		lua_getfield(L, 1, "hotspots");
+		if (DeckRectangleList* rect_list = DeckRectangleList::from_stack(L, -1, false); rect_list)
+		{
+			rect_list->push_any_contains(L, event.motion.x, event.motion.y);
+			lua_replace(L, -2);
+		}
+		else
+		{
+			lua_pop(L, 1);
+			lua_pushnil(L);
+		}
+
+		LuaHelpers::pcall(L, 6, 0);
+	}
+	else
+	{
+		lua_pop(L, 1);
+	}
 }

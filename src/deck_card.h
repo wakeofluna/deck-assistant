@@ -28,6 +28,7 @@ public:
 
 private:
 	static int _lua_blit(lua_State* L);
+	static int _lua_centered(lua_State* L);
 	static int _lua_clear(lua_State* L);
 	static int _lua_resize(lua_State* L);
 	static int _lua_subcard(lua_State* L);

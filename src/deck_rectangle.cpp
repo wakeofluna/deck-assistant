@@ -8,6 +8,11 @@ DeckRectangle::DeckRectangle()
 {
 }
 
+DeckRectangle::DeckRectangle(SDL_Rect const& rect)
+    : m_rectangle(rect)
+{
+}
+
 DeckRectangle::DeckRectangle(int w, int h)
     : m_rectangle { 0, 0, w, h }
 {
@@ -20,6 +25,9 @@ DeckRectangle::DeckRectangle(int x, int y, int w, int h)
 
 void DeckRectangle::init_class_table(lua_State* L)
 {
+	lua_pushcfunction(L, &_lua_centered);
+	lua_setfield(L, -2, "centered");
+
 	lua_pushcfunction(L, &_lua_contains);
 	lua_setfield(L, -2, "contains");
 
@@ -80,33 +88,37 @@ int DeckRectangle::index(lua_State* L, std::string_view const& key) const
 
 int DeckRectangle::newindex(lua_State* L, std::string_view const& key)
 {
-	int value = LuaHelpers::check_arg_int(L, 3);
-
 	if (key == "x" || key == "left")
 	{
+		int value     = LuaHelpers::check_arg_int(L, 3);
 		m_rectangle.x = value;
 	}
 	else if (key == "y" || key == "top")
 	{
+		int value     = LuaHelpers::check_arg_int(L, 3);
 		m_rectangle.y = value;
 	}
 	else if (key == "w" || key == "width")
 	{
+		int value = LuaHelpers::check_arg_int(L, 3);
 		luaL_argcheck(L, (value >= 0), 3, "value must be positive");
 		m_rectangle.w = value;
 	}
 	else if (key == "h" || key == "height")
 	{
+		int value = LuaHelpers::check_arg_int(L, 3);
 		luaL_argcheck(L, (value >= 0), 3, "value must be positive");
 		m_rectangle.h = value;
 	}
 	else if (key == "right")
 	{
+		int value = LuaHelpers::check_arg_int(L, 3);
 		luaL_argcheck(L, (value >= m_rectangle.x), 3, "right value must be larger than left coordinate");
 		m_rectangle.w = value - m_rectangle.x;
 	}
 	else if (key == "bottom")
 	{
+		int value = LuaHelpers::check_arg_int(L, 3);
 		luaL_argcheck(L, (value >= m_rectangle.y), 3, "bottom value must be larger than top coordinate");
 		m_rectangle.h = value - m_rectangle.y;
 	}
@@ -125,6 +137,16 @@ int DeckRectangle::tostring(lua_State* L) const
 {
 	lua_pushfstring(L, "%s { x=%d, y=%d, w=%d, h=%d }", LUA_TYPENAME, int(m_rectangle.x), int(m_rectangle.y), int(m_rectangle.w), int(m_rectangle.h));
 	return 1;
+}
+
+SDL_Rect DeckRectangle::centered(SDL_Rect const& object, SDL_Rect const& frame)
+{
+	SDL_Rect rect;
+	rect.x = frame.x + (frame.w - object.w) / 2;
+	rect.y = frame.y + (frame.h - object.h) / 2;
+	rect.w = object.w;
+	rect.h = object.h;
+	return rect;
 }
 
 SDL_Rect DeckRectangle::clip(SDL_Rect const& lhs, SDL_Rect const& rhs)
@@ -171,6 +193,18 @@ bool DeckRectangle::contains(SDL_Rect const& rect, int x, int y)
 	        && y >= rect.y
 	        && x < rect.x + rect.w
 	        && y < rect.y + rect.h);
+}
+
+int DeckRectangle::_lua_centered(lua_State* L)
+{
+	DeckRectangle* self  = from_stack(L, 1);
+	DeckRectangle* other = from_stack(L, 2);
+
+	SDL_Rect rect     = DeckRectangle::centered(self->m_rectangle, other->m_rectangle);
+	self->m_rectangle = rect;
+
+	lua_settop(L, 1);
+	return 1;
 }
 
 int DeckRectangle::_lua_contains(lua_State* L)

@@ -3,11 +3,13 @@
 
 #include "connector_base.h"
 #include <SDL.h>
-#include <atomic>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 class DeckCard;
+class DeckRectangleList;
 
 class ConnectorWindow : public ConnectorBase<ConnectorWindow>
 {
@@ -31,6 +33,10 @@ private:
 
 	static int _sdl_event_filter(void* userdata, SDL_Event* event);
 
+	void handle_window_event(lua_State* L, SDL_Event const& event);
+	void handle_motion_event(lua_State* L, SDL_Event const& event);
+	void handle_button_event(lua_State* L, SDL_Event const& event);
+
 private:
 	// Window physicals
 	SDL_Window* m_window;
@@ -39,12 +45,14 @@ private:
 	std::optional<int> m_wanted_height;
 	std::optional<bool> m_wanted_visible;
 
-	// Event signalling flags - naming is a bit funky because of how they work
-	std::atomic_flag m_window_size_is_ok;
-	std::atomic_flag m_window_surface_is_ok;
+	std::mutex m_mutex;
+	bool m_event_size_changed;
+	bool m_event_surface_dirty;
+	std::vector<SDL_Event> m_pending_events;
 
 	// Deck-related
 	DeckCard* m_card;
+	DeckRectangleList* m_hotspots;
 };
 
 #endif // DECK_ASSISTANT_CONNECTOR_WINDOW_H

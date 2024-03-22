@@ -10,6 +10,8 @@ public:
 	DeckRectangleList();
 	~DeckRectangleList();
 
+	static void push_any_contains(lua_State* L, int x, int y);
+
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
 	int index(lua_State* L, std::string_view const& key) const;
@@ -19,6 +21,7 @@ public:
 
 protected:
 	static int _lua_add(lua_State* L);
+	static int _lua_clear(lua_State* L);
 	static int _lua_remove(lua_State* L);
 	static int _lua_any_contains(lua_State* L);
 	static int _lua_all_contains(lua_State* L);

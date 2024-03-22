@@ -60,6 +60,9 @@ inline void DeckLogger::_string_stream(std::stringstream& sstream, T value, ARGS
 template <typename T, typename... ARGS>
 void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message, T arg, ARGS... args)
 {
+	if (int(level) < int(m_min_level))
+		return;
+
 	std::string full_message;
 	full_message.reserve(256);
 
@@ -73,6 +76,9 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 template <typename... ARGS>
 void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, ARGS... args)
 {
+	if (int(level) < int(m_min_level))
+		return;
+
 	std::string full_message;
 	full_message.reserve(256);
 
