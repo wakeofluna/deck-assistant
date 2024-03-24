@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstring>
 
 char const* DeckCard::LUA_TYPENAME = "deck:Card";
 
@@ -85,37 +86,37 @@ std::vector<unsigned char> save_surface_as(SDL_Surface* surface, Format format)
 	return buffer;
 }
 
-} // namespace
-
-DeckCard::DeckCard(SDL_Surface* surface)
-    : m_surface(surface)
-    , m_parent_surface(nullptr)
-    , m_is_dup(false)
+inline void pixel_blend(Uint8& value, Uint8 const target, double factor)
 {
-	assert(m_surface && "DeckCard must be initialised with a valid surface");
+	value = std::clamp<int>(value + (target - value) * factor, 0, 255);
 }
+
+} // namespace
 
 DeckCard::DeckCard(SDL_Surface* surface, SDL_Surface* parent_surface)
     : m_surface(surface)
     , m_parent_surface(parent_surface)
 {
 	assert(m_surface && "DeckCard must be initialised with a valid surface");
-	assert(m_parent_surface && "DeckCard must be initialised with a valid parent_surface");
-	assert(m_surface->format == m_parent_surface->format && "DeckCard surface and parent_surface can't possible be related");
 
-	unsigned char const* surface_pixels_start = reinterpret_cast<unsigned char const*>(m_surface->pixels);
-	unsigned char const* surface_pixels_end   = surface_pixels_start + (m_surface->h - 1) * m_surface->pitch + m_surface->w * m_surface->format->BytesPerPixel;
-	unsigned char const* parent_pixels_start  = reinterpret_cast<unsigned char const*>(m_parent_surface->pixels);
-	unsigned char const* parent_pixels_end    = parent_pixels_start + (m_parent_surface->h - 1) * m_parent_surface->pitch + m_parent_surface->w * m_parent_surface->format->BytesPerPixel;
-	assert(surface_pixels_start >= parent_pixels_start && surface_pixels_end <= parent_pixels_end && "DeckCard surface must be contained within the parent_surface");
+	if (m_parent_surface)
+	{
+		assert(m_surface->format == m_parent_surface->format && "DeckCard surface and parent_surface can't possible be related");
 
-	// Avoid warnings in some builds
-	(void)surface_pixels_start;
-	(void)surface_pixels_end;
-	(void)parent_pixels_start;
-	(void)parent_pixels_end;
+		unsigned char const* surface_pixels_start = reinterpret_cast<unsigned char const*>(m_surface->pixels);
+		unsigned char const* surface_pixels_end   = surface_pixels_start + (m_surface->h - 1) * m_surface->pitch + m_surface->w * m_surface->format->BytesPerPixel;
+		unsigned char const* parent_pixels_start  = reinterpret_cast<unsigned char const*>(m_parent_surface->pixels);
+		unsigned char const* parent_pixels_end    = parent_pixels_start + (m_parent_surface->h - 1) * m_parent_surface->pitch + m_parent_surface->w * m_parent_surface->format->BytesPerPixel;
+		assert(surface_pixels_start >= parent_pixels_start && surface_pixels_end <= parent_pixels_end && "DeckCard surface must be contained within the parent_surface");
 
-	++m_parent_surface->refcount;
+		// Avoid warnings in some builds
+		(void)surface_pixels_start;
+		(void)surface_pixels_end;
+		(void)parent_pixels_start;
+		(void)parent_pixels_end;
+
+		++m_parent_surface->refcount;
+	}
 }
 
 DeckCard::~DeckCard()
@@ -136,6 +137,15 @@ void DeckCard::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_clear);
 	lua_setfield(L, -2, "clear");
+
+	lua_pushcfunction(L, &_lua_darken);
+	lua_setfield(L, -2, "darken");
+
+	lua_pushcfunction(L, &_lua_fade_to);
+	lua_setfield(L, -2, "fade_to");
+
+	lua_pushcfunction(L, &_lua_lighten);
+	lua_setfield(L, -2, "lighten");
 
 	lua_pushcfunction(L, &_lua_resize);
 	lua_setfield(L, -2, "resize");
@@ -255,6 +265,54 @@ SDL_Surface* DeckCard::resize_surface(SDL_Surface* surface, int new_width, int n
 	SDL_SetSurfaceBlendMode(new_surface, old_blend_mode);
 
 	return new_surface;
+}
+
+void DeckCard::fade_to_colour(SDL_Surface* surface, SDL_Color target_colour, double factor)
+{
+	if (!surface)
+		return;
+
+	unsigned char* pixels = reinterpret_cast<unsigned char*>(surface->pixels);
+	std::size_t const bpp = surface->format->BytesPerPixel;
+
+	for (int y = 0; y < surface->h; ++y)
+	{
+		unsigned char* current_position = pixels;
+		for (int x = 0; x < surface->w; ++x)
+		{
+			Uint32 pixel_value;
+			if (bpp == 4)
+			{
+				pixel_value = *reinterpret_cast<Uint32*>(current_position);
+			}
+			else
+			{
+				pixel_value = 0;
+				std::memcpy(&pixel_value, current_position, bpp);
+			}
+
+			Uint8 r, g, b, a;
+			SDL_GetRGBA(pixel_value, surface->format, &r, &g, &b, &a);
+
+			pixel_blend(r, target_colour.r, factor);
+			pixel_blend(g, target_colour.b, factor);
+			pixel_blend(b, target_colour.g, factor);
+
+			pixel_value = SDL_MapRGBA(surface->format, r, g, b, a);
+
+			if (bpp == 4)
+			{
+				*reinterpret_cast<Uint32*>(current_position) = pixel_value;
+			}
+			else
+			{
+				std::memcpy(current_position, &pixel_value, bpp);
+			}
+
+			current_position += bpp;
+		}
+		pixels += surface->pitch;
+	}
 }
 
 std::vector<unsigned char> DeckCard::save_surface_as_bmp(SDL_Surface* surface)
@@ -383,6 +441,58 @@ int DeckCard::_lua_clear(lua_State* L)
 	// When the surface is fully opaque we don't need alpha blending
 	SDL_BlendMode blend_mode = (color.a != 255) ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE;
 	SDL_SetSurfaceBlendMode(self->m_surface, blend_mode);
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+int DeckCard::_lua_darken(lua_State* L)
+{
+	DeckCard* self    = from_stack(L, 1);
+	lua_Number factor = luaL_checknumber(L, 2);
+	if (factor >= 1)
+		factor /= 100.0;
+
+	luaL_argcheck(L, factor > 0, 2, "factor must be positive");
+	luaL_argcheck(L, factor < 1.0, 2, "factor value out of range");
+
+	self->dedup(L);
+	fade_to_colour(self->m_surface, SDL_Color { 0, 0, 0, 255 }, factor);
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+int DeckCard::_lua_fade_to(lua_State* L)
+{
+	DeckCard* self     = from_stack(L, 1);
+	DeckColour* colour = DeckColour::from_stack(L, 2);
+	lua_Number factor  = luaL_checknumber(L, 3);
+	if (factor >= 1)
+		factor /= 100.0;
+
+	luaL_argcheck(L, factor > 0, 2, "factor must be positive");
+	luaL_argcheck(L, factor < 1.0, 2, "factor value out of range");
+
+	self->dedup(L);
+	fade_to_colour(self->m_surface, colour->get_colour(), factor);
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+int DeckCard::_lua_lighten(lua_State* L)
+{
+	DeckCard* self    = from_stack(L, 1);
+	lua_Number factor = luaL_checknumber(L, 2);
+	if (factor >= 1)
+		factor /= 100.0;
+
+	luaL_argcheck(L, factor > 0, 2, "factor must be positive");
+	luaL_argcheck(L, factor < 1.0, 2, "factor value out of range");
+
+	self->dedup(L);
+	fade_to_colour(self->m_surface, SDL_Color { 255, 255, 255, 255 }, factor);
 
 	lua_settop(L, 1);
 	return 1;

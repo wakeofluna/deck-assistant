@@ -123,6 +123,9 @@ void ConnectorWindow::shutdown(lua_State* L)
 void ConnectorWindow::init_class_table(lua_State* L)
 {
 	Super::init_class_table(L);
+
+	lua_pushcfunction(L, &_lua_redraw);
+	lua_setfield(L, -2, "redraw");
 }
 
 void ConnectorWindow::init_instance_table(lua_State* L)
@@ -324,6 +327,16 @@ void ConnectorWindow::emit_event(lua_State* L, char const* func_name)
 	{
 		lua_pop(L, 1);
 	}
+}
+
+int ConnectorWindow::_lua_redraw(lua_State* L)
+{
+	ConnectorWindow* self = from_stack(L, 1);
+
+	std::lock_guard guard(self->m_mutex);
+	self->m_event_surface_dirty = true;
+
+	return 0;
 }
 
 int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)

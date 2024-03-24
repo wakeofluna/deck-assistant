@@ -31,8 +31,9 @@ private:
 	bool attempt_create_window(lua_State* L);
 	void emit_event(lua_State* L, char const* func_name);
 
-	static int _sdl_event_filter(void* userdata, SDL_Event* event);
+	static int _lua_redraw(lua_State* L);
 
+	static int _sdl_event_filter(void* userdata, SDL_Event* event);
 	void handle_window_event(lua_State* L, SDL_Event const& event);
 	void handle_motion_event(lua_State* L, SDL_Event const& event);
 	void handle_button_event(lua_State* L, SDL_Event const& event);
@@ -45,7 +46,7 @@ private:
 	std::optional<int> m_wanted_height;
 	std::optional<bool> m_wanted_visible;
 
-	std::mutex m_mutex;
+	std::recursive_mutex m_mutex;
 	bool m_event_size_changed;
 	bool m_event_surface_dirty;
 	std::vector<SDL_Event> m_pending_events;
