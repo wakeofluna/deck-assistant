@@ -85,7 +85,7 @@ void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view con
 	int currentline;
 	bool const line_ok = LuaHelpers::lua_lineinfo(L, full_message, currentline);
 
-	std::stringstream stream(std::move(full_message));
+	std::stringstream stream(std::move(full_message), std::ios::in | std::ios::out | std::ios::app);
 	if (line_ok)
 		stream << ':' << currentline << ": ";
 
