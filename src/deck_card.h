@@ -27,6 +27,9 @@ public:
 	static std::vector<unsigned char> save_surface_as_png(SDL_Surface* surface);
 
 private:
+	void assign_new_surface(SDL_Surface* surface);
+	void dedup(lua_State* L);
+
 	static int _lua_blit(lua_State* L);
 	static int _lua_centered(lua_State* L);
 	static int _lua_clear(lua_State* L);
@@ -36,6 +39,7 @@ private:
 private:
 	SDL_Surface* m_surface;
 	SDL_Surface* m_parent_surface;
+	bool m_is_dup;
 };
 
 #endif // DECK_ASSISTANT_DECK_CARD_H

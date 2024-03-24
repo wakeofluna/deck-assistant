@@ -90,6 +90,7 @@ std::vector<unsigned char> save_surface_as(SDL_Surface* surface, Format format)
 DeckCard::DeckCard(SDL_Surface* surface)
     : m_surface(surface)
     , m_parent_surface(nullptr)
+    , m_is_dup(false)
 {
 	assert(m_surface && "DeckCard must be initialised with a valid surface");
 }
@@ -162,7 +163,8 @@ int DeckCard::index(lua_State* L, std::string_view const& key) const
 	else if (key == "dup")
 	{
 		m_surface->refcount++;
-		push_new(L, m_surface);
+		DeckCard* new_card = push_new(L, m_surface, m_parent_surface);
+		new_card->m_is_dup = true;
 	}
 	else if (key == "rect" || key == "rectangle")
 	{
@@ -177,7 +179,7 @@ int DeckCard::index(lua_State* L, std::string_view const& key) const
 
 int DeckCard::newindex(lua_State* L, std::string_view const& key)
 {
-	if (key == "w" || key == "width" || key == "h" || key == "height" || key == "rect" || key == "rectangle")
+	if (key == "w" || key == "width" || key == "h" || key == "height" || key == "dup" || key == "rect" || key == "rectangle")
 	{
 		luaL_error(L, "key %s is readonly for %s", key.data(), LUA_TYPENAME);
 	}
@@ -243,7 +245,12 @@ SDL_Surface* DeckCard::resize_surface(SDL_Surface* surface, int new_width, int n
 	SDL_BlendMode old_blend_mode;
 	SDL_GetSurfaceBlendMode(surface, &old_blend_mode);
 	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
-	SDL_BlitScaled(surface, nullptr, new_surface, nullptr);
+
+	if (surface->w == new_surface->w && surface->h == new_surface->h)
+		SDL_BlitSurface(surface, nullptr, new_surface, nullptr);
+	else
+		SDL_BlitScaled(surface, nullptr, new_surface, nullptr);
+
 	SDL_SetSurfaceBlendMode(surface, old_blend_mode);
 	SDL_SetSurfaceBlendMode(new_surface, old_blend_mode);
 
@@ -263,6 +270,39 @@ std::vector<unsigned char> DeckCard::save_surface_as_jpeg(SDL_Surface* surface)
 std::vector<unsigned char> DeckCard::save_surface_as_png(SDL_Surface* surface)
 {
 	return save_surface_as(surface, Format::PNG);
+}
+
+void DeckCard::assign_new_surface(SDL_Surface* surface)
+{
+	assert(surface && "cannot assign null surface");
+	assert(surface != m_surface);
+
+	SDL_FreeSurface(m_surface);
+	m_surface = surface;
+
+	if (m_parent_surface)
+	{
+		SDL_FreeSurface(m_parent_surface);
+		m_parent_surface = nullptr;
+	}
+
+	m_is_dup = false;
+}
+
+void DeckCard::dedup(lua_State* L)
+{
+	if (m_is_dup)
+	{
+		SDL_Surface* new_surface = resize_surface(m_surface, m_surface->w, m_surface->h);
+		if (!new_surface)
+		{
+			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "deck:Card deduplication failed");
+		}
+		else
+		{
+			assign_new_surface(new_surface);
+		}
+	}
 }
 
 int DeckCard::_lua_blit(lua_State* L)
@@ -300,7 +340,10 @@ int DeckCard::_lua_blit(lua_State* L)
 	SDL_Rect const target_rect  = DeckRectangle::clip(surface_rect, dstrect);
 
 	if (target_rect.w > 0 && target_rect.h > 0)
+	{
+		self->dedup(L);
 		SDL_BlitScaled(source, nullptr, self->m_surface, &dstrect);
+	}
 
 	DeckRectangle::push_new(L, target_rect);
 	return 1;
@@ -332,6 +375,8 @@ int DeckCard::_lua_clear(lua_State* L)
 	DeckCard* self     = from_stack(L, 1);
 	DeckColour* colour = DeckColour::from_stack(L, 2);
 
+	self->dedup(L);
+
 	SDL_Color color = colour->get_colour();
 	SDL_FillRect(self->m_surface, nullptr, SDL_MapRGBA(self->m_surface->format, color.r, color.g, color.b, color.a));
 
@@ -360,8 +405,7 @@ int DeckCard::_lua_resize(lua_State* L)
 		}
 		else
 		{
-			SDL_FreeSurface(self->m_surface);
-			self->m_surface = new_surface;
+			self->assign_new_surface(new_surface);
 		}
 	}
 
@@ -405,6 +449,11 @@ int DeckCard::_lua_subcard(lua_State* L)
 		return 0;
 	}
 
+	SDL_BlendMode blend_mode;
+	SDL_GetSurfaceBlendMode(self->m_surface, &blend_mode);
+	SDL_SetSurfaceBlendMode(new_surface, blend_mode);
+
+	self->dedup(L);
 	DeckCard::push_new(L, new_surface, self->m_parent_surface ? self->m_parent_surface : self->m_surface);
 
 	// Store the master card for the users reference
