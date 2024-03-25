@@ -33,13 +33,6 @@ void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 	if (!m_window && !attempt_create_window(L))
 		return;
 
-	if (m_event_size_changed)
-	{
-		m_event_size_changed  = false;
-		m_event_surface_dirty = true;
-		emit_event(L, "on_resize");
-	}
-
 	for (SDL_Event const& event : m_pending_events)
 	{
 		switch (event.type)
@@ -58,6 +51,13 @@ void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 	}
 
 	m_pending_events.clear();
+
+	if (m_event_size_changed)
+	{
+		m_event_size_changed  = false;
+		m_event_surface_dirty = true;
+		emit_event(L, "on_resize");
+	}
 }
 
 void ConnectorWindow::tick_outputs(lua_State* L)
@@ -384,7 +384,7 @@ void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
 		case SDL_WINDOWEVENT_SIZE_CHANGED:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", event.window.data1, 'x', event.window.data2);
 			m_event_surface_dirty = true;
-			emit_event(L, "on_resize");
+			m_event_size_changed  = true;
 			break;
 		case SDL_WINDOWEVENT_SHOWN:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became shown");
