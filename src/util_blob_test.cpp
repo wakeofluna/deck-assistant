@@ -34,12 +34,16 @@ TEST_CASE("Blob", "[util]")
 
 	SECTION("Blob from literal")
 	{
+		Blob blob = Blob::from_literal("There can be");
+		REQUIRE(blob.size() == 12);
+		REQUIRE(blob.to_bin() == "There can be");
+
 		BlobView blob2("only one!");
 		REQUIRE(blob2.size() == 9);
 		REQUIRE(blob2.to_bin() == "only one!");
 	}
 
-	SECTION("Blob from/to hex")
+	SECTION("Blob hex")
 	{
 		std::string_view input = "59657420616e6f746865722068657820696d706c656d656e746174696f6e";
 
@@ -50,7 +54,7 @@ TEST_CASE("Blob", "[util]")
 		REQUIRE(output == input);
 	}
 
-	SECTION("Blob from/to base64")
+	SECTION("Blob base64")
 	{
 		std::string_view input = "WWV0IGFub3RoZXIgYmFzZTY0IGltcGxlbWVudGF0aW9uIQ==";
 
@@ -69,8 +73,8 @@ TEST_CASE("Blob", "[util]")
 		std::string_view websocket_uuid   = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 		std::string_view websocket_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 
-		Blob blob(60);
-		blob += BlobView(websocket_nonce).to_base64();
+		Blob websocket_key = Blob::from_literal(websocket_nonce);
+		Blob blob          = Blob::from_literal(websocket_key.to_base64());
 		REQUIRE(blob.to_bin() == "dGhlIHNhbXBsZSBub25jZQ==");
 
 		blob             += websocket_uuid;

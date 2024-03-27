@@ -1,5 +1,6 @@
 #include "deck_connector_factory.h"
 #include "connector_elgato_streamdeck.h"
+#include "connector_websocket.h"
 #include "connector_window.h"
 #include "lua_helpers.h"
 
@@ -11,6 +12,9 @@ void DeckConnectorFactory::init_class_table(lua_State* L)
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "ElgatoStreamDeck");
 	lua_setfield(L, -2, "StreamDeck");
+
+	lua_pushcfunction(L, &_lua_create_websocket);
+	lua_setfield(L, -2, "Websocket");
 
 	lua_pushcfunction(L, &_lua_create_window);
 	lua_setfield(L, -2, "Window");
@@ -34,6 +38,12 @@ int DeckConnectorFactory::tostring(lua_State* L) const
 int DeckConnectorFactory::_lua_create_elgato_streamdeck(lua_State* L)
 {
 	ConnectorElgatoStreamDeck::push_new(L);
+	return 1;
+}
+
+int DeckConnectorFactory::_lua_create_websocket(lua_State* L)
+{
+	ConnectorWebsocket::push_new(L);
 	return 1;
 }
 

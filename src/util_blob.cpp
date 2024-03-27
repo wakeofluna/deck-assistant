@@ -202,14 +202,13 @@ std::string BlobView::to_base64() const
 	return result;
 }
 
+#ifdef HAVE_GNUTLS
 Blob BlobView::sha1() const
 {
 	Blob blob(20);
 
-#ifdef HAVE_GNUTLS
 	gnutls_hash_fast(GNUTLS_DIG_SHA1, m_data, m_end - m_data, blob.data());
 	blob.m_end += 20;
-#endif
 
 	return blob;
 }
@@ -218,13 +217,12 @@ Blob BlobView::sha256() const
 {
 	Blob blob(32);
 
-#ifdef HAVE_GNUTLS
 	gnutls_hash_fast(GNUTLS_DIG_SHA256, m_data, m_end - m_data, blob.data());
 	blob.m_end += 32;
-#endif
 
 	return blob;
 }
+#endif
 
 BlobView& BlobView::operator=(BlobView&&)      = default;
 BlobView& BlobView::operator=(BlobView const&) = default;
@@ -295,6 +293,19 @@ void Blob::clear()
 		std::memset(m_data, 0, m_end - m_data);
 		m_end = m_data;
 	}
+}
+
+Blob Blob::from_literal(std::string_view const& initial)
+{
+	std::size_t const len = initial.size();
+
+	Blob blob(len);
+	blob.m_end += len;
+
+	if (len > 0)
+		std::memcpy(blob.m_data, initial.data(), len);
+
+	return blob;
 }
 
 Blob Blob::from_random(std::size_t len)

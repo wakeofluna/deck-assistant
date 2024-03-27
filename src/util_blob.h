@@ -23,8 +23,10 @@ public:
 	std::string to_hex() const;
 	std::string to_base64() const;
 
+#ifdef HAVE_GNUTLS
 	Blob sha1() const;
 	Blob sha256() const;
+#endif
 
 	BlobView& operator=(BlobView&& other);
 	BlobView& operator=(BlobView const& other);
@@ -49,6 +51,7 @@ public:
 	inline unsigned char* data() { return m_data; }
 	inline std::size_t capacity() const { return m_capacity - m_data; }
 
+	static Blob from_literal(std::string_view const& initial);
 	static Blob from_random(std::size_t len);
 	static Blob from_hex(std::string_view const& initial);
 	static Blob from_base64(std::string_view const& initial);

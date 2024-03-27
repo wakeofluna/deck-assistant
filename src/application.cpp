@@ -5,6 +5,7 @@
 #include "lua_helpers.h"
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_net.h>
 #include <SDL_ttf.h>
 #include <algorithm>
 #include <cassert>
@@ -77,6 +78,7 @@ Application::Application()
 	luaL_openlibs(L);
 
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+	SDLNet_Init();
 	SDL_hid_init();
 	IMG_Init(0xffffffff);
 	TTF_Init();
@@ -99,6 +101,7 @@ Application::~Application()
 	TTF_Quit();
 	IMG_Quit();
 	SDL_hid_exit();
+	SDLNet_Quit();
 	SDL_Quit();
 
 	lua_close(L);

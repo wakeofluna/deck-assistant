@@ -159,6 +159,16 @@ lua_Integer LuaHelpers::check_arg_int(lua_State* L, int idx)
 	return lua_tointeger(L, idx);
 }
 
+bool LuaHelpers::check_arg_bool(lua_State* L, int idx)
+{
+	idx = absidx(L, idx);
+
+	if (lua_type(L, idx) != LUA_TBOOLEAN)
+		luaL_typerror(L, idx, "boolean");
+
+	return lua_toboolean(L, idx);
+}
+
 std::string_view LuaHelpers::push_converted_to_string(lua_State* L, int idx)
 {
 	idx              = absidx(L, idx);

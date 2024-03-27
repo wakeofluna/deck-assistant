@@ -41,6 +41,12 @@ sdl_image = dependency(
     required: true,
 )
 
+sdl_net = dependency(
+    'SDL2_net',
+    disabler: false,
+    required: true,
+)
+
 sdl_ttf = dependency(
     'SDL2_ttf',
     disabler: false,
@@ -78,6 +84,7 @@ summary(
         lua.name(): lua,
         sdl.name(): sdl,
         sdl_image.name(): sdl_image,
+        sdl_net.name(): sdl_net,
         sdl_ttf.name(): sdl_ttf,
         ssl.name(): ssl,
     },

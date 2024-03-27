@@ -219,10 +219,8 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 	if (key == "connected" || key == "pixel_width" || key == "pixel_height")
 	{
 		luaL_error(L, "key %s is readonly for %s", key.data(), LUA_TYPENAME);
-		return 0;
 	}
-
-	if (key == "title")
+	else if (key == "title")
 	{
 		std::string_view title = LuaHelpers::check_arg_string(L, 3);
 		m_wanted_title         = title;

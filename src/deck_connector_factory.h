@@ -14,6 +14,7 @@ public:
 
 private:
 	static int _lua_create_elgato_streamdeck(lua_State* L);
+	static int _lua_create_websocket(lua_State* L);
 	static int _lua_create_window(lua_State* L);
 };
 
