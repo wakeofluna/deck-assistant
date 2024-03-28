@@ -11,6 +11,7 @@ project(
 buildflags = []
 feature_luajit = get_option('luajit')
 feature_test = get_option('test')
+feature_gnutls = get_option('gnutls')
 
 lua = dependency(
     'luajit',
@@ -46,6 +47,16 @@ sdl_ttf = dependency(
     required: true,
 )
 
+ssl = dependency(
+    'gnutls',
+    disabler: false,
+    required: feature_gnutls,
+)
+
+if ssl.found()
+    buildflags += '-DHAVE_GNUTLS'
+endif
+
 catch2 = dependency(
     'catch2-with-main',
     version: '>=3.0.0',
@@ -57,17 +68,18 @@ summary(
     {
         'luajit': feature_luajit,
         'test': feature_test,
+        'gnutls': feature_gnutls,
     },
     section: 'Features',
 )
 
 summary(
     {
-        catch2.name(): catch2,
         lua.name(): lua,
         sdl.name(): sdl,
         sdl_image.name(): sdl_image,
         sdl_ttf.name(): sdl_ttf,
+        ssl.name(): ssl,
     },
     section: 'Runtime dependencies',
 )

@@ -15,6 +15,7 @@ sources = files(
     'deck_rectangle_list.cpp',
     'lua_class.cpp',
     'lua_helpers.cpp',
+    'util_blob.cpp',
     'util_colour.cpp',
 )
 
@@ -23,12 +24,13 @@ test_sources = files(
     'lua_class_test.cpp',
     'lua_helpers_test.cpp',
     'test_utils_test.cpp',
+    'util_blob_test.cpp',
 )
 
 slib = static_library(
     'deck-assistant',
     sources: sources,
-    dependencies: [lua, sdl, sdl_image, sdl_ttf],
+    dependencies: [lua, sdl, sdl_image, sdl_ttf, ssl],
     cpp_args: ['-fno-exceptions'] + buildflags,
 )
 
@@ -43,7 +45,7 @@ tests = executable(
     'testdeck',
     sources: test_sources,
     link_with: [slib],
-    dependencies: [catch2, lua, sdl],
+    dependencies: [catch2, lua, sdl, ssl],
     cpp_args: buildflags,
 )
 

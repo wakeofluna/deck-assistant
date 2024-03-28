@@ -1,4 +1,5 @@
 #include "util_colour.h"
+#include "util_blob.h"
 #include <algorithm>
 #include <cctype>
 #include <utility>
@@ -177,37 +178,19 @@ constexpr bool standard_colours_are_sorted()
 // Required for std::lower_bound to work correctly
 static_assert(standard_colours_are_sorted());
 
-constexpr unsigned char hex_to_nibble(char ch)
-{
-	if (ch >= '0' && ch <= '9')
-		return ch - '0';
-	if (ch >= 'a' && ch <= 'f')
-		return ch - 'a' + 10;
-	if (ch >= 'A' && ch <= 'F')
-		return ch - 'A' + 10;
-	return 0;
-}
-
-constexpr inline unsigned char hex_to_char(char const* ch)
-{
-	return (hex_to_nibble(ch[0]) << 4) + hex_to_nibble(ch[1]);
-}
-
-constexpr char nibble_to_hex(unsigned char nibble)
-{
-	if (nibble < 10)
-		return '0' + nibble;
-	else
-		return 'a' + (nibble - 10);
-}
-
 bool parse_hex(std::string_view const& value, Colour& target)
 {
 	if (value.size() == 3)
 	{
-		target.color.r = hex_to_nibble(value[0]) << 4;
-		target.color.g = hex_to_nibble(value[1]) << 4;
-		target.color.b = hex_to_nibble(value[2]) << 4;
+		char hex[2];
+		hex[1] = 0;
+
+		hex[0]         = value[0];
+		target.color.r = hex_to_char(hex);
+		hex[0]         = value[1];
+		target.color.g = hex_to_char(hex);
+		hex[0]         = value[2];
+		target.color.b = hex_to_char(hex);
 		target.color.a = 255;
 		return true;
 	}
@@ -269,12 +252,10 @@ bool Colour::parse_colour(std::string_view const& value, Colour& target)
 std::string_view Colour::to_string(std::array<char, 10>& buffer) const
 {
 	buffer[0] = '#';
-	buffer[1] = nibble_to_hex(color.r >> 4);
-	buffer[2] = nibble_to_hex(color.r & 15);
-	buffer[3] = nibble_to_hex(color.g >> 4);
-	buffer[4] = nibble_to_hex(color.g & 15);
-	buffer[5] = nibble_to_hex(color.b >> 4);
-	buffer[6] = nibble_to_hex(color.b & 15);
+
+	char_to_hex(color.r, &buffer[1]);
+	char_to_hex(color.g, &buffer[3]);
+	char_to_hex(color.b, &buffer[5]);
 
 	if (color.a == 255)
 	{
@@ -282,8 +263,8 @@ std::string_view Colour::to_string(std::array<char, 10>& buffer) const
 		return std::string_view(buffer.data(), 7);
 	}
 
-	buffer[7] = nibble_to_hex(color.a >> 4);
-	buffer[8] = nibble_to_hex(color.a & 15);
+	char_to_hex(color.a, &buffer[7]);
+
 	buffer[9] = 0;
 	return std::string_view(buffer.data(), 9);
 }
