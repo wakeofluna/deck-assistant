@@ -184,6 +184,10 @@ int Application::run()
 			lua_pushinteger(L, clock_msec);
 			LuaHelpers::pcall(L, 1, 0);
 		}
+		else
+		{
+			lua_pop(L, 1);
+		}
 		lua_pop(L, 1);
 
 		deck_module->tick_outputs(L);
