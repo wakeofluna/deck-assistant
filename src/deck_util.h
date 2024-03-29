@@ -17,6 +17,8 @@ private:
 	static int _lua_to_base64(lua_State* L);
 	static int _lua_from_hex(lua_State* L);
 	static int _lua_to_hex(lua_State* L);
+	static int _lua_from_json(lua_State* L);
+	static int _lua_to_json(lua_State* L);
 	static int _lua_sha1(lua_State* L);
 	static int _lua_sha256(lua_State* L);
 	static int _lua_random_bytes(lua_State* L);
