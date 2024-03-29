@@ -53,19 +53,28 @@ public:
 
 	static Blob from_literal(std::string_view const& initial);
 	static Blob from_random(std::size_t len);
-	static Blob from_hex(std::string_view const& initial);
-	static Blob from_base64(std::string_view const& initial);
+	static Blob from_hex(std::string_view const& initial, bool& ok);
+	static Blob from_base64(std::string_view const& initial, bool& ok);
 
 	Blob& operator=(Blob&&);
 	Blob& operator=(Blob const&) = delete;
 
 	Blob& operator+=(BlobView const& blob);
 
+	using BlobView::operator<=>;
+	using BlobView::operator!=;
+
+	// Some helpers for catch2
+	inline std::strong_ordering operator<=>(Blob const& blob) const { return BlobView::operator<=>(blob); }
+	inline bool operator==(Blob const& blob) const { return BlobView::operator<=>(blob) == std::strong_ordering::equal; }
+	inline bool operator!=(Blob const& blob) const { return BlobView::operator!=(blob); }
+
 protected:
 	unsigned char* m_capacity;
 };
 
 unsigned char hex_to_char(char const* hex);
+unsigned char hex_to_char(char const* hex, bool& ok);
 void char_to_hex(unsigned char ch, char* hex);
 void char_to_hex_uc(unsigned char ch, char* hex);
 

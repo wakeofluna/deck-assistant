@@ -2,6 +2,7 @@
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
+#include "deck_util.h"
 #include "lua_helpers.h"
 #include <SDL.h>
 #include <SDL_image.h>
@@ -90,6 +91,9 @@ Application::Application()
 
 	DeckLogger::push_new(L);
 	lua_setglobal(L, "logger");
+
+	DeckUtil::push_new(L);
+	lua_setglobal(L, "util");
 
 	DeckFont::insert_enum_values(L);
 

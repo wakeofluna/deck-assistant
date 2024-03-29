@@ -46,23 +46,46 @@ TEST_CASE("Blob", "[util]")
 	SECTION("Blob hex")
 	{
 		std::string_view input = "59657420616e6f746865722068657820696d706c656d656e746174696f6e";
+		bool ok;
 
-		Blob blob = Blob::from_hex(input);
+		Blob blob = Blob::from_hex(input, ok);
+		REQUIRE(ok);
 		REQUIRE(blob.to_bin() == "Yet another hex implementation");
 
 		std::string output = blob.to_hex();
 		REQUIRE(output == input);
+
+		input = "0123456789abcdef";
+		blob  = Blob::from_hex(input, ok);
+		REQUIRE(ok);
+		REQUIRE(blob.size() == 8);
+
+		input      = "0123456789ABCDEF";
+		Blob blob2 = Blob::from_hex(input, ok);
+		REQUIRE(ok);
+		REQUIRE(blob2.size() == 8);
+		REQUIRE(blob2 == blob);
+
+		input      = "0123456789ABCDEFGH";
+		Blob blob3 = Blob::from_hex(input, ok);
+		REQUIRE_FALSE(ok);
 	}
 
 	SECTION("Blob base64")
 	{
 		std::string_view input = "WWV0IGFub3RoZXIgYmFzZTY0IGltcGxlbWVudGF0aW9uIQ==";
+		bool ok;
 
-		Blob blob = Blob::from_base64(input);
+		Blob blob = Blob::from_base64(input, ok);
+		REQUIRE(ok);
 		REQUIRE(blob.to_bin() == "Yet another base64 implementation!");
 
 		std::string output = blob.to_base64();
 		REQUIRE(output == input);
+
+		input = "WWV0IGFub3RoZXIgYmFzZTY0!GltcGxlbWVudGF0aW9uIQ==";
+		blob  = Blob::from_base64(input, ok);
+		REQUIRE_FALSE(ok);
 	}
 
 	SECTION("Blob sha1")

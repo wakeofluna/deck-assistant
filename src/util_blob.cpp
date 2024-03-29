@@ -21,6 +21,18 @@ constexpr unsigned char hex_to_nibble(char ch)
 	return 0;
 }
 
+constexpr unsigned char hex_to_nibble(char ch, bool& ok)
+{
+	if (ch >= '0' && ch <= '9')
+		return ch - '0';
+	if (ch >= 'a' && ch <= 'f')
+		return ch - 'a' + 10;
+	if (ch >= 'A' && ch <= 'F')
+		return ch - 'A' + 10;
+	ok = false;
+	return 0;
+}
+
 constexpr char nibble_to_hex(unsigned char nibble)
 {
 	if (nibble < 10)
@@ -51,7 +63,7 @@ char nibble_to_base64(unsigned char ch)
 		return '/';
 }
 
-unsigned char base64_to_nibble(char ch)
+unsigned char base64_to_nibble(char ch, bool& ok)
 {
 	if (ch >= 'A' && ch <= 'Z')
 		return ch - 'A';
@@ -61,8 +73,10 @@ unsigned char base64_to_nibble(char ch)
 		return ch - '0' + 52;
 	else if (ch == '+')
 		return 62;
-	else
+	else if (ch == '/')
 		return 63;
+	ok = false;
+	return 0;
 }
 
 } // namespace
@@ -70,6 +84,11 @@ unsigned char base64_to_nibble(char ch)
 unsigned char hex_to_char(char const* hex)
 {
 	return (hex_to_nibble(hex[0]) << 4) + hex_to_nibble(hex[1]);
+}
+
+unsigned char hex_to_char(char const* hex, bool& ok)
+{
+	return (hex_to_nibble(hex[0], ok) << 4) + hex_to_nibble(hex[1], ok);
 }
 
 void char_to_hex(unsigned char ch, char* hex)
@@ -327,16 +346,17 @@ Blob Blob::from_random(std::size_t len)
 	return blob;
 }
 
-Blob Blob::from_hex(std::string_view const& initial)
+Blob Blob::from_hex(std::string_view const& initial, bool& ok)
 {
 	std::size_t const len = initial.size() >> 1;
 
 	Blob blob(len);
+	ok = true;
 
 	char const* src = initial.data();
 	for (std::size_t i = 0; i < len; ++i)
 	{
-		*blob.m_end = hex_to_char(src);
+		*blob.m_end = hex_to_char(src, ok);
 		++blob.m_end;
 		src += 2;
 	}
@@ -344,17 +364,18 @@ Blob Blob::from_hex(std::string_view const& initial)
 	return blob;
 }
 
-Blob Blob::from_base64(std::string_view const& initial)
+Blob Blob::from_base64(std::string_view const& initial, bool& ok)
 {
 	std::size_t const len = initial.size() / 4 * 3;
 
 	Blob blob(len);
-	char const* src = initial.data();
+	ok = true;
 
+	char const* src = initial.data();
 	for (std::size_t i = 0; i < len; ++i)
 	{
-		unsigned char v1 = base64_to_nibble(*src++);
-		unsigned char v2 = base64_to_nibble(*src++);
+		unsigned char v1 = base64_to_nibble(*src++, ok);
+		unsigned char v2 = base64_to_nibble(*src++, ok);
 
 		*blob.m_end = (v1 << 2) + (v2 >> 4);
 		++blob.m_end;
@@ -362,7 +383,7 @@ Blob Blob::from_base64(std::string_view const& initial)
 		if (*src == '=')
 			break;
 
-		unsigned char v3 = base64_to_nibble(*src++);
+		unsigned char v3 = base64_to_nibble(*src++, ok);
 
 		*blob.m_end = (v2 << 4) + (v3 >> 2);
 		++blob.m_end;
@@ -370,7 +391,7 @@ Blob Blob::from_base64(std::string_view const& initial)
 		if (*src == '=')
 			break;
 
-		unsigned char v4 = base64_to_nibble(*src++);
+		unsigned char v4 = base64_to_nibble(*src++, ok);
 
 		*blob.m_end = (v3 << 6) + v4;
 		++blob.m_end;
