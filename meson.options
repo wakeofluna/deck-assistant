@@ -18,3 +18,10 @@ option(
     value: 'auto',
     description: 'Use GnuTLS for hashes and crypto functions',
 )
+
+option(
+    'vnc',
+    type: 'feature',
+    value: 'auto',
+    description: 'Use libvncserver to host a VNC connection',
+)

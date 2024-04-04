@@ -29,18 +29,6 @@ struct ErrorContext
 	int line;
 };
 
-struct StackValue
-{
-	StackValue(int idx)
-	    : index(idx)
-	{
-	}
-	StackValue(StackValue const&) = default;
-	StackValue(StackValue&&)      = default;
-
-	int index;
-};
-
 int absidx(lua_State* L, int idx);
 
 void push_standard_weak_key_metatable(lua_State* L);
@@ -77,12 +65,35 @@ void debug_dump_stack(lua_State* L, char const* description = nullptr);
 void debug_dump_table(std::ostream& stream, lua_State* L, int idx, bool recursive = false, char const* description = nullptr);
 void debug_dump_table(lua_State* L, int idx, bool recursive = false, char const* description = nullptr);
 
+struct StackValue
+{
+	StackValue(int idx)
+	    : index(idx)
+	{
+	}
+
+	StackValue(lua_State* L, int idx)
+	    : index(absidx(L, idx))
+	{
+	}
+
+	StackValue(StackValue const&) = default;
+	StackValue(StackValue&&)      = default;
+
+	int index;
+};
+
 inline void push_argument(lua_State* L, bool value)
 {
 	lua_pushboolean(L, value);
 }
 
 inline void push_argument(lua_State* L, int value)
+{
+	lua_pushinteger(L, value);
+}
+
+inline void push_argument(lua_State* L, unsigned int value)
 {
 	lua_pushinteger(L, value);
 }

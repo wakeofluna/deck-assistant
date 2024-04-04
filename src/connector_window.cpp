@@ -4,8 +4,6 @@
 #include "deck_rectangle_list.h"
 #include "lua_helpers.h"
 
-template class ConnectorBase<ConnectorWindow>;
-
 char const* ConnectorWindow::LUA_TYPENAME = "deck:ConnectorWindow";
 
 ConnectorWindow::ConnectorWindow()
@@ -16,7 +14,6 @@ ConnectorWindow::ConnectorWindow()
     , m_event_size_changed(false)
     , m_event_surface_dirty(false)
     , m_card(nullptr)
-    , m_hotspots(nullptr)
 {
 }
 
@@ -56,7 +53,12 @@ void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 	{
 		m_event_size_changed  = false;
 		m_event_surface_dirty = true;
-		emit_event(L, "on_resize");
+
+		int width;
+		int height;
+		SDL_GetWindowSize(m_window, &width, &height);
+
+		LuaHelpers::emit_event(L, 1, "on_resize", width, height);
 	}
 }
 
@@ -130,7 +132,7 @@ void ConnectorWindow::init_class_table(lua_State* L)
 
 void ConnectorWindow::init_instance_table(lua_State* L)
 {
-	m_hotspots = DeckRectangleList::push_new(L);
+	DeckRectangleList::push_new(L);
 	lua_setfield(L, -2, "hotspots");
 }
 
@@ -251,19 +253,15 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 		else
 			card = DeckCard::from_stack(L, 3);
 
-		m_card = card;
+		m_card                = card;
+		m_event_surface_dirty = true;
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	else if (key == "hotspots")
 	{
-		DeckRectangleList* rect_list;
+		if (lua_type(L, 3) != LUA_TNIL)
+			DeckRectangleList::from_stack(L, 3);
 
-		if (lua_type(L, 3) == LUA_TNIL)
-			rect_list = nullptr;
-		else
-			rect_list = DeckRectangleList::from_stack(L, 3);
-
-		m_hotspots = rect_list;
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	else if (key.starts_with("on_"))
@@ -311,20 +309,6 @@ bool ConnectorWindow::attempt_create_window(lua_State* L)
 	}
 
 	return m_window;
-}
-
-void ConnectorWindow::emit_event(lua_State* L, char const* func_name)
-{
-	lua_getfield(L, 1, func_name);
-	if (lua_type(L, -1) == LUA_TFUNCTION)
-	{
-		lua_pushvalue(L, 1);
-		LuaHelpers::pcall(L, 1, 0);
-	}
-	else
-	{
-		lua_pop(L, 1);
-	}
 }
 
 int ConnectorWindow::_lua_redraw(lua_State* L)
@@ -444,9 +428,9 @@ void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
 		lua_pushinteger(L, event.motion.y);
 
 		lua_getfield(L, 1, "hotspots");
-		if (DeckRectangleList* rect_list = DeckRectangleList::from_stack(L, -1, false); rect_list)
+		if (DeckRectangleList::from_stack(L, -1, false))
 		{
-			rect_list->push_any_contains(L, event.motion.x, event.motion.y);
+			DeckRectangleList::push_any_contains(L, event.motion.x, event.motion.y);
 			lua_replace(L, -2);
 		}
 		else
@@ -475,9 +459,9 @@ void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
 		lua_pushboolean(L, event.type == SDL_MOUSEBUTTONDOWN);
 
 		lua_getfield(L, 1, "hotspots");
-		if (DeckRectangleList* rect_list = DeckRectangleList::from_stack(L, -1, false); rect_list)
+		if (DeckRectangleList::from_stack(L, -1, false))
 		{
-			rect_list->push_any_contains(L, event.motion.x, event.motion.y);
+			DeckRectangleList::push_any_contains(L, event.motion.x, event.motion.y);
 			lua_replace(L, -2);
 		}
 		else

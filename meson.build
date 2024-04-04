@@ -12,7 +12,9 @@ buildflags = []
 feature_luajit = get_option('luajit')
 feature_test = get_option('test')
 feature_gnutls = get_option('gnutls')
+feature_vnc = get_option('vnc')
 
+# MIT license
 lua = dependency(
     'luajit',
     version: '>=2.1.0',
@@ -22,6 +24,7 @@ lua = dependency(
 if lua.found()
     buildflags += '-DHAVE_LUAJIT'
 else
+    # MIT license
     lua = dependency(
         'lua5.1',
         version: '>=5.1.5',
@@ -29,30 +32,35 @@ else
     )
 endif
 
+# zlib license
 sdl = dependency(
     'sdl2',
     disabler: false,
     required: true,
 )
 
+# zlib license
 sdl_image = dependency(
     'SDL2_image',
     disabler: false,
     required: true,
 )
 
+# zlib license
 sdl_net = dependency(
     'SDL2_net',
     disabler: false,
     required: true,
 )
 
+# zlib license
 sdl_ttf = dependency(
     'SDL2_ttf',
     disabler: false,
     required: true,
 )
 
+# LGPL-2.1 or later
 ssl = dependency(
     'gnutls',
     disabler: false,
@@ -63,6 +71,18 @@ if ssl.found()
     buildflags += '-DHAVE_GNUTLS'
 endif
 
+# GPL-2.0 or later
+vnc = dependency(
+    'libvncserver',
+    disabler: false,
+    required: feature_vnc,
+)
+
+if vnc.found()
+    buildflags += '-DHAVE_VNC'
+endif
+
+# MIT license
 catch2 = dependency(
     'catch2-with-main',
     version: '>=3.0.0',
@@ -75,6 +95,7 @@ summary(
         'luajit': feature_luajit,
         'test': feature_test,
         'gnutls': feature_gnutls,
+        'vnc': feature_vnc,
     },
     section: 'Features',
 )
@@ -87,6 +108,7 @@ summary(
         sdl_net.name(): sdl_net,
         sdl_ttf.name(): sdl_ttf,
         ssl.name(): ssl,
+        vnc.name(): vnc,
     },
     section: 'Runtime dependencies',
 )

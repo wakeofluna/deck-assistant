@@ -29,7 +29,6 @@ public:
 
 private:
 	bool attempt_create_window(lua_State* L);
-	void emit_event(lua_State* L, char const* func_name);
 
 	static int _lua_redraw(lua_State* L);
 
@@ -53,7 +52,6 @@ private:
 
 	// Deck-related
 	DeckCard* m_card;
-	DeckRectangleList* m_hotspots;
 };
 
 #endif // DECK_ASSISTANT_CONNECTOR_WINDOW_H

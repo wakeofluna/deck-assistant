@@ -18,6 +18,12 @@ void ConnectorBase<T>::init_class_table(lua_State* L)
 }
 
 template <typename T>
+void ConnectorBase<T>::finalize(lua_State* L)
+{
+	shutdown(L);
+}
+
+template <typename T>
 int ConnectorBase<T>::_lua_tick_inputs(lua_State* L)
 {
 	T* self           = LuaClass<T>::from_stack(L, 1);

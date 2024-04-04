@@ -3,6 +3,7 @@ sources = files(
     'builtins.cpp',
     'connector_base.cpp',
     'connector_elgato_streamdeck.cpp',
+    'connector_vnc.cpp',
     'connector_websocket.cpp',
     'connector_window.cpp',
     'deck_card.cpp',
@@ -35,7 +36,7 @@ test_sources = files(
 slib = static_library(
     'deck-assistant',
     sources: sources,
-    dependencies: [lua, sdl, sdl_image, sdl_net, sdl_ttf, ssl],
+    dependencies: [lua, sdl, sdl_image, sdl_net, sdl_ttf, ssl, vnc],
     cpp_args: ['-fno-exceptions'] + buildflags,
 )
 

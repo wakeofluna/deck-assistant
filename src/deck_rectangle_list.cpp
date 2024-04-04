@@ -10,16 +10,14 @@ DeckRectangleList::~DeckRectangleList() = default;
 
 void DeckRectangleList::push_any_contains(lua_State* L, int x, int y)
 {
-	DeckRectangleList* self = from_stack(L, -1, false);
+	DeckRectangleList const* self = from_stack(L, -1, false);
 	assert(self != nullptr && "DeckRectangleList::push_any_contains requires self on top of stack");
 
 	LuaHelpers::push_instance_table(L, -1);
 
-	auto iter = self->m_refs.cbegin();
-	auto end  = self->m_refs.cend();
-	for (; iter != end; ++iter)
+	for (int raw_idx : self->m_refs)
 	{
-		lua_rawgeti(L, -1, *iter);
+		lua_rawgeti(L, -1, raw_idx);
 		DeckRectangle* rect = DeckRectangle::from_stack(L, -1);
 		if (rect->contains(x, y))
 		{

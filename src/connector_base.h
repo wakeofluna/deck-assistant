@@ -15,6 +15,7 @@ public:
 
 	static bool const LUA_ENABLE_PUSH_THIS = true;
 	static void init_class_table(lua_State* L);
+	virtual void finalize(lua_State* L);
 
 protected:
 	static int _lua_tick_inputs(lua_State* L);
