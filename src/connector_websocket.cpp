@@ -53,7 +53,8 @@ Blob make_websocket_key_nonce()
 
 Blob make_websocket_accept_nonce(Blob const&)
 {
-	return Blob::from_base64("H3P/IhOIXOMiE9YV+WG5Jqe3G08=");
+	bool ok;
+	return Blob::from_base64("H3P/IhOIXOMiE9YV+WG5Jqe3G08=", ok);
 }
 
 #endif

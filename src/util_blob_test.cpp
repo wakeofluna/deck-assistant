@@ -88,6 +88,7 @@ TEST_CASE("Blob", "[util]")
 		REQUIRE_FALSE(ok);
 	}
 
+#ifdef HAVE_GNUTLS
 	SECTION("Blob sha1")
 	{
 		// Websocket RFC example
@@ -129,4 +130,5 @@ TEST_CASE("Blob", "[util]")
 		REQUIRE(auth.size() == 32);
 		REQUIRE(auth.to_base64() == obs_auth);
 	}
+#endif
 }

@@ -499,7 +499,8 @@ int DeckUtil::_lua_sha1(lua_State* L)
 	lua_pushlstring(L, (char const*)output.data(), output.size());
 	return 1;
 #else
-	luaL_error(L, "function not implemented due to lack of gnutls");
+	(void)input;
+	luaL_error(L, "sha1() function not implemented, recompile with gnutls support");
 	return 0;
 #endif
 }
@@ -515,7 +516,8 @@ int DeckUtil::_lua_sha256(lua_State* L)
 	lua_pushlstring(L, (char const*)output.data(), output.size());
 	return 1;
 #else
-	luaL_error(L, "function not implemented due to lack of gnutls");
+	(void)input;
+	luaL_error(L, "sha256() function not implemented, recompile with gnutls support");
 	return 0;
 #endif
 }
