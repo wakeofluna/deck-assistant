@@ -15,7 +15,6 @@
 #include "deck_util.h"
 
 template class LuaClass<ConnectorElgatoStreamDeck>;
-template class LuaClass<ConnectorVnc>;
 template class LuaClass<ConnectorWebsocket>;
 template class LuaClass<ConnectorWindow>;
 template class LuaClass<DeckCard>;
@@ -28,3 +27,7 @@ template class LuaClass<DeckModule>;
 template class LuaClass<DeckRectangle>;
 template class LuaClass<DeckRectangleList>;
 template class LuaClass<DeckUtil>;
+
+#ifdef HAVE_VNC
+template class LuaClass<ConnectorVnc>;
+#endif

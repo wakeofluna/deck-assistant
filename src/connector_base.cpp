@@ -5,6 +5,9 @@
 #include "connector_window.h"
 
 template class ConnectorBase<ConnectorElgatoStreamDeck>;
-template class ConnectorBase<ConnectorVnc>;
 template class ConnectorBase<ConnectorWebsocket>;
 template class ConnectorBase<ConnectorWindow>;
+
+#ifdef HAVE_VNC
+template class ConnectorBase<ConnectorVnc>;
+#endif

@@ -1,3 +1,5 @@
+#ifdef HAVE_VNC
+
 #include "connector_vnc.h"
 #include "deck_card.h"
 #include "deck_logger.h"
@@ -423,3 +425,5 @@ int ConnectorVnc::_lua_redraw(lua_State* L)
 	self->m_dirty_flags[DirtyCard] = true;
 	return 0;
 }
+
+#endif

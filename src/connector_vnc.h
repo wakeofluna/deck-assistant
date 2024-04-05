@@ -1,6 +1,8 @@
 #ifndef DECK_ASSISTANT_CONNECTOR_VNC_H
 #define DECK_ASSISTANT_CONNECTOR_VNC_H
 
+#ifdef HAVE_VNC
+
 #include "connector_base.h"
 #include <SDL.h>
 #include <array>
@@ -62,5 +64,7 @@ private:
 	std::vector<bool> m_dirty_flags;
 	DeckCard* m_card;
 };
+
+#endif
 
 #endif // DECK_ASSISTANT_CONNECTOR_VNC_H

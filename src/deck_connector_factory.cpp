@@ -15,18 +15,32 @@ int new_connector(lua_State* L)
 	return 1;
 }
 
+int no_connector(lua_State* L)
+{
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_error(L);
+	return 0;
+}
+
 } // namespace
 
 char const* DeckConnectorFactory::LUA_TYPENAME = "deck:ConnectorFactory";
 
 void DeckConnectorFactory::init_class_table(lua_State* L)
 {
+	(void)no_connector;
+
 	lua_pushcfunction(L, &new_connector<ConnectorElgatoStreamDeck>);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "ElgatoStreamDeck");
 	lua_setfield(L, -2, "StreamDeck");
 
+#ifdef HAVE_VNC
 	lua_pushcfunction(L, &new_connector<ConnectorVnc>);
+#else
+	lua_pushliteral(L, "Vnc connector not available, recompile with libvncserver support");
+	lua_pushcclosure(L, &no_connector, 1);
+#endif
 	lua_setfield(L, -2, "Vnc");
 
 	lua_pushcfunction(L, &new_connector<ConnectorWebsocket>);
