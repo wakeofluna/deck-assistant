@@ -28,8 +28,17 @@ else
     lua = dependency(
         'lua5.1',
         version: '>=5.1.5',
-        required: true,
+        required: false,
     )
+endif
+
+if not lua.found()
+    lua = dependency(
+        'luajit-2.1',
+        required: true,
+        allow_fallback: true,
+    )
+    buildflags += '-DHAVE_LUAJIT'
 endif
 
 # zlib license
@@ -37,6 +46,7 @@ sdl = dependency(
     'sdl2',
     disabler: false,
     required: true,
+    default_options: ['default_library=shared'],
 )
 
 # zlib license
@@ -44,6 +54,7 @@ sdl_image = dependency(
     'SDL2_image',
     disabler: false,
     required: true,
+    default_options: ['default_library=static'],
 )
 
 # zlib license
@@ -51,6 +62,7 @@ sdl_net = dependency(
     'SDL2_net',
     disabler: false,
     required: true,
+    default_options: ['default_library=static'],
 )
 
 # zlib license
@@ -58,6 +70,7 @@ sdl_ttf = dependency(
     'SDL2_ttf',
     disabler: false,
     required: true,
+    default_options: ['default_library=static'],
 )
 
 # LGPL-2.1 or later

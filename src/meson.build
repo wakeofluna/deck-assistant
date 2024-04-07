@@ -36,18 +36,26 @@ test_sources = files(
     'util_url_test.cpp',
 )
 
+if build_machine.system() != 'windows'
+    noexcept = ['-fno-exceptions']
+else
+    noexcept = []
+endif
+
+
 slib = static_library(
     'deck-assistant',
     sources: sources,
     dependencies: [lua, sdl, sdl_image, sdl_net, sdl_ttf, ssl, vnc],
-    cpp_args: ['-fno-exceptions'] + buildflags,
+    cpp_args: noexcept + buildflags,
 )
 
 executable(
     'deck',
     sources: ['main.cpp'],
     link_with: [slib],
-    cpp_args: ['-fno-exceptions'],
+    cpp_args: noexcept,
+    install: true,
 )
 
 tests = executable(

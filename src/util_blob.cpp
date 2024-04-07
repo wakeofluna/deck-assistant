@@ -356,7 +356,7 @@ Blob Blob::from_random(std::size_t len)
 #endif
 
 	std::random_device rand;
-	std::uniform_int_distribution<unsigned char> dist(0, 255);
+	std::uniform_int_distribution<unsigned int> dist(0, 255);
 
 	for (unsigned char* dst = blob.m_data; dst < blob.m_end; ++dst)
 		*dst = dist(rand);

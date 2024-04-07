@@ -106,7 +106,7 @@ std::vector<unsigned char> save_surface_as(SDL_Surface* surface, Format format)
 
 inline void pixel_blend(Uint8& value, Uint8 const target, double factor)
 {
-	value = std::clamp<int>(value + (target - value) * factor, 0, 255);
+	value = std::clamp<int>(value + int((target - value) * factor), 0, 255);
 }
 
 } // namespace

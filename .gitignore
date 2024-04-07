@@ -2,3 +2,8 @@
 /.cache/
 /.vscode/
 *.user
+
+/subprojects/*-*/
+/subprojects/packagecache/
+/subprojects/libpng.wrap
+/subprojects/zlib.wrap

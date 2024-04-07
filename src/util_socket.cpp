@@ -23,7 +23,6 @@
 #include <fcntl.h>
 #include <mutex>
 #include <string>
-#include <unistd.h>
 
 struct Socket::SharedState
 {

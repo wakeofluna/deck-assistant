@@ -46,7 +46,7 @@ char const* DeckConnectorFactory::LUA_TYPENAME = "deck:ConnectorFactory";
 
 void DeckConnectorFactory::init_class_table(lua_State* L)
 {
-	(void)no_connector;
+	(void)&no_connector;
 
 	lua_pushcfunction(L, &new_connector<ConnectorElgatoStreamDeck>);
 	lua_pushvalue(L, -1);
