@@ -27,7 +27,13 @@
 #include <cassert>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstring>
+
+#ifdef _WIN32
+#define WIN32
+#endif
+
 #include <rfb/rfb.h>
 
 namespace
@@ -42,14 +48,14 @@ enum DirtyFlags : unsigned char
 template <std::size_t N>
 inline std::string_view to_string_view(std::array<char, N> const& arr)
 {
-	char const* last = std::find(arr.cbegin(), arr.cend(), '\0');
+	char const* last = std::find(arr.data(), arr.data() + N, '\0');
 	return std::string_view(arr.data(), last);
 }
 
 template <std::size_t N>
 inline void assign_array(std::array<char, N>& arr, std::string_view const& value)
 {
-	std::size_t len = std::min(value.size(), N - 1);
+	std::size_t len = std::min<std::size_t>(value.size(), N - 1);
 	std::memcpy(arr.data(), value.data(), len);
 	arr[len] = 0;
 }
@@ -201,7 +207,7 @@ void ConnectorVnc::tick_outputs(lua_State* L)
 		if (m_bind_port)
 		{
 			portbuf.fill(0);
-			std::to_chars(portbuf.begin(), portbuf.end(), m_bind_port, 10);
+			std::to_chars(portbuf.data(), portbuf.data() + portbuf.size(), m_bind_port, 10);
 
 			argv[argc++] = "-rfbport";
 			argv[argc++] = portbuf.data();

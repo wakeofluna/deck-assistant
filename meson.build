@@ -84,6 +84,7 @@ ssl = dependency(
 if ssl.found()
     buildflags += '-DHAVE_GNUTLS'
 else
+    # Apache License v2
     ssl = dependency(
         'openssl',
         disabler: false,
@@ -101,6 +102,8 @@ vnc = dependency(
     'libvncserver',
     disabler: false,
     required: feature_vnc,
+    allow_fallback: true,
+    default_options: ['default_library=shared'],
 )
 
 if vnc.found()
