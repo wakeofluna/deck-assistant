@@ -20,6 +20,13 @@ option(
 )
 
 option(
+    'ssl',
+    type: 'feature',
+    value: 'auto',
+    description: 'Use OpenSSL when GnuTLS is not available',
+)
+
+option(
     'vnc',
     type: 'feature',
     value: 'auto',

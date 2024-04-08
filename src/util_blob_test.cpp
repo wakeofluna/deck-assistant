@@ -106,7 +106,7 @@ TEST_CASE("Blob", "[util]")
 		REQUIRE_FALSE(ok);
 	}
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	SECTION("Blob sha1")
 	{
 		// Websocket RFC example

@@ -21,8 +21,10 @@
 #include <cstring>
 #include <random>
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS)
 #include <gnutls/crypto.h>
+#elif (defined HAVE_OPENSSL)
+#include <openssl/sha.h>
 #endif
 
 namespace
@@ -239,7 +241,7 @@ std::string BlobView::to_base64() const
 	return result;
 }
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS)
 Blob BlobView::sha1() const
 {
 	Blob blob(20);
@@ -255,6 +257,26 @@ Blob BlobView::sha256() const
 	Blob blob(32);
 
 	gnutls_hash_fast(GNUTLS_DIG_SHA256, m_data, m_end - m_data, blob.data());
+	blob.m_end += 32;
+
+	return blob;
+}
+#elif (defined HAVE_OPENSSL)
+Blob BlobView::sha1() const
+{
+	Blob blob(20);
+
+	SHA1(m_data, m_end - m_data, blob.data());
+	blob.m_end += 20;
+
+	return blob;
+}
+
+Blob BlobView::sha256() const
+{
+	Blob blob(32);
+
+	SHA256(m_data, m_end - m_data, blob.data());
 	blob.m_end += 32;
 
 	return blob;

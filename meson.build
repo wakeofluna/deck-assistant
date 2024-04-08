@@ -12,6 +12,7 @@ buildflags = []
 feature_luajit = get_option('luajit')
 feature_test = get_option('test')
 feature_gnutls = get_option('gnutls')
+feature_ssl = get_option('ssl')
 feature_vnc = get_option('vnc')
 
 # MIT license
@@ -82,6 +83,17 @@ ssl = dependency(
 
 if ssl.found()
     buildflags += '-DHAVE_GNUTLS'
+else
+    ssl = dependency(
+        'openssl',
+        disabler: false,
+        required: feature_ssl,
+        allow_fallback: true,
+        default_options: ['default_library=shared'],
+    )
+    if ssl.found()
+        buildflags += '-DHAVE_OPENSSL'
+    endif
 endif
 
 # GPL-2.0 or later
@@ -108,6 +120,7 @@ summary(
         'luajit': feature_luajit,
         'test': feature_test,
         'gnutls': feature_gnutls,
+        'ssl': feature_ssl,
         'vnc': feature_vnc,
     },
     section: 'Features',

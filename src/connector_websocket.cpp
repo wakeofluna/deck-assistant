@@ -43,7 +43,7 @@ enum CloseReason : std::uint16_t
 	CLOSE_HandshakeFailed = 1015,
 };
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 
 Blob make_websocket_key_nonce()
 {

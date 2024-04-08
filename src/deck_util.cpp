@@ -510,7 +510,7 @@ int DeckUtil::_lua_sha1(lua_State* L)
 {
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	BlobView blob = input;
 	Blob output   = blob.sha1();
 
@@ -527,7 +527,7 @@ int DeckUtil::_lua_sha256(lua_State* L)
 {
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	BlobView blob = input;
 	Blob output   = blob.sha256();
 

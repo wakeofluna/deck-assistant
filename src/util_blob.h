@@ -41,7 +41,7 @@ public:
 	std::string to_hex() const;
 	std::string to_base64() const;
 
-#ifdef HAVE_GNUTLS
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	Blob sha1() const;
 	Blob sha256() const;
 #endif
