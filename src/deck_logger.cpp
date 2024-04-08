@@ -103,13 +103,14 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 		{
 			push_level(L, level);
 			lua_pushlstring(L, message.data(), message.size());
-			if (!LuaHelpers::pcall(L, 2, 0, false))
+			if (lua_pcall(L, 2, 0, 0) != LUA_OK)
 			{
 				std::string buf;
 				buf.reserve(256);
 				buf  = "Additionally, an error occured in the Logger on_message callback:\n";
-				buf += LuaHelpers::get_last_error_context().message;
+				buf += LuaHelpers::to_string_view(L, -1);
 				stream_output(std::cerr, Level::Error, buf);
+				lua_pop(L, 1);
 			}
 		}
 

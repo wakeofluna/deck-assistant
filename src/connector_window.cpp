@@ -284,7 +284,9 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 	}
 	else if (key.starts_with("on_"))
 	{
-		luaL_argcheck(L, (lua_type(L, 3) == LUA_TFUNCTION), 3, "event handlers must be functions");
+		if (lua_type(L, 3) != LUA_TNIL)
+			luaL_argcheck(L, (lua_type(L, 3) == LUA_TFUNCTION), 3, "event handlers must be functions");
+
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	else
@@ -457,7 +459,7 @@ void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
 			lua_pushnil(L);
 		}
 
-		LuaHelpers::pcall(L, 4, 0);
+		LuaHelpers::yieldable_call(L, 4);
 	}
 	else
 	{
@@ -488,7 +490,7 @@ void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
 			lua_pushnil(L);
 		}
 
-		LuaHelpers::pcall(L, 6, 0);
+		LuaHelpers::yieldable_call(L, 6);
 	}
 	else
 	{

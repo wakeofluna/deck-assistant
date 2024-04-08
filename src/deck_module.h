@@ -33,6 +33,8 @@ public:
 	static char const* LUA_TYPENAME;
 	static constexpr bool const LUA_IS_GLOBAL = true;
 
+	static lua_Integer get_clock(lua_State* L);
+
 	void tick_inputs(lua_State* L, lua_Integer clock);
 	void tick_outputs(lua_State* L);
 	void shutdown(lua_State* L);
@@ -52,6 +54,7 @@ private:
 	static int _lua_create_connector(lua_State* L);
 	static int _lua_create_font(lua_State* L);
 	static int _lua_create_image(lua_State* L);
+	static int _lua_create_promise_list(lua_State* L);
 	static int _lua_create_rectangle(lua_State* L);
 	static int _lua_create_rectangle_list(lua_State* L);
 	static int _lua_request_quit(lua_State* L);

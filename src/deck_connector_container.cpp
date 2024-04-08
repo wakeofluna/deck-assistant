@@ -17,7 +17,6 @@
  */
 
 #include "deck_connector_container.h"
-#include "deck_logger.h"
 #include "lua_helpers.h"
 #include <cassert>
 
@@ -45,12 +44,7 @@ void DeckConnectorContainer::for_each(lua_State* L, char const* function_name, i
 			for (int i = arg_start; i <= arg_end; ++i)
 				lua_pushvalue(L, i);
 
-			if (lua_pcall(L, nargs + 1, 0, 0) != LUA_OK)
-			{
-				DeckLogger::log_message(L, DeckLogger::Level::Error, "Error during Connector \"", LuaHelpers::to_string_view(L, -3), "\" function \"", function_name, "\": ", LuaHelpers::to_string_view(L, -1));
-				// Pop the error message
-				lua_pop(L, 1);
-			}
+			LuaHelpers::pcall(L, nargs + 1, 0);
 		}
 		else
 		{

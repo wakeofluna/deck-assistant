@@ -13,6 +13,8 @@ sources = files(
     'deck_font.cpp',
     'deck_logger.cpp',
     'deck_module.cpp',
+    'deck_promise.cpp',
+    'deck_promise_list.cpp',
     'deck_rectangle.cpp',
     'deck_rectangle_list.cpp',
     'deck_util.cpp',
@@ -22,6 +24,7 @@ sources = files(
     'util_colour.cpp',
     'util_socket.cpp',
     'util_url.cpp',
+
 )
 
 test_sources = files(

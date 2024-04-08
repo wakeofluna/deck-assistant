@@ -63,6 +63,7 @@ int push_dummy_value(lua_State* L, int tp);
 
 using TableCountMap = std::map<int, std::pair<int, int>>;
 TableCountMap count_elements_in_table(lua_State* L, int idx);
+bool get_and_pop_key_value_in_table(lua_State* L, int idx);
 
 std::vector<std::string_view> split_string(std::string_view const& text, char split_char = '\n');
 

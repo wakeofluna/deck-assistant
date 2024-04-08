@@ -20,6 +20,7 @@
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
+#include "deck_promise.h"
 #include "deck_util.h"
 #include "lua_helpers.h"
 #include <SDL.h>
@@ -102,8 +103,6 @@ Application::Application()
 	IMG_Init(0xffffffff);
 	TTF_Init();
 
-	LuaHelpers::install_error_context_handler(L);
-
 	DeckModule::push_new(L);
 	lua_setglobal(L, "deck");
 
@@ -176,6 +175,7 @@ int Application::run()
 		auto const real_clock        = std::chrono::steady_clock::now();
 		lua_Integer const clock_msec = std::chrono::duration_cast<std::chrono::milliseconds>(real_clock - start_time).count();
 
+		// Pump the system event loop
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
@@ -192,15 +192,21 @@ int Application::run()
 		}
 		assert(lua_gettop(L) == resettop && "Application event loop handling is not stack balanced");
 
+		// Run all connector input tick functions
 		deck_module->tick_inputs(L, clock_msec);
 		assert(lua_gettop(L) == resettop && "DeckModule tick_inputs function is not stack balanced");
 
+		// Check all yielded functions
+		process_yielded_functions(clock_msec);
+		assert(lua_gettop(L) == resettop && "Yield continuation calls is not stack balanced");
+
+		// Run script tick function
 		lua_getfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
 		lua_getfield(L, -1, "tick");
 		if (lua_type(L, -1) == LUA_TFUNCTION)
 		{
 			lua_pushinteger(L, clock_msec);
-			LuaHelpers::pcall(L, 1, 0);
+			LuaHelpers::yieldable_call(L, 1);
 		}
 		else
 		{
@@ -208,11 +214,14 @@ int Application::run()
 		}
 		lua_pop(L, 1);
 
+		// Run all connector output tick functions
 		deck_module->tick_outputs(L);
 		assert(lua_gettop(L) == resettop && "DeckModule tick_outputs function is not stack balanced");
 
+		// Make sure we regularly clean up
 		lua_gc(L, LUA_GCSTEP, 1);
 
+		// Wait for the next cycle. Skips ticks if we can't keep up.
 		auto const lower_limit = std::chrono::steady_clock::now();
 		while (clock_tick < lower_limit)
 			clock_tick += std::chrono::milliseconds(10);
@@ -236,4 +245,64 @@ void Application::install_function_overrides()
 	DeckLogger::push_global_instance(L);
 	lua_pushcclosure(L, &override_print, 1);
 	lua_setglobal(L, "print");
+}
+
+void Application::process_yielded_functions(long long clock)
+{
+	LuaHelpers::push_yielded_calls_table(L);
+
+	lua_pushnil(L);
+	while (lua_next(L, -2))
+	{
+		lua_State* thread = lua_tothread(L, -2);
+		assert(thread != nullptr && "Non-thread in yielded calls table");
+		assert(lua_status(thread) == LUA_YIELD && "Non-yielded thread in yielded calls table");
+
+		if (DeckPromise* promise = DeckPromise::from_stack(L, -1, false); promise)
+		{
+			if (!promise->check_wakeup(clock))
+			{
+				lua_pop(L, 1);
+				continue;
+			}
+
+			LuaHelpers::push_instance_table(L, -1);
+			lua_pushliteral(L, "value");
+			lua_rawget(L, -2);
+			lua_xmove(L, thread, 1);
+			lua_insert(thread, 1);
+			lua_pop(L, 1);
+		}
+
+		lua_pop(L, 1);
+
+		int result = lua_resume(thread, lua_gettop(thread));
+		if (result == LUA_YIELD)
+		{
+			lua_pushvalue(L, -1);
+			if (lua_isnoneornil(thread, 1))
+			{
+				lua_pushboolean(L, true);
+			}
+			else
+			{
+				lua_pushvalue(thread, 1);
+				lua_xmove(thread, L, 1);
+			}
+			lua_rawset(L, -4);
+		}
+		else
+		{
+			if (result != LUA_OK)
+			{
+				std::string_view message = LuaHelpers::to_string_view(thread, -1);
+				DeckLogger::log_message(thread, DeckLogger::Level::Error, message);
+			}
+			lua_pushvalue(L, -1);
+			lua_pushnil(L);
+			lua_rawset(L, -4);
+		}
+	}
+
+	lua_pop(L, 1);
 }

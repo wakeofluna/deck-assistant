@@ -28,6 +28,8 @@
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
+#include "deck_promise.h"
+#include "deck_promise_list.h"
 #include "deck_rectangle.h"
 #include "deck_rectangle_list.h"
 #include "deck_util.h"
@@ -42,6 +44,8 @@ template class LuaClass<DeckColour>;
 template class LuaClass<DeckFont>;
 template class LuaClass<DeckLogger>;
 template class LuaClass<DeckModule>;
+template class LuaClass<DeckPromise>;
+template class LuaClass<DeckPromiseList>;
 template class LuaClass<DeckRectangle>;
 template class LuaClass<DeckRectangleList>;
 template class LuaClass<DeckUtil>;

@@ -16,38 +16,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef DECK_ASSISTANT_APPLICATION_H
-#define DECK_ASSISTANT_APPLICATION_H
+#ifndef DECK_ASSISTANT_DECK_PROMISE_LIST_H
+#define DECK_ASSISTANT_DECK_PROMISE_LIST_H
 
-#include <memory_resource>
-#include <string>
-#include <string_view>
-#include <vector>
+#include "lua_class.h"
 
-typedef struct lua_State lua_State;
-
-class Application
+class DeckPromiseList : public LuaClass<DeckPromiseList>
 {
 public:
-	Application();
-	Application(Application const&) = delete;
-	Application(Application&&)      = delete;
-	~Application();
+	DeckPromiseList() noexcept;
 
-	Application& operator=(Application const&) = delete;
-	Application& operator=(Application&&)      = delete;
-
-	bool init(std::vector<std::string_view>&& args);
-	int run();
+	static char const* LUA_TYPENAME;
+	static void init_class_table(lua_State* L);
+	void init_instance_table(lua_State* L);
+	int index(lua_State* L, std::string_view const& key) const;
+	int newindex(lua_State* L);
+	int tostring(lua_State* L) const;
 
 private:
-	void install_function_overrides();
-	void process_yielded_functions(long long clock);
+	static int _lua_new_promise(lua_State* L);
+	static int _lua_fulfill_promise(lua_State* L);
 
 private:
-	lua_State* L;
-	std::pmr::memory_resource* m_mem_resource;
-	std::string m_deckfile_file_name;
+	int m_default_timeout;
 };
 
-#endif // DECK_ASSISTANT_APPLICATION_H
+#endif // DECK_ASSISTANT_DECK_PROMISE_LIST_H

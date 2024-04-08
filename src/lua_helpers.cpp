@@ -27,18 +27,9 @@ namespace
 
 constexpr char const k_weak_key_metatable_key[]   = "deck:WeakKeyMetatable";
 constexpr char const k_weak_value_metatable_key[] = "deck:WeakValueMetatable";
+constexpr char const k_yielded_calls_table_key[]  = "deck:YieldedCalls";
 
 LuaHelpers::ErrorContext g_last_error_context;
-
-int _lua_error_handler(lua_State* L)
-{
-	g_last_error_context.message = lua_tostring(L, 1);
-	LuaHelpers::lua_lineinfo(L, g_last_error_context.source_name, g_last_error_context.line);
-	lua_pop(L, 1);
-	return 0;
-}
-
-int _lua_error_index;
 
 } // namespace
 
@@ -88,6 +79,20 @@ void LuaHelpers::push_standard_weak_value_metatable(lua_State* L)
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, LUA_REGISTRYINDEX, k_weak_value_metatable_key);
+	}
+}
+
+void LuaHelpers::push_yielded_calls_table(lua_State* L)
+{
+	lua_getfield(L, LUA_REGISTRYINDEX, k_yielded_calls_table_key);
+	if (lua_type(L, -1) != LUA_TTABLE)
+	{
+		lua_pop(L, 1);
+
+		lua_createtable(L, 0, 8);
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, LUA_REGISTRYINDEX, k_yielded_calls_table_key);
 	}
 }
 
@@ -357,32 +362,77 @@ void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_n
 
 bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
 {
-	bool const use_lua_error_handler = lua_tocfunction(L, _lua_error_index) == _lua_error_handler;
-	int const funcidx                = lua_gettop(L) - nargs;
+	g_last_error_context.clear();
+	g_last_error_context.result = lua_pcall(L, nargs, nresults, 0);
+
+	if (g_last_error_context.result == LUA_OK)
+		return true;
+
+	g_last_error_context.message = LuaHelpers::to_string_view(L, -1);
+
+	if (log_error)
+		DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
+
+	lua_pop(L, 1);
+	return false;
+}
+
+bool LuaHelpers::yieldable_call(lua_State* L, int nargs, bool log_error)
+{
+	lua_State* thread = lua_newthread(L);
+	lua_checkstack(thread, 21 + nargs);
+	lua_insert(L, -(nargs + 2));
+	lua_xmove(L, thread, nargs + 1);
 
 	g_last_error_context.clear();
-	g_last_error_context.result = lua_pcall(L, nargs, nresults, use_lua_error_handler ? _lua_error_index : 0);
+	g_last_error_context.result = lua_resume(thread, nargs);
 
-	if (g_last_error_context.result != LUA_OK)
+	if (g_last_error_context.result == LUA_OK)
 	{
-		if (!use_lua_error_handler)
-			g_last_error_context.message = LuaHelpers::to_string_view(L, -1);
-
-		lua_settop(L, funcidx - 1);
-
-		if (log_error)
-			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
-
-		return false;
+		lua_pop(L, 1);
+		return true;
 	}
 
-	return true;
+	if (g_last_error_context.result == LUA_YIELD)
+	{
+		// Park the thread in a global table with its first yielded value as a sentinel
+		push_yielded_calls_table(L);
+		lua_insert(L, -2);
+
+		if (lua_isnoneornil(thread, 1))
+		{
+			lua_pushboolean(L, true);
+		}
+		else
+		{
+			lua_pushvalue(thread, 1);
+			lua_xmove(thread, L, 1);
+		}
+		lua_rawset(L, -3);
+
+		lua_pop(L, 1);
+		return true;
+	}
+
+	g_last_error_context.message = LuaHelpers::to_string_view(thread, -1);
+	LuaHelpers::lua_lineinfo(thread, g_last_error_context.source_name, g_last_error_context.line);
+
+	if (log_error)
+	{
+		if (g_last_error_context.line != -1 && g_last_error_context.message.find(g_last_error_context.source_name) == std::string::npos)
+			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.source_name, ':', g_last_error_context.line, ": ", g_last_error_context.message);
+		else
+			DeckLogger::log_message(L, DeckLogger::Level::Error, g_last_error_context.message);
+	}
+
+	lua_pop(L, 1);
+	return false;
 }
 
 bool LuaHelpers::lua_lineinfo(lua_State* L, std::string& short_src, int& currentline)
 {
 	lua_Debug ar;
-	int depth = 1;
+	int depth = 0;
 
 	while (lua_getstack(L, depth, &ar))
 	{
@@ -398,12 +448,6 @@ bool LuaHelpers::lua_lineinfo(lua_State* L, std::string& short_src, int& current
 	}
 
 	return false;
-}
-
-void LuaHelpers::install_error_context_handler(lua_State* L)
-{
-	lua_pushcfunction(L, &_lua_error_handler);
-	_lua_error_index = lua_gettop(L);
 }
 
 LuaHelpers::ErrorContext const& LuaHelpers::get_last_error_context()

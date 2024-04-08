@@ -518,8 +518,6 @@ value = foo(15)
 
 	SECTION("pcall")
 	{
-		LuaHelpers::install_error_context_handler(L);
-
 		SECTION("C-function that works correctly")
 		{
 			auto func = [](lua_State* L) -> int {
@@ -530,11 +528,7 @@ value = foo(15)
 
 			lua_pushcfunction(L, func);
 			lua_pushinteger(L, 9);
-			REQUIRE(LuaHelpers::pcall(L, 1, 1, false));
-
-			REQUIRE(lua_gettop(L) == 2);
-			REQUIRE(lua_tointeger(L, 2) == 11);
-			lua_pop(L, 1);
+			REQUIRE(LuaHelpers::pcall(L, 1, 0, false));
 		}
 
 		SECTION("C-function that throws a lua error")
@@ -547,7 +541,7 @@ value = foo(15)
 
 			lua_pushcfunction(L, func);
 			lua_pushnil(L);
-			REQUIRE(!LuaHelpers::pcall(L, 1, 1, false));
+			REQUIRE(!LuaHelpers::pcall(L, 1, 0, false));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.result == LUA_ERRRUN);
@@ -561,7 +555,7 @@ value = foo(15)
 			lua_createtable(L, 0, 0);
 			lua_pushinteger(L, 2);
 
-			REQUIRE(!LuaHelpers::pcall(L, 1, 2, false));
+			REQUIRE(!LuaHelpers::pcall(L, 1, 0, false));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.result == LUA_ERRRUN);
@@ -582,7 +576,7 @@ end
 )str";
 
 			REQUIRE(LuaHelpers::load_script_inline(L, "inline_error_chunk", script));
-			REQUIRE(lua_gettop(L) == 2);
+			REQUIRE(lua_gettop(L) == 1);
 
 			lua_getfenv(L, -1);
 			lua_insert(L, -2);
@@ -592,17 +586,80 @@ end
 			REQUIRE(lua_type(L, -1) == LUA_TFUNCTION);
 			lua_replace(L, -2);
 
-			REQUIRE(!LuaHelpers::pcall(L, 0, 1, false));
+			REQUIRE(!LuaHelpers::pcall(L, 0, 0, false));
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.result == LUA_ERRRUN);
 			REQUIRE(error.message.find("inline_error_chunk") != std::string::npos);
-			REQUIRE(error.source_name == "[string \"inline_error_chunk\"]");
-			REQUIRE(error.line == 2);
 		}
 
-		REQUIRE(lua_gettop(L) == 1);
-		REQUIRE(lua_iscfunction(L, 1));
+		REQUIRE(lua_gettop(L) == 0);
+	}
+
+	SECTION("yieldable_call")
+	{
+		lua_pushinteger(L, 0);
+		lua_setglobal(L, "trigger");
+
+		SECTION("Calling a C function that does not yield")
+		{
+			auto func = [](lua_State* L) -> int {
+				lua_Integer n = LuaHelpers::check_arg_int(L, 1);
+				lua_pushinteger(L, n + 2);
+				return 1;
+			};
+
+			lua_pushcfunction(L, func);
+			lua_setglobal(L, "func");
+
+			std::string_view const script = "trigger = func(5)\n";
+			REQUIRE(luaL_loadbuffer(L, script.data(), script.size(), "inline_chunk") == LUA_OK);
+
+			REQUIRE(LuaHelpers::yieldable_call(L, 0, false));
+			REQUIRE(lua_gettop(L) == 0);
+
+			lua_getglobal(L, "trigger");
+			REQUIRE(lua_tointeger(L, -1) == 7);
+
+			LuaHelpers::push_yielded_calls_table(L);
+			REQUIRE_FALSE(get_and_pop_key_value_in_table(L, -1));
+		}
+
+		SECTION("Calling and resuming a C function that yields")
+		{
+			auto func = [](lua_State* L) -> int {
+				lua_Integer n = LuaHelpers::check_arg_int(L, 1);
+				lua_pushinteger(L, n + 2);
+				return lua_yield(L, 1);
+			};
+
+			lua_pushcfunction(L, func);
+			lua_setglobal(L, "func");
+
+			std::string_view const script = "trigger = func(5)\n";
+			REQUIRE(luaL_loadbuffer(L, script.data(), script.size(), "inline_chunk") == LUA_OK);
+
+			REQUIRE(LuaHelpers::yieldable_call(L, 0, false));
+			REQUIRE(lua_gettop(L) == 0);
+
+			lua_getglobal(L, "trigger");
+			REQUIRE(lua_tointeger(L, -1) == 0);
+
+			LuaHelpers::push_yielded_calls_table(L);
+			REQUIRE(get_and_pop_key_value_in_table(L, -1));
+			REQUIRE_FALSE(get_and_pop_key_value_in_table(L, -3));
+
+			REQUIRE(lua_isthread(L, -2));
+			REQUIRE(lua_isnumber(L, -1));
+			REQUIRE(lua_tointeger(L, -1) == 7);
+
+			lua_State* thread = lua_tothread(L, -2);
+			REQUIRE(lua_gettop(thread) == 1);
+			REQUIRE(lua_resume(thread, 1) == LUA_OK);
+
+			lua_getglobal(L, "trigger");
+			REQUIRE(lua_tointeger(L, -1) == 7);
+		}
 	}
 
 	SECTION("debug_dump_stack")

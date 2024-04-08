@@ -469,7 +469,9 @@ int ConnectorWebsocket::newindex(lua_State* L, std::string_view const& key)
 	}
 	else if (key.starts_with("on_"))
 	{
-		luaL_argcheck(L, (lua_type(L, 3) == LUA_TFUNCTION), 3, "event handlers must be functions");
+		if (lua_type(L, 3) != LUA_TNIL)
+			luaL_argcheck(L, (lua_type(L, 3) == LUA_TFUNCTION), 3, "event handlers must be functions");
+
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	else

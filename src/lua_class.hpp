@@ -709,6 +709,7 @@ T* LuaClass<T>::push_global_instance(lua_State* L)
 	else
 	{
 		assert(false && "attempted to get global instance of non-global class");
+		return nullptr;
 	}
 }
 

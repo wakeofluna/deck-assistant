@@ -51,6 +51,7 @@ int absidx(lua_State* L, int idx);
 
 void push_standard_weak_key_metatable(lua_State* L);
 void push_standard_weak_value_metatable(lua_State* L);
+void push_yielded_calls_table(lua_State* L);
 
 void push_class_table(lua_State* L, int idx);
 void push_instance_table(lua_State* L, int idx);
@@ -74,8 +75,8 @@ bool load_script_inline(lua_State* L, char const* chunk_name, std::string_view c
 void assign_new_env_table(lua_State* L, int idx, char const* chunk_name);
 
 bool pcall(lua_State* L, int nargs, int nresults, bool log_error = true);
+bool yieldable_call(lua_State* L, int nargs, bool log_error = true);
 bool lua_lineinfo(lua_State* L, std::string& short_src, int& currentline);
-void install_error_context_handler(lua_State* L);
 ErrorContext const& get_last_error_context();
 
 void debug_dump_stack(std::ostream& stream, lua_State* L, char const* description = nullptr);
@@ -112,6 +113,11 @@ inline void push_argument(lua_State* L, int value)
 }
 
 inline void push_argument(lua_State* L, unsigned int value)
+{
+	lua_pushinteger(L, value);
+}
+
+inline void push_argument(lua_State* L, std::size_t value)
 {
 	lua_pushinteger(L, value);
 }
@@ -159,7 +165,7 @@ bool LuaHelpers::emit_event(lua_State* L, int idx, char const* function_name, AR
 		if constexpr (nargs > 0)
 			push_arguments(L, std::forward<ARGS>(args)...);
 
-		return LuaHelpers::pcall(L, 1 + nargs, 0);
+		return LuaHelpers::yieldable_call(L, 1 + nargs);
 	}
 	else
 	{

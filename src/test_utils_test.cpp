@@ -108,6 +108,23 @@ TableCountMap count_elements_in_table(lua_State* L, int idx)
 	return count_map;
 }
 
+bool get_and_pop_key_value_in_table(lua_State* L, int idx)
+{
+	idx = LuaHelpers::absidx(L, idx);
+
+	if (lua_type(L, idx) != LUA_TTABLE)
+		return false;
+
+	lua_pushnil(L);
+	if (lua_next(L, idx) == 0)
+		return false;
+
+	lua_pushvalue(L, -2);
+	lua_pushnil(L);
+	lua_settable(L, idx);
+	return true;
+}
+
 std::vector<std::string_view> split_string(std::string_view const& text, char split_char)
 {
 	std::vector<std::string_view> result;
