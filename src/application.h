@@ -26,6 +26,11 @@
 
 typedef struct lua_State lua_State;
 
+namespace LuaHelpers
+{
+enum class Trust : char;
+}
+
 class Application
 {
 public:
@@ -40,9 +45,12 @@ public:
 	bool init(std::vector<std::string_view>&& args);
 	int run();
 
+	static void build_environment_tables(lua_State* L);
+
 private:
-	void install_function_overrides();
-	void process_yielded_functions(long long clock);
+	static void install_function_overrides(lua_State* L);
+	static void build_environment_table(lua_State* L, LuaHelpers::Trust trust);
+	static void process_yielded_functions(lua_State* L, long long clock);
 
 private:
 	lua_State* L;

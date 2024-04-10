@@ -85,7 +85,46 @@ int override_print(lua_State* L)
 	DeckLogger* logger = DeckLogger::from_stack(L, -1);
 	lua_insert(L, 1);
 	return logger->call(L);
-};
+}
+
+int override_exit(lua_State* L)
+{
+	int exit_code = 0;
+	if (lua_type(L, 1) == LUA_TNUMBER)
+		exit_code = lua_tointeger(L, 1);
+
+	DeckModule* deck_module = DeckModule::push_global_instance(L);
+	deck_module->set_exit_requested(exit_code);
+
+	DeckLogger::lua_log_message(L, DeckLogger::Level::Info, "Application exit requested by script with code ", exit_code);
+
+	return 0;
+}
+
+int override_loadstring(lua_State* L)
+{
+	std::string_view script = LuaHelpers::check_arg_string(L, 1);
+	std::string_view name   = LuaHelpers::check_arg_string_or_none(L, 2);
+
+	int trust_level_max            = lua_tointeger(L, lua_upvalueindex(1));
+	int trust_level_wanted         = lua_tointeger(L, lua_upvalueindex(2));
+	LuaHelpers::Trust trust_max    = static_cast<LuaHelpers::Trust>(trust_level_max);
+	LuaHelpers::Trust trust_wanted = static_cast<LuaHelpers::Trust>(trust_level_wanted);
+
+	if (int(trust_wanted) > int(trust_max))
+	{
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "Script attempted to call loadstring with increased privileges");
+		trust_wanted = trust_max;
+	}
+
+	if (LuaHelpers::load_script_inline(L, name.empty() ? nullptr : name.data(), script, trust_wanted))
+		return 1;
+
+	// Restore the original error message
+	std::string_view error = LuaHelpers::get_last_error_context().message;
+	lua_pushlstring(L, error.data(), error.size());
+	return 1;
+}
 
 } // namespace
 
@@ -103,18 +142,7 @@ Application::Application()
 	IMG_Init(0xffffffff);
 	TTF_Init();
 
-	DeckModule::push_new(L);
-	lua_setglobal(L, "deck");
-
-	DeckLogger::push_new(L);
-	lua_setglobal(L, "logger");
-
-	DeckUtil::push_new(L);
-	lua_setglobal(L, "util");
-
-	DeckFont::insert_enum_values(L);
-
-	install_function_overrides();
+	build_environment_tables(L);
 }
 
 Application::~Application()
@@ -140,7 +168,7 @@ bool Application::init(std::vector<std::string_view>&& args)
 		file_name = args[1];
 	m_deckfile_file_name = file_name;
 
-	if (!LuaHelpers::load_script(L, m_deckfile_file_name.c_str()))
+	if (!LuaHelpers::load_script(L, m_deckfile_file_name.c_str(), LuaHelpers::Trust::Trusted))
 		return false;
 
 	// TODO add safe mode by removing some dangerous stdlib functions
@@ -197,7 +225,7 @@ int Application::run()
 		assert(lua_gettop(L) == resettop && "DeckModule tick_inputs function is not stack balanced");
 
 		// Check all yielded functions
-		process_yielded_functions(clock_msec);
+		process_yielded_functions(L, clock_msec);
 		assert(lua_gettop(L) == resettop && "Yield continuation calls is not stack balanced");
 
 		// Run script tick function
@@ -240,14 +268,181 @@ int Application::run()
 	return exit_code;
 }
 
-void Application::install_function_overrides()
+void Application::build_environment_tables(lua_State* L)
 {
-	DeckLogger::push_global_instance(L);
-	lua_pushcclosure(L, &override_print, 1);
-	lua_setglobal(L, "print");
+	int const oldtop  = lua_gettop(L);
+	int const oldtop1 = oldtop + 1;
+
+	install_function_overrides(L);
+
+	assert(lua_gettop(L) == oldtop && "Application Lua init is not stack balanced");
+
+	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Admin);
+	build_environment_table(L, LuaHelpers::Trust::Admin);
+	assert(lua_gettop(L) == oldtop1 && "Application Admin environment table build is not stack balanced");
+	lua_pop(L, 1);
+
+	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Trusted);
+	build_environment_table(L, LuaHelpers::Trust::Trusted);
+	assert(lua_gettop(L) == oldtop1 && "Application Trusted environment table build is not stack balanced");
+	lua_pop(L, 1);
+
+	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Untrusted);
+	build_environment_table(L, LuaHelpers::Trust::Untrusted);
+	assert(lua_gettop(L) == oldtop1 && "Application Untrusted environment table build is not stack balanced");
+	lua_pop(L, 1);
 }
 
-void Application::process_yielded_functions(long long clock)
+void Application::install_function_overrides(lua_State* L)
+{
+	DeckLogger::push_new(L);
+	lua_pushcclosure(L, &override_print, 1);
+	lua_setglobal(L, "print");
+
+	lua_getglobal(L, "os");
+	if (lua_type(L, -1) == LUA_TTABLE)
+	{
+		lua_pushcfunction(L, &override_exit);
+		lua_setfield(L, -2, "exit");
+	}
+	lua_pop(L, 1);
+}
+
+void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust)
+{
+	// Insert our API
+	DeckModule::push_new(L);
+	lua_setfield(L, -2, "deck");
+
+	DeckLogger::push_new(L);
+	lua_setfield(L, -2, "logger");
+
+	DeckUtil::push_new(L);
+	lua_setfield(L, -2, "util");
+
+	DeckFont::insert_enum_values(L);
+
+	char const* const untrusted_keys[] = {
+		// basic
+		"_VERSION",
+		"assert",
+		"error",
+		"ipairs",
+		"next",
+		"pairs",
+		"pcall",
+		"print",
+		"rawequal",
+		"select",
+		"tonumber",
+		"tostring",
+		"type",
+		"unpack",
+		"xpcall",
+	};
+
+	for (auto key : untrusted_keys)
+	{
+		lua_getglobal(L, key);
+		lua_setfield(L, -2, key);
+	}
+
+	// Deep copy the module tables
+	for (auto module : { "coroutine", "math", "string", "table" })
+	{
+		lua_createtable(L, 0, 32);
+		lua_getglobal(L, module);
+
+		if (lua_type(L, -1) == LUA_TTABLE)
+		{
+			LuaHelpers::copy_table_fields(L);
+			lua_setfield(L, -2, module);
+		}
+		else
+		{
+			lua_pop(L, 2);
+		}
+	}
+
+	// Only allow some fields from the OS module
+	lua_getglobal(L, "os");
+	if (lua_type(L, -1) == LUA_TTABLE)
+	{
+		lua_createtable(L, 0, 5);
+		for (auto key : { "clock", "date", "difftime", "exit", "time" })
+		{
+			lua_pushstring(L, key);
+			lua_pushvalue(L, -1);
+			lua_gettable(L, -4);
+			lua_settable(L, -3);
+		}
+		lua_setfield(L, -3, "os");
+	}
+	lua_pop(L, 1);
+
+	// Build script loader functions
+	lua_pushinteger(L, int(trust));
+	lua_pushinteger(L, int(LuaHelpers::Trust::Untrusted));
+	lua_pushcclosure(L, &override_loadstring, 2);
+	lua_setfield(L, -2, "loadstring");
+
+	lua_pushinteger(L, int(trust));
+	lua_pushinteger(L, int(LuaHelpers::Trust::Trusted));
+	lua_pushcclosure(L, &override_loadstring, 2);
+	lua_setfield(L, -2, "loadstring_trusted");
+
+	lua_pushinteger(L, int(trust));
+	lua_pushinteger(L, int(LuaHelpers::Trust::Admin));
+	lua_pushcclosure(L, &override_loadstring, 2);
+	lua_setfield(L, -2, "loadstring_admin");
+
+	// Functions for at-least Trusted
+
+	char const* const trusted_keys[] = {
+		// basic
+		"collectgarbage",
+		"getfenv",
+		"getmetatable",
+		"rawget",
+		"rawset",
+		"setfenv",
+		"setmetatable",
+	};
+
+	for (auto key : trusted_keys)
+	{
+		lua_getglobal(L, key);
+		lua_setfield(L, -2, key);
+	}
+
+	if (trust == LuaHelpers::Trust::Trusted)
+		return;
+
+	// Functions for at-least Admin
+
+	char const* const admin_keys[] = {
+		// basic
+		"module",
+		"require",
+	};
+
+	for (auto key : admin_keys)
+	{
+		lua_getglobal(L, key);
+		lua_setfield(L, -2, key);
+	}
+
+	// Modules are fully accessible instead of copies
+	for (auto module : { "coroutine", "debug", "io", "math", "os", "package", "string", "table" })
+	{
+		lua_getglobal(L, module);
+		lua_setfield(L, -2, module);
+	}
+
+	return;
+}
+
+void Application::process_yielded_functions(lua_State* L, long long clock)
 {
 	LuaHelpers::push_yielded_calls_table(L);
 

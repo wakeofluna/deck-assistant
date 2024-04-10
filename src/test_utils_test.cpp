@@ -17,6 +17,7 @@
  */
 
 #include "test_utils_test.h"
+#include "deck_logger.h"
 #include "lua_helpers.h"
 #include <cassert>
 #include <catch2/catch_test_macros.hpp>
@@ -44,6 +45,10 @@ lua_State* new_test_state()
 		full_message             += g_panic_msg;
 		FAIL(full_message);
 	}
+
+	// Disable logging by default
+	DeckLogger::override_min_level(DeckLogger::Level::Error);
+
 	return L;
 }
 

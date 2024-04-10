@@ -28,8 +28,41 @@ namespace
 constexpr char const k_weak_key_metatable_key[]   = "deck:WeakKeyMetatable";
 constexpr char const k_weak_value_metatable_key[] = "deck:WeakValueMetatable";
 constexpr char const k_yielded_calls_table_key[]  = "deck:YieldedCalls";
+constexpr char const k_untrusted_table_name[]     = "deck:EnvironmentUntrusted";
+constexpr char const k_trusted_table_name[]       = "deck:EnvironmentTrusted";
+constexpr char const k_admin_table_name[]         = "deck:EnvironmentAdmin";
 
 LuaHelpers::ErrorContext g_last_error_context;
+
+int _lua_upvalue_index(lua_State* L)
+{
+	// Special case for compatibility.. sortof..
+	if (lua_type(L, 2) == LUA_TSTRING)
+	{
+		std::string_view key = LuaHelpers::to_string_view(L, 2);
+		if (key == "_G")
+		{
+			lua_pushvalue(L, 1);
+			return 1;
+		}
+	}
+
+	for (int attempt = 1;; ++attempt)
+	{
+		lua_pushvalue(L, lua_upvalueindex(attempt));
+		if (lua_type(L, -1) != LUA_TTABLE)
+			break;
+
+		lua_pushvalue(L, 2);
+		lua_rawget(L, -2);
+		if (lua_type(L, -1) != LUA_TNIL)
+			return 1;
+
+		lua_pop(L, 2);
+	}
+
+	return 0;
+}
 
 } // namespace
 
@@ -93,6 +126,41 @@ void LuaHelpers::push_yielded_calls_table(lua_State* L)
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, LUA_REGISTRYINDEX, k_yielded_calls_table_key);
+	}
+}
+
+void LuaHelpers::push_global_environment_table(lua_State* L, Trust trust)
+{
+	char const* table_name = nullptr;
+
+	switch (trust)
+	{
+		case Trust::Untrusted:
+			table_name = k_untrusted_table_name;
+			break;
+		case Trust::Trusted:
+			table_name = k_trusted_table_name;
+			break;
+		case Trust::Admin:
+			table_name = k_admin_table_name;
+			break;
+	}
+
+	if (table_name == nullptr)
+	{
+		assert(false && "Invalid trust value while pushing global environment table");
+		lua_pushnil(L);
+	}
+	else
+	{
+		lua_getfield(L, LUA_REGISTRYINDEX, table_name);
+		if (lua_type(L, -1) != LUA_TTABLE)
+		{
+			lua_pop(L, 1);
+			lua_createtable(L, 0, 48);
+			lua_pushvalue(L, -1);
+			lua_setfield(L, LUA_REGISTRYINDEX, table_name);
+		}
 	}
 }
 
@@ -299,7 +367,7 @@ void LuaHelpers::copy_table_fields(lua_State* L)
 	lua_pop(L, 1);
 }
 
-bool LuaHelpers::load_script(lua_State* L, char const* file_name, bool log_error)
+bool LuaHelpers::load_script(lua_State* L, char const* file_name, Trust trust, bool log_error)
 {
 	g_last_error_context.clear();
 	g_last_error_context.result = luaL_loadfile(L, file_name);
@@ -315,18 +383,18 @@ bool LuaHelpers::load_script(lua_State* L, char const* file_name, bool log_error
 		return false;
 	}
 
-	assign_new_env_table(L, -1, file_name);
+	assign_new_env_table(L, -1, file_name, trust);
 	return true;
 }
 
-bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, bool log_error)
+bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, Trust trust, bool log_error)
 {
 	g_last_error_context.clear();
 	g_last_error_context.result = luaL_loadbuffer(L, script.data(), script.size(), chunk_name);
 	if (g_last_error_context.result != LUA_OK)
 	{
 		g_last_error_context.message     = lua_tostring(L, -1);
-		g_last_error_context.source_name = chunk_name;
+		g_last_error_context.source_name = chunk_name ? chunk_name : "inline";
 		lua_pop(L, 1);
 
 		if (log_error)
@@ -335,29 +403,84 @@ bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::s
 		return false;
 	}
 
-	assign_new_env_table(L, -1, chunk_name);
+	assign_new_env_table(L, -1, chunk_name, trust);
 	return true;
 }
 
-void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_name)
+void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_name, Trust trust)
 {
 	idx = absidx(L, idx);
 	assert(lua_isfunction(L, idx));
 
-	// Create a new ENV table for the new chunk
-	lua_createtable(L, 0, 0);
-	// Create a metatable that indexes into the original ENV table
-	lua_createtable(L, 0, 3);
+	// Create the new ENV table
+	lua_createtable(L, 0, 16);
+
+	// Create the metatable
+	lua_createtable(L, 0, chunk_name ? 3 : 2);
 	lua_pushboolean(L, true);
 	lua_setfield(L, -2, "__metatable");
+
+	if (chunk_name)
+	{
+		lua_pushstring(L, chunk_name);
+		lua_setfield(L, -2, "__name");
+	}
+
+	// Build the upvalues for the indexing function
+
+	// Examine the old ENV table
 	lua_getfenv(L, idx);
-	lua_setfield(L, -2, "__index");
-	lua_pushstring(L, chunk_name);
-	lua_setfield(L, -2, "__name");
-	// Set the metatable on the new ENV table
+	if (!lua_getmetatable(L, -1))
+	{
+		lua_pushnil(L);
+		lua_pushnil(L);
+	}
+	else
+	{
+		lua_getfield(L, -1, "__index");
+	}
+
+	if (lua_tocfunction(L, -1) == &_lua_upvalue_index)
+	{
+		int const funcindex = lua_gettop(L);
+
+		// We are building further on a previously protected ENV
+		// Start by indexing into the old ENV table
+		lua_getfenv(L, idx);
+
+		// Then get all upvalues from the old ENV table for ourselves
+		int nr_tables;
+		for (nr_tables = 1;; ++nr_tables)
+		{
+			lua_getupvalue(L, funcindex, nr_tables);
+			if (lua_isnil(L, -1))
+			{
+				lua_pop(L, 1);
+				break;
+			}
+		}
+
+		// Modify the trust table to what we want
+		lua_pop(L, 1);
+		push_global_environment_table(L, trust);
+
+		lua_pushcclosure(L, &_lua_upvalue_index, nr_tables);
+	}
+	else
+	{
+		// This is a new protected ENV, no inheritance
+		push_global_environment_table(L, trust);
+		lua_pushcclosure(L, &_lua_upvalue_index, 1);
+	}
+
+	lua_setfield(L, -5, "__index");
+	lua_pop(L, 3);
+
+	// Assign the metatable to the new ENV table
 	lua_setmetatable(L, -2);
+
 	// Assign the new ENV table to the function
-	lua_setfenv(L, -2);
+	lua_setfenv(L, idx);
 }
 
 bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
@@ -497,7 +620,6 @@ void LuaHelpers::debug_dump_table(std::ostream& stream, lua_State* L, int idx, b
 		stream << key << " : " << value << std::endl;
 		lua_pop(L, 3);
 	}
-	lua_pop(L, 1);
 }
 
 void LuaHelpers::debug_dump_table(lua_State* L, int idx, bool recursive, char const* description)

@@ -42,6 +42,9 @@ public:
 
 	DeckLogger();
 
+	// For testing
+	static void override_min_level(Level level);
+
 	static void log_message(lua_State* L, Level level, std::string_view const& message);
 
 	template <typename T, typename... ARGS>

@@ -25,7 +25,6 @@ class DeckUtil : public LuaClass<DeckUtil>
 {
 public:
 	static char const* LUA_TYPENAME;
-	static constexpr bool const LUA_IS_GLOBAL = true;
 
 	static void init_class_table(lua_State* L);
 	int newindex(lua_State* L);

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "application.h"
 #include "lua_class.h"
 #include "lua_helpers.h"
 #include "test_utils_test.h"
@@ -72,6 +73,56 @@ public:
 };
 
 char const* TestClass2::LUA_TYPENAME = "TestClass2Type";
+
+LuaHelpers::Trust determine_fenv_trust_level(lua_State* L, int idx, char const* subfunction)
+{
+	if (lua_type(L, idx) != LUA_TFUNCTION)
+		return LuaHelpers::Trust(-1);
+
+	lua_getfenv(L, idx);
+
+	if (subfunction)
+	{
+		lua_getfield(L, -1, subfunction);
+		if (lua_type(L, -1) != LUA_TFUNCTION)
+			return LuaHelpers::Trust(-1);
+		lua_getfenv(L, -1);
+		lua_replace(L, -3);
+		lua_pop(L, 1);
+	}
+
+	lua_getfield(L, -1, "loadstring_admin");
+
+	if (!lua_tocfunction(L, -1))
+		return LuaHelpers::Trust(-1);
+
+	lua_getupvalue(L, -1, 1);
+	lua_getupvalue(L, -2, 2);
+	int trust_level_max    = lua_tointeger(L, -2);
+	int trust_level_wanted = lua_tointeger(L, -1);
+
+	if (trust_level_wanted != int(LuaHelpers::Trust::Admin))
+		return LuaHelpers::Trust(-1);
+
+	lua_pop(L, 4);
+	return static_cast<LuaHelpers::Trust>(trust_level_max);
+}
+
+bool load_script_trust_tester(lua_State* L, LuaHelpers::Trust trust)
+{
+	std::string_view const script = R"str(
+tpl = "return a + 2"
+untrusted = loadstring(tpl, "ls1")
+trusted = loadstring_trusted(tpl, "ls2")
+admin = loadstring_admin(tpl, "ls3")
+)str";
+
+	if (!LuaHelpers::load_script_inline(L, "inline_test_chunk", script, trust, false))
+		return false;
+
+	lua_pushvalue(L, 1);
+	return (lua_pcall(L, 0, 0, 0) == LUA_OK);
+}
 
 } // namespace lua_helpers_test
 
@@ -484,7 +535,7 @@ end
 value = foo(15)
 )str";
 
-			REQUIRE(LuaHelpers::load_script_inline(L, "inline_test_chunk", script));
+			REQUIRE(LuaHelpers::load_script_inline(L, "inline_test_chunk", script, LuaHelpers::Trust::Untrusted, false));
 			REQUIRE(lua_gettop(L) == 1);
 
 			lua_pushvalue(L, 1);
@@ -507,12 +558,45 @@ value = foo(15)
 		{
 			std::string_view const script = "a = 1\nb = 2\nc = 3 = 4\nd = 5";
 
-			REQUIRE(!LuaHelpers::load_script_inline(L, "inline_test_chunk", script, false));
+			REQUIRE(!LuaHelpers::load_script_inline(L, "inline_test_chunk", script, LuaHelpers::Trust::Untrusted, false));
 			REQUIRE(lua_gettop(L) == 0);
 
 			LuaHelpers::ErrorContext const& error = LuaHelpers::get_last_error_context();
 			REQUIRE(error.message.find("inline_test_chunk") != std::string::npos);
 			REQUIRE(error.message.find(":3:") != std::string::npos);
+		}
+
+		SECTION("Untrusted scripts")
+		{
+			Application::build_environment_tables(L);
+
+			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Untrusted));
+			REQUIRE(determine_fenv_trust_level(L, -1, nullptr) == LuaHelpers::Trust::Untrusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "untrusted") == LuaHelpers::Trust::Untrusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "trusted") == LuaHelpers::Trust::Untrusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "admin") == LuaHelpers::Trust::Untrusted);
+		}
+
+		SECTION("Trusted scripts")
+		{
+			Application::build_environment_tables(L);
+
+			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Trusted));
+			REQUIRE(determine_fenv_trust_level(L, -1, nullptr) == LuaHelpers::Trust::Trusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "untrusted") == LuaHelpers::Trust::Untrusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "trusted") == LuaHelpers::Trust::Trusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "admin") == LuaHelpers::Trust::Trusted);
+		}
+
+		SECTION("Admin scripts")
+		{
+			Application::build_environment_tables(L);
+
+			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Admin));
+			REQUIRE(determine_fenv_trust_level(L, -1, nullptr) == LuaHelpers::Trust::Admin);
+			REQUIRE(determine_fenv_trust_level(L, -1, "untrusted") == LuaHelpers::Trust::Untrusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "trusted") == LuaHelpers::Trust::Trusted);
+			REQUIRE(determine_fenv_trust_level(L, -1, "admin") == LuaHelpers::Trust::Admin);
 		}
 	}
 
@@ -575,7 +659,7 @@ function foo(a)
 end
 )str";
 
-			REQUIRE(LuaHelpers::load_script_inline(L, "inline_error_chunk", script));
+			REQUIRE(LuaHelpers::load_script_inline(L, "inline_error_chunk", script, LuaHelpers::Trust::Untrusted, false));
 			REQUIRE(lua_gettop(L) == 1);
 
 			lua_getfenv(L, -1);

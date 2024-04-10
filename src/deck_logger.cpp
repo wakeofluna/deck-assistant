@@ -78,6 +78,11 @@ DeckLogger::DeckLogger()
 {
 }
 
+void DeckLogger::override_min_level(Level level)
+{
+	m_min_level = level;
+}
+
 void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message)
 {
 	if (message.empty())
