@@ -15,6 +15,12 @@ feature_gnutls = get_option('gnutls')
 feature_ssl = get_option('ssl')
 feature_vnc = get_option('vnc')
 
+if host_machine.system() == 'windows'
+    do_fallbacks = true
+else
+    do_fallbacks = false
+endif
+
 # MIT license
 lua = dependency(
     'luajit',
@@ -37,7 +43,7 @@ if not lua.found()
     lua = dependency(
         'luajit-2.1',
         required: true,
-        allow_fallback: true,
+        allow_fallback: do_fallbacks,
     )
     buildflags += '-DHAVE_LUAJIT'
 endif
@@ -47,6 +53,7 @@ sdl = dependency(
     'sdl2',
     disabler: false,
     required: true,
+    allow_fallback: do_fallbacks,
     default_options: ['default_library=shared'],
 )
 
@@ -55,6 +62,7 @@ sdl_image = dependency(
     'SDL2_image',
     disabler: false,
     required: true,
+    allow_fallback: do_fallbacks,
     default_options: ['default_library=static'],
 )
 
@@ -63,6 +71,7 @@ sdl_net = dependency(
     'SDL2_net',
     disabler: false,
     required: true,
+    allow_fallback: do_fallbacks,
     default_options: ['default_library=static'],
 )
 
@@ -71,6 +80,7 @@ sdl_ttf = dependency(
     'SDL2_ttf',
     disabler: false,
     required: true,
+    allow_fallback: do_fallbacks,
     default_options: ['default_library=static'],
 )
 
@@ -89,7 +99,7 @@ else
         'openssl',
         disabler: false,
         required: feature_ssl,
-        allow_fallback: true,
+        allow_fallback: do_fallbacks,
         default_options: ['default_library=shared'],
     )
     if ssl.found()
@@ -102,7 +112,7 @@ vnc = dependency(
     'libvncserver',
     disabler: false,
     required: feature_vnc,
-    allow_fallback: true,
+    allow_fallback: do_fallbacks,
     default_options: ['default_library=shared'],
 )
 
@@ -116,6 +126,7 @@ catch2 = dependency(
     version: '>=3.0.0',
     disabler: true,
     required: feature_test,
+    allow_fallback: do_fallbacks,
 )
 
 summary(
