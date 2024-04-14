@@ -24,6 +24,8 @@
 #include <iosfwd>
 #include <sstream>
 #include <string>
+#include <cwchar>
+#include <vector>
 
 class DeckLogger : public LuaClass<DeckLogger>
 {
@@ -65,6 +67,9 @@ private:
 	template <typename T, typename... ARGS>
 	static inline void _string_stream(std::stringstream& sstream, T value, ARGS... args);
 
+	template <typename... ARGS>
+	static inline void _string_stream(std::stringstream& sstream, wchar_t const* value, ARGS... args);
+
 private:
 	mutable bool m_block_logs;
 	static Level m_min_level;
@@ -74,6 +79,21 @@ template <typename T, typename... ARGS>
 inline void DeckLogger::_string_stream(std::stringstream& sstream, T value, ARGS... args)
 {
 	sstream << value;
+	if constexpr (sizeof...(args) > 0)
+		_string_stream(sstream, std::forward<ARGS>(args)...);
+}
+
+template <typename... ARGS>
+inline void DeckLogger::_string_stream(std::stringstream& sstream, wchar_t const* value, ARGS... args)
+{
+	std::mbstate_t state = std::mbstate_t();
+	std::size_t len = 1 + std::wcsrtombs(nullptr, &value, 0, &state);
+	std::vector<char> mbstr(len);
+	std::size_t size = std::wcsrtombs(&mbstr[0], &value, mbstr.size(), &state);
+
+	if (size != std::size_t(-1))
+		sstream.write(mbstr.data(), size);
+
 	if constexpr (sizeof...(args) > 0)
 		_string_stream(sstream, std::forward<ARGS>(args)...);
 }

@@ -22,9 +22,9 @@ sources = files(
     'lua_helpers.cpp',
     'util_blob.cpp',
     'util_colour.cpp',
+    'util_paths.cpp',
     'util_socket.cpp',
     'util_url.cpp',
-
 )
 
 test_sources = files(
