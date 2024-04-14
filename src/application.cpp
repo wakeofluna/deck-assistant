@@ -122,8 +122,41 @@ int override_loadstring(lua_State* L)
 
 	// Restore the original error message
 	std::string_view error = LuaHelpers::get_last_error_context().message;
+	lua_pushnil(L);
 	lua_pushlstring(L, error.data(), error.size());
-	return 1;
+	return 2;
+}
+
+int override_loadfile(lua_State* L)
+{
+	std::string_view name = LuaHelpers::check_arg_string(L, 1);
+
+	int trust_level_max            = lua_tointeger(L, lua_upvalueindex(1));
+	int trust_level_wanted         = lua_tointeger(L, lua_upvalueindex(2));
+	LuaHelpers::Trust trust_max    = static_cast<LuaHelpers::Trust>(trust_level_max);
+	LuaHelpers::Trust trust_wanted = static_cast<LuaHelpers::Trust>(trust_level_wanted);
+
+	if (int(trust_wanted) > int(trust_max))
+	{
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "Script attempted to call loadfile with increased privileges");
+		trust_wanted = trust_max;
+	}
+
+	// TODO resolve absolute path
+
+	if (trust_max != LuaHelpers::Trust::Admin)
+	{
+		// TODO check sandbox
+	}
+
+	if (LuaHelpers::load_script(L, name.empty() ? nullptr : name.data(), trust_wanted))
+		return 1;
+
+	// Restore the original error message
+	std::string_view error = LuaHelpers::get_last_error_context().message;
+	lua_pushnil(L);
+	lua_pushlstring(L, error.data(), error.size());
+	return 2;
 }
 
 } // namespace
@@ -230,16 +263,7 @@ int Application::run()
 
 		// Run script tick function
 		lua_getfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
-		lua_getfield(L, -1, "tick");
-		if (lua_type(L, -1) == LUA_TFUNCTION)
-		{
-			lua_pushinteger(L, clock_msec);
-			LuaHelpers::yieldable_call(L, 1);
-		}
-		else
-		{
-			lua_pop(L, 1);
-		}
+		LuaHelpers::emit_event(L, -1, "tick", clock_msec);
 		lua_pop(L, 1);
 
 		// Run all connector output tick functions
@@ -395,6 +419,24 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust)
 	lua_pushinteger(L, int(LuaHelpers::Trust::Admin));
 	lua_pushcclosure(L, &override_loadstring, 2);
 	lua_setfield(L, -2, "loadstring_admin");
+
+	lua_pushinteger(L, int(trust));
+	lua_pushinteger(L, int(LuaHelpers::Trust::Untrusted));
+	lua_pushcclosure(L, &override_loadfile, 2);
+	lua_setfield(L, -2, "loadfile");
+
+	lua_pushinteger(L, int(trust));
+	lua_pushinteger(L, int(LuaHelpers::Trust::Trusted));
+	lua_pushcclosure(L, &override_loadfile, 2);
+	lua_setfield(L, -2, "loadfile_trusted");
+
+	lua_pushinteger(L, int(trust));
+	lua_pushinteger(L, int(LuaHelpers::Trust::Admin));
+	lua_pushcclosure(L, &override_loadfile, 2);
+	lua_setfield(L, -2, "loadfile_admin");
+
+	if (trust == LuaHelpers::Trust::Untrusted)
+		return;
 
 	// Functions for at-least Trusted
 

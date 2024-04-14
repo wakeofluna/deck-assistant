@@ -125,12 +125,27 @@ inline void push_argument(lua_State* L, int value)
 	lua_pushinteger(L, value);
 }
 
+inline void push_argument(lua_State* L, long value)
+{
+	lua_pushinteger(L, value);
+}
+
+inline void push_argument(lua_State* L, long long value)
+{
+	lua_pushinteger(L, value);
+}
+
 inline void push_argument(lua_State* L, unsigned int value)
 {
 	lua_pushinteger(L, value);
 }
 
-inline void push_argument(lua_State* L, std::size_t value)
+inline void push_argument(lua_State* L, unsigned long value)
+{
+	lua_pushinteger(L, value);
+}
+
+inline void push_argument(lua_State* L, unsigned long long value)
 {
 	lua_pushinteger(L, value);
 }
@@ -172,13 +187,15 @@ bool LuaHelpers::emit_event(lua_State* L, int idx, char const* function_name, AR
 	lua_getfield(L, idx, function_name);
 	if (lua_type(L, -1) == LUA_TFUNCTION)
 	{
-		lua_pushvalue(L, idx);
+		bool const is_userdata = lua_isuserdata(L, idx);
+		if (is_userdata)
+			lua_pushvalue(L, idx);
 
 		constexpr int const nargs = sizeof...(args);
 		if constexpr (nargs > 0)
 			push_arguments(L, std::forward<ARGS>(args)...);
 
-		return LuaHelpers::yieldable_call(L, 1 + nargs);
+		return LuaHelpers::yieldable_call(L, (is_userdata ? 1 : 0) + nargs);
 	}
 	else
 	{
