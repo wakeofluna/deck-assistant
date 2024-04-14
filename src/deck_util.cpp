@@ -83,7 +83,7 @@ void convert_to_json(lua_State* L, int idx, std::ostream& stream, bool pretty, i
 				std::size_t offset = 0;
 				while (offset < value.size())
 				{
-					std::size_t next = value.find_first_of("\\\"", offset);
+					std::size_t next = value.find_first_of("\"\\/\b\f\n\r\t", offset);
 					if (next == std::string_view::npos)
 						break;
 
@@ -91,7 +91,29 @@ void convert_to_json(lua_State* L, int idx, std::ostream& stream, bool pretty, i
 						stream << value.substr(offset, next - offset);
 
 					stream << '\\';
-					stream << value[next];
+
+					char const v = value[next];
+					switch (v)
+					{
+						case '\b':
+							stream << 'b';
+							break;
+						case '\f':
+							stream << 'f';
+							break;
+						case '\n':
+							stream << 'n';
+							break;
+						case '\r':
+							stream << 'r';
+							break;
+						case '\t':
+							stream << 't';
+							break;
+						default:
+							stream << v;
+							break;
+					}
 					offset = next + 1;
 				}
 
@@ -314,14 +336,34 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 
 			++offset;
 
-			if (input[offset] == '"')
-				luaL_addchar(&buf, '"');
-			else if (input[offset] == '\\')
-				luaL_addchar(&buf, '\\');
-			else if (input[offset] == 'n')
-				luaL_addchar(&buf, '\n');
-			else
-				luaL_addlstring(&buf, input.data() + offset - 1, 2);
+			char const v = input[offset];
+			switch (v)
+			{
+				case '"':
+				case '\\':
+				case '/':
+					luaL_addchar(&buf, v);
+					break;
+				case 'b':
+					luaL_addchar(&buf, '\b');
+					break;
+				case 'f':
+					luaL_addchar(&buf, '\f');
+					break;
+				case 'n':
+					luaL_addchar(&buf, '\n');
+					break;
+				case 'r':
+					luaL_addchar(&buf, '\r');
+					break;
+				case 't':
+					luaL_addchar(&buf, '\t');
+					break;
+				default:
+					luaL_addchar(&buf, '\\');
+					luaL_addchar(&buf, v);
+					break;
+			}
 
 			++offset;
 		}
