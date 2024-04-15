@@ -17,7 +17,6 @@
  */
 
 #include "util_paths.h"
-#include <cassert>
 #include <cstdlib>
 
 #ifdef _WIN32

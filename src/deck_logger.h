@@ -21,10 +21,10 @@
 
 #include "lua_class.h"
 #include "lua_helpers.h"
+#include <cwchar>
 #include <iosfwd>
 #include <sstream>
 #include <string>
-#include <cwchar>
 #include <vector>
 
 class DeckLogger : public LuaClass<DeckLogger>
@@ -87,7 +87,7 @@ template <typename... ARGS>
 inline void DeckLogger::_string_stream(std::stringstream& sstream, wchar_t const* value, ARGS... args)
 {
 	std::mbstate_t state = std::mbstate_t();
-	std::size_t len = 1 + std::wcsrtombs(nullptr, &value, 0, &state);
+	std::size_t len      = 1 + std::wcsrtombs(nullptr, &value, 0, &state);
 	std::vector<char> mbstr(len);
 	std::size_t size = std::wcsrtombs(&mbstr[0], &value, mbstr.size(), &state);
 

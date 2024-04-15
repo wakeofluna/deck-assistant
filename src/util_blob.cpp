@@ -204,7 +204,7 @@ std::string BlobView::to_base64() const
 
 	for (std::size_t i = 0; i < len;)
 	{
-		const std::size_t remaining = len - i;
+		std::size_t const remaining = len - i;
 
 		unsigned char const ch1 = m_data[i];
 		++i;

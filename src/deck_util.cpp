@@ -20,7 +20,6 @@
 #include "lua_helpers.h"
 #include "util_blob.h"
 #include <algorithm>
-#include <cassert>
 #include <charconv>
 #include <iostream>
 #include <sstream>
