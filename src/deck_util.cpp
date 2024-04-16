@@ -416,6 +416,11 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 
 char const* DeckUtil::LUA_TYPENAME = "deck:DeckUtil";
 
+DeckUtil::DeckUtil(LuaHelpers::Trust trust)
+    : m_trust(trust)
+{
+}
+
 void DeckUtil::init_class_table(lua_State* L)
 {
 	lua_pushcfunction(L, &_lua_from_base64);
@@ -444,6 +449,23 @@ void DeckUtil::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_random_bytes);
 	lua_setfield(L, -2, "random_bytes");
+}
+
+void DeckUtil::init_instance_table(lua_State* L)
+{
+	switch (m_trust)
+	{
+		case LuaHelpers::Trust::Trusted:
+			lua_pushliteral(L, "Trusted");
+			break;
+		case LuaHelpers::Trust::Untrusted:
+			lua_pushliteral(L, "Untrusted");
+			break;
+		case LuaHelpers::Trust::Admin:
+			lua_pushliteral(L, "Admin");
+			break;
+	}
+	lua_setfield(L, -2, "trust");
 }
 
 int DeckUtil::newindex(lua_State* L)

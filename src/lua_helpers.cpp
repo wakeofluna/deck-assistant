@@ -19,6 +19,7 @@
 #include "lua_helpers.h"
 #include "deck_logger.h"
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -62,6 +63,32 @@ int _lua_upvalue_index(lua_State* L)
 	}
 
 	return 0;
+}
+
+struct FileReaderContext
+{
+	std::ifstream fp;
+	std::vector<char> buf;
+};
+
+char const* _lua_file_reader(lua_State* L, void* data, std::size_t* size)
+{
+	FileReaderContext* context = reinterpret_cast<FileReaderContext*>(data);
+
+	if (context->fp.good())
+	{
+		if (context->buf.empty())
+			context->buf.assign(4096, 0);
+
+		context->fp.read(context->buf.data(), context->buf.size());
+		if (std::streamsize count = context->fp.gcount(); count > 0)
+		{
+			*size = count;
+			return context->buf.data();
+		}
+	}
+
+	return nullptr;
 }
 
 } // namespace
@@ -367,14 +394,33 @@ void LuaHelpers::copy_table_fields(lua_State* L)
 	lua_pop(L, 1);
 }
 
-bool LuaHelpers::load_script(lua_State* L, char const* file_name, Trust trust, bool log_error)
+bool LuaHelpers::load_script(lua_State* L, std::filesystem::path const& file, Trust trust, bool log_error)
 {
+	std::string file_name;
+	file_name.reserve(64);
+	file_name  = "@";
+	file_name += file.filename();
+
 	g_last_error_context.clear();
-	g_last_error_context.result = luaL_loadfile(L, file_name);
+
+	// Not using luaL_loadfile because it doesn't set nice chunk names
+	FileReaderContext context;
+	context.fp.open(file.c_str(), std::ios::binary | std::ios::in);
+	if (!context.fp.is_open())
+	{
+		g_last_error_context.result = LUA_ERRFILE;
+		lua_pushfstring(L, "failed to open %s", file_name.c_str() + 1);
+	}
+	else
+	{
+		g_last_error_context.result = lua_load(L, &_lua_file_reader, &context, file_name.c_str());
+		context.fp.close();
+	}
+
 	if (g_last_error_context.result != LUA_OK)
 	{
 		g_last_error_context.message     = lua_tostring(L, -1);
-		g_last_error_context.source_name = file_name;
+		g_last_error_context.source_name = file_name.c_str();
 		lua_pop(L, 1);
 
 		if (log_error)
@@ -383,7 +429,7 @@ bool LuaHelpers::load_script(lua_State* L, char const* file_name, Trust trust, b
 		return false;
 	}
 
-	assign_new_env_table(L, -1, file_name, trust);
+	assign_new_env_table(L, -1, file_name.c_str(), trust);
 	return true;
 }
 

@@ -20,10 +20,10 @@
 #include "lua_class.h"
 #include "lua_helpers.h"
 #include "test_utils_test.h"
+#include "util_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <csetjmp>
 #include <string_view>
 
 namespace lua_helpers_test
@@ -568,7 +568,8 @@ value = foo(15)
 
 		SECTION("Untrusted scripts")
 		{
-			Application::build_environment_tables(L);
+			Paths paths;
+			Application::build_environment_tables(L, &paths);
 
 			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Untrusted));
 			REQUIRE(determine_fenv_trust_level(L, -1, nullptr) == LuaHelpers::Trust::Untrusted);
@@ -579,7 +580,8 @@ value = foo(15)
 
 		SECTION("Trusted scripts")
 		{
-			Application::build_environment_tables(L);
+			Paths paths;
+			Application::build_environment_tables(L, &paths);
 
 			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Trusted));
 			REQUIRE(determine_fenv_trust_level(L, -1, nullptr) == LuaHelpers::Trust::Trusted);
@@ -590,7 +592,8 @@ value = foo(15)
 
 		SECTION("Admin scripts")
 		{
-			Application::build_environment_tables(L);
+			Paths paths;
+			Application::build_environment_tables(L, &paths);
 
 			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Admin));
 			REQUIRE(determine_fenv_trust_level(L, -1, nullptr) == LuaHelpers::Trust::Admin);

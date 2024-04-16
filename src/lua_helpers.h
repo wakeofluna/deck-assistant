@@ -19,6 +19,7 @@
 #ifndef DECK_ASSISTANT_LUA_HELPERS_H
 #define DECK_ASSISTANT_LUA_HELPERS_H
 
+#include <filesystem>
 #include <iosfwd>
 #include <lua.hpp>
 #include <string>
@@ -83,7 +84,7 @@ void copy_table_fields(lua_State* L);
 template <typename... ARGS>
 bool emit_event(lua_State* L, int idx, char const* function_name, ARGS... args);
 
-bool load_script(lua_State* L, char const* file_name, Trust trust, bool log_error = true);
+bool load_script(lua_State* L, std::filesystem::path const& file, Trust trust, bool log_error = true);
 bool load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, Trust trust, bool log_error = true);
 void assign_new_env_table(lua_State* L, int idx, char const* chunk_name, Trust trust);
 

@@ -23,7 +23,6 @@
 #include "lua_helpers.h"
 #include <cassert>
 #include <lua.hpp>
-#include <new>
 #include <string_view>
 #include <type_traits>
 #include <typeinfo>

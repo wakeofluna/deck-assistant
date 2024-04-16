@@ -23,6 +23,7 @@
 #include "deck_promise.h"
 #include "deck_util.h"
 #include "lua_helpers.h"
+#include "util_paths.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_net.h>
@@ -133,6 +134,7 @@ int override_loadfile(lua_State* L)
 
 	int trust_level_max            = lua_tointeger(L, lua_upvalueindex(1));
 	int trust_level_wanted         = lua_tointeger(L, lua_upvalueindex(2));
+	Paths* paths                   = (Paths*)lua_touserdata(L, lua_upvalueindex(3));
 	LuaHelpers::Trust trust_max    = static_cast<LuaHelpers::Trust>(trust_level_max);
 	LuaHelpers::Trust trust_wanted = static_cast<LuaHelpers::Trust>(trust_level_wanted);
 
@@ -142,14 +144,17 @@ int override_loadfile(lua_State* L)
 		trust_wanted = trust_max;
 	}
 
-	// TODO resolve absolute path
+	bool const allow_home        = (trust_max != LuaHelpers::Trust::Untrusted);
+	std::filesystem::path target = paths->find_data_file(name, allow_home, true);
 
-	if (trust_max != LuaHelpers::Trust::Admin)
+	if (target.empty())
 	{
-		// TODO check sandbox
+		lua_pushnil(L);
+		lua_pushliteral(L, "file not found");
+		return 2;
 	}
 
-	if (LuaHelpers::load_script(L, name.empty() ? nullptr : name.data(), trust_wanted))
+	if (LuaHelpers::load_script(L, target, trust_wanted))
 		return 1;
 
 	// Restore the original error message
@@ -164,6 +169,7 @@ int override_loadfile(lua_State* L)
 Application::Application()
 {
 	m_mem_resource = new std::pmr::unsynchronized_pool_resource({ 1024, 4096 }, std::pmr::new_delete_resource());
+	m_paths        = new Paths();
 
 	L = lua_newstate(&_lua_alloc, m_mem_resource);
 	lua_checkstack(L, 200);
@@ -175,7 +181,7 @@ Application::Application()
 	IMG_Init(0xffffffff);
 	TTF_Init();
 
-	build_environment_tables(L);
+	build_environment_tables(L, m_paths);
 }
 
 Application::~Application()
@@ -187,6 +193,7 @@ Application::~Application()
 	SDL_Quit();
 
 	lua_close(L);
+	delete m_paths;
 	delete m_mem_resource;
 }
 
@@ -199,12 +206,15 @@ bool Application::init(std::vector<std::string_view>&& args)
 		file_name = "deckfile.lua";
 	else
 		file_name = args[1];
-	m_deckfile_file_name = file_name;
 
-	if (!LuaHelpers::load_script(L, m_deckfile_file_name.c_str(), LuaHelpers::Trust::Trusted))
+	std::error_code ec;
+	std::filesystem::path full_path = std::filesystem::absolute(file_name, ec);
+	full_path.make_preferred();
+
+	if (!LuaHelpers::load_script(L, full_path, LuaHelpers::Trust::Trusted))
 		return false;
 
-	// TODO add safe mode by removing some dangerous stdlib functions
+	m_paths->set_sandbox_path(full_path.parent_path());
 
 	// XXX remove me
 	lua_pushvalue(L, -1);
@@ -292,7 +302,7 @@ int Application::run()
 	return exit_code;
 }
 
-void Application::build_environment_tables(lua_State* L)
+void Application::build_environment_tables(lua_State* L, Paths* paths)
 {
 	int const oldtop  = lua_gettop(L);
 	int const oldtop1 = oldtop + 1;
@@ -302,17 +312,17 @@ void Application::build_environment_tables(lua_State* L)
 	assert(lua_gettop(L) == oldtop && "Application Lua init is not stack balanced");
 
 	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Admin);
-	build_environment_table(L, LuaHelpers::Trust::Admin);
+	build_environment_table(L, LuaHelpers::Trust::Admin, paths);
 	assert(lua_gettop(L) == oldtop1 && "Application Admin environment table build is not stack balanced");
 	lua_pop(L, 1);
 
 	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Trusted);
-	build_environment_table(L, LuaHelpers::Trust::Trusted);
+	build_environment_table(L, LuaHelpers::Trust::Trusted, paths);
 	assert(lua_gettop(L) == oldtop1 && "Application Trusted environment table build is not stack balanced");
 	lua_pop(L, 1);
 
 	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Untrusted);
-	build_environment_table(L, LuaHelpers::Trust::Untrusted);
+	build_environment_table(L, LuaHelpers::Trust::Untrusted, paths);
 	assert(lua_gettop(L) == oldtop1 && "Application Untrusted environment table build is not stack balanced");
 	lua_pop(L, 1);
 }
@@ -332,7 +342,7 @@ void Application::install_function_overrides(lua_State* L)
 	lua_pop(L, 1);
 }
 
-void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust)
+void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust, Paths* paths)
 {
 	// Insert our API
 	DeckModule::push_new(L);
@@ -341,7 +351,7 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust)
 	DeckLogger::push_new(L);
 	lua_setfield(L, -2, "logger");
 
-	DeckUtil::push_new(L);
+	DeckUtil::push_new(L, trust);
 	lua_setfield(L, -2, "util");
 
 	DeckFont::insert_enum_values(L);
@@ -422,17 +432,20 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust)
 
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Untrusted));
-	lua_pushcclosure(L, &override_loadfile, 2);
+	lua_pushlightuserdata(L, paths);
+	lua_pushcclosure(L, &override_loadfile, 3);
 	lua_setfield(L, -2, "loadfile");
 
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Trusted));
-	lua_pushcclosure(L, &override_loadfile, 2);
+	lua_pushlightuserdata(L, paths);
+	lua_pushcclosure(L, &override_loadfile, 3);
 	lua_setfield(L, -2, "loadfile_trusted");
 
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Admin));
-	lua_pushcclosure(L, &override_loadfile, 2);
+	lua_pushlightuserdata(L, paths);
+	lua_pushcclosure(L, &override_loadfile, 3);
 	lua_setfield(L, -2, "loadfile_admin");
 
 	if (trust == LuaHelpers::Trust::Untrusted)

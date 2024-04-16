@@ -20,13 +20,17 @@
 #define DECK_ASSISTANT_DECK_UTIL_H
 
 #include "lua_class.h"
+#include "lua_helpers.h"
 
 class DeckUtil : public LuaClass<DeckUtil>
 {
 public:
+	DeckUtil(LuaHelpers::Trust trust);
+
 	static char const* LUA_TYPENAME;
 
 	static void init_class_table(lua_State* L);
+	void init_instance_table(lua_State* L);
 	int newindex(lua_State* L);
 
 private:
@@ -39,6 +43,8 @@ private:
 	static int _lua_sha1(lua_State* L);
 	static int _lua_sha256(lua_State* L);
 	static int _lua_random_bytes(lua_State* L);
+
+	LuaHelpers::Trust m_trust;
 };
 
 #endif // DECK_ASSISTANT_DECK_UTIL_H

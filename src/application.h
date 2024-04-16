@@ -25,6 +25,7 @@
 #include <vector>
 
 typedef struct lua_State lua_State;
+class Paths;
 
 namespace LuaHelpers
 {
@@ -45,17 +46,17 @@ public:
 	bool init(std::vector<std::string_view>&& args);
 	int run();
 
-	static void build_environment_tables(lua_State* L);
+	static void build_environment_tables(lua_State* L, Paths* paths);
 
 private:
 	static void install_function_overrides(lua_State* L);
-	static void build_environment_table(lua_State* L, LuaHelpers::Trust trust);
+	static void build_environment_table(lua_State* L, LuaHelpers::Trust trust, Paths* paths);
 	static void process_yielded_functions(lua_State* L, long long clock);
 
 private:
 	lua_State* L;
 	std::pmr::memory_resource* m_mem_resource;
-	std::string m_deckfile_file_name;
+	Paths* m_paths;
 };
 
 #endif // DECK_ASSISTANT_APPLICATION_H
