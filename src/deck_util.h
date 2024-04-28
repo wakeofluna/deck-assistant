@@ -45,6 +45,8 @@ private:
 	static int _lua_sha1(lua_State* L);
 	static int _lua_sha256(lua_State* L);
 	static int _lua_random_bytes(lua_State* L);
+	static int _lua_store_secret(lua_State* L);
+	static int _lua_retrieve_secret(lua_State* L);
 	static int _lua_ls(lua_State* L);
 
 	Paths const* m_paths;

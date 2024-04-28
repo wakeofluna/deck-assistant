@@ -21,9 +21,10 @@
 #include "util_blob.h"
 #include "util_paths.h"
 #include <algorithm>
+#include <cassert>
 #include <charconv>
 #include <chrono>
-#include <iostream>
+#include <fstream>
 #include <sstream>
 
 namespace
@@ -414,6 +415,101 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 	return std::string_view();
 }
 
+using SettingPair  = std::pair<std::string_view, std::string_view>;
+using SettingPairs = std::vector<SettingPair>;
+
+std::string_view trim(std::string_view const& str)
+{
+	char const* start = str.data();
+	char const* end   = start + str.size();
+
+	while (end > start && end[-1] <= 32)
+		--end;
+
+	while (start < end && start[0] <= 32)
+		++start;
+
+	return (start == end) ? std::string_view() : std::string_view(start, end);
+}
+
+SettingPairs parse_settings(std::string_view const& data)
+{
+	SettingPairs result;
+	result.reserve(16);
+
+	std::size_t offset    = 0;
+	std::size_t const end = data.size();
+
+	while (offset < end)
+	{
+		std::size_t found = data.find('\n', offset);
+		if (found == std::string_view::npos)
+			found = end;
+
+		std::string_view line = trim(data.substr(offset, found - offset));
+		offset                = found + 1;
+
+		if (line.empty() || line.starts_with('#'))
+			continue;
+
+		found = line.find('=');
+		if (found == std::string_view::npos)
+			continue;
+
+		std::string_view key   = trim(line.substr(0, found));
+		std::string_view value = trim(line.substr(found + 1));
+
+		result.emplace_back(key, value);
+	}
+
+	return result;
+}
+
+bool store_settings(std::filesystem::path const& path, SettingPairs const& settings)
+{
+	assert(path.is_absolute() && "store_settings requires an absolute path");
+
+	std::ofstream fp(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+	if (!fp.good())
+		return false;
+
+	for (SettingPair const& pair : settings)
+	{
+		if (!pair.first.empty() && !pair.second.empty())
+		{
+			fp.write(pair.first.data(), pair.first.size());
+			fp.write(" = ", 3);
+			fp.write(pair.second.data(), pair.second.size());
+			fp.write("\n", 1);
+		}
+	}
+
+	return true;
+}
+
+std::string load_file(std::filesystem::path const& path)
+{
+	assert(path.is_absolute() && "load_file requires an absolute path");
+
+	std::ifstream fp(path.c_str(), std::ios::in | std::ios::binary);
+	if (!fp.good())
+		return std::string();
+
+	fp.seekg(0, std::ios::end);
+	auto file_size = fp.tellg();
+
+	if (file_size == 0)
+		return std::string();
+
+	fp.seekg(0, std::ios::beg);
+
+	std::string contents;
+	contents.reserve(std::size_t(file_size) + 1);
+
+	std::copy_n(std::istreambuf_iterator(fp), file_size, std::back_inserter(contents));
+	return contents;
+}
+
 } // namespace
 
 char const* DeckUtil::LUA_TYPENAME = "deck:DeckUtil";
@@ -474,6 +570,15 @@ void DeckUtil::init_instance_table(lua_State* L)
 	lua_pushinteger(L, int(m_trust));
 	lua_pushcclosure(L, &_lua_ls, 2);
 	lua_setfield(L, -2, "ls");
+
+	lua_pushlightuserdata(L, (void*)m_paths);
+	lua_pushcclosure(L, &_lua_store_secret, 1);
+	lua_setfield(L, -2, "store_secret");
+
+	lua_pushlightuserdata(L, (void*)m_paths);
+	lua_pushinteger(L, int(m_trust));
+	lua_pushcclosure(L, &_lua_retrieve_secret, 2);
+	lua_setfield(L, -2, "retrieve_secret");
 }
 
 int DeckUtil::newindex(lua_State* L)
@@ -621,6 +726,69 @@ int DeckUtil::_lua_random_bytes(lua_State* L)
 	Blob output = Blob::from_random(count);
 	lua_pushlstring(L, (char const*)output.data(), output.size());
 	return 1;
+}
+
+int DeckUtil::_lua_store_secret(lua_State* L)
+{
+	Paths const* paths = reinterpret_cast<Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	std::string_view key   = LuaHelpers::check_arg_string(L, 1);
+	std::string_view value = LuaHelpers::check_arg_string(L, 2);
+
+	// TODO check key and value for invalid/dangerous characters
+
+	std::filesystem::path path = paths->get_sandbox_dir() / "secrets.conf";
+	std::string file_data      = load_file(path);
+	SettingPairs settings      = parse_settings(file_data);
+
+	bool found = false;
+	for (SettingPair& pair : settings)
+	{
+		if (pair.first == key)
+		{
+			if (pair.second == value)
+				return 0;
+
+			pair.second = value;
+			found       = true;
+			break;
+		}
+	}
+
+	if (!found)
+		settings.emplace_back(key, value);
+
+	store_settings(path, settings);
+	return 0;
+}
+
+int DeckUtil::_lua_retrieve_secret(lua_State* L)
+{
+	Paths const* paths            = reinterpret_cast<Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+	LuaHelpers::Trust const trust = static_cast<LuaHelpers::Trust>(lua_tointeger(L, lua_upvalueindex(2)));
+
+	std::string_view key = LuaHelpers::check_arg_string(L, 1);
+
+	for (std::filesystem::path const& base_path : { paths->get_sandbox_dir(), paths->get_user_config_dir() })
+	{
+		std::filesystem::path path = base_path / "secrets.conf";
+		std::string file_data      = load_file(path);
+		SettingPairs settings      = parse_settings(file_data);
+
+		for (SettingPair const& pair : settings)
+		{
+			if (pair.first == key)
+			{
+				lua_pushlstring(L, pair.second.data(), pair.second.size());
+				return 1;
+			}
+		}
+
+		if (trust == LuaHelpers::Trust::Untrusted)
+			break;
+	}
+
+	return 0;
 }
 
 int DeckUtil::_lua_ls(lua_State* L)
