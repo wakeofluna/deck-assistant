@@ -22,10 +22,12 @@
 #include "lua_class.h"
 #include "lua_helpers.h"
 
+class Paths;
+
 class DeckUtil : public LuaClass<DeckUtil>
 {
 public:
-	DeckUtil(LuaHelpers::Trust trust);
+	DeckUtil(LuaHelpers::Trust trust, Paths const* paths);
 
 	static char const* LUA_TYPENAME;
 
@@ -43,7 +45,9 @@ private:
 	static int _lua_sha1(lua_State* L);
 	static int _lua_sha256(lua_State* L);
 	static int _lua_random_bytes(lua_State* L);
+	static int _lua_ls(lua_State* L);
 
+	Paths const* m_paths;
 	LuaHelpers::Trust m_trust;
 };
 

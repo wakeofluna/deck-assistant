@@ -42,6 +42,8 @@ public:
 	inline std::vector<std::filesystem::path> const& get_system_path_dirs() const { return m_system_path_dirs; }
 	inline std::vector<std::filesystem::path> const& get_system_data_dirs() const { return m_system_data_dirs; }
 
+	static bool verify_path_contains_path(std::filesystem::path const& p, std::filesystem::path const& base, bool allow_subdirs = true);
+
 private:
 	std::filesystem::path m_sandbox_dir;
 	std::filesystem::path m_user_data_dir;

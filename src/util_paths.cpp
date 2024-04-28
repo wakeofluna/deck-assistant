@@ -134,26 +134,8 @@ bool find_file_in(std::filesystem::path const& base, std::string_view const& fil
 	if (ec)
 		return false;
 
-	// All base components must match and be used up
-	auto base_iter   = base.begin();
-	auto base_end    = base.end();
-	auto target_iter = target.begin();
-	auto target_end  = target.end();
-
-	for (; base_iter != base_end && target_iter != target_end; ++base_iter, ++target_iter)
-		if (*base_iter != *target_iter)
-			return false;
-
-	if (base_iter != base_end)
+	if (!Paths::verify_path_contains_path(target, base, allow_subdirs))
 		return false;
-
-	// Only one component allowed on the target if we don't allow subdirs
-	if (!allow_subdirs)
-	{
-		++target_iter;
-		if (target_iter != target_end)
-			return false;
-	}
 
 	// Only actually access the filesystem once our checks have completed
 	std::filesystem::file_status file_status = std::filesystem::status(target, ec);
@@ -271,4 +253,30 @@ std::filesystem::path Paths::find_executable(std::string_view const& file_name, 
 				return target;
 
 	return std::filesystem::path();
+}
+
+bool Paths::verify_path_contains_path(std::filesystem::path const& p, std::filesystem::path const& base, bool allow_subdirs)
+{
+	// All base components must match and be used up
+	auto base_iter    = base.begin();
+	auto base_end     = base.end();
+	auto subject_iter = p.begin();
+	auto subject_end  = p.end();
+
+	for (; base_iter != base_end && subject_iter != subject_end; ++base_iter, ++subject_iter)
+		if (*base_iter != *subject_iter)
+			return false;
+
+	if (base_iter != base_end)
+		return false;
+
+	// Only one component allowed on the subject if we don't allow subdirs
+	if (!allow_subdirs)
+	{
+		++subject_iter;
+		if (subject_iter != subject_end)
+			return false;
+	}
+
+	return true;
 }

@@ -351,7 +351,7 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust,
 	DeckLogger::push_new(L);
 	lua_setfield(L, -2, "logger");
 
-	DeckUtil::push_new(L, trust);
+	DeckUtil::push_new(L, trust, paths);
 	lua_setfield(L, -2, "util");
 
 	DeckFont::insert_enum_values(L);

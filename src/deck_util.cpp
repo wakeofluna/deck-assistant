@@ -19,8 +19,10 @@
 #include "deck_util.h"
 #include "lua_helpers.h"
 #include "util_blob.h"
+#include "util_paths.h"
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <iostream>
 #include <sstream>
 
@@ -416,8 +418,9 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 
 char const* DeckUtil::LUA_TYPENAME = "deck:DeckUtil";
 
-DeckUtil::DeckUtil(LuaHelpers::Trust trust)
-    : m_trust(trust)
+DeckUtil::DeckUtil(LuaHelpers::Trust trust, Paths const* paths)
+    : m_paths(paths)
+    , m_trust(trust)
 {
 }
 
@@ -466,6 +469,11 @@ void DeckUtil::init_instance_table(lua_State* L)
 			break;
 	}
 	lua_setfield(L, -2, "trust");
+
+	lua_pushlightuserdata(L, (void*)m_paths);
+	lua_pushinteger(L, int(m_trust));
+	lua_pushcclosure(L, &_lua_ls, 2);
+	lua_setfield(L, -2, "ls");
 }
 
 int DeckUtil::newindex(lua_State* L)
@@ -612,5 +620,169 @@ int DeckUtil::_lua_random_bytes(lua_State* L)
 
 	Blob output = Blob::from_random(count);
 	lua_pushlstring(L, (char const*)output.data(), output.size());
+	return 1;
+}
+
+int DeckUtil::_lua_ls(lua_State* L)
+{
+	Paths const* paths            = reinterpret_cast<Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+	LuaHelpers::Trust const trust = static_cast<LuaHelpers::Trust>(lua_tointeger(L, lua_upvalueindex(2)));
+
+	std::string_view request = LuaHelpers::check_arg_string_or_none(L, 1);
+	std::filesystem::path request_path(request.empty() ? "." : request);
+
+	// Trust rules:
+	// Untrusted: sandbox only, no symlinks escape
+	// Trusted: sandbox only, but symlinks can escape
+	// Admin: no restrictions
+
+	std::filesystem::path const& sandbox = paths->get_sandbox_dir();
+	std::filesystem::path normal_path;
+	if (request_path.is_absolute())
+	{
+		if (trust != LuaHelpers::Trust::Admin)
+			luaL_error(L, "absolute paths not allowed");
+
+		normal_path = request_path.lexically_normal();
+	}
+	else
+	{
+		normal_path = (sandbox / request_path).lexically_normal();
+	}
+
+	std::error_code ec;
+	std::filesystem::path abs_path = std::filesystem::absolute(normal_path, ec);
+	if (ec)
+		luaL_error(L, "path error");
+	abs_path.make_preferred();
+
+	std::filesystem::path canon_path = std::filesystem::weakly_canonical(abs_path, ec);
+	if (ec)
+		luaL_error(L, "path error");
+	canon_path.make_preferred();
+
+	bool const canon_path_contained = Paths::verify_path_contains_path(canon_path, sandbox);
+	if (trust == LuaHelpers::Trust::Untrusted && !canon_path_contained)
+		luaL_error(L, "access denied");
+
+	bool const abs_path_contained = Paths::verify_path_contains_path(abs_path, sandbox);
+	if (trust != LuaHelpers::Trust::Admin && !abs_path_contained)
+		luaL_error(L, "access denied");
+
+	std::filesystem::file_status dir_status = std::filesystem::status(canon_path, ec);
+	if (ec)
+		luaL_error(L, "path does not exist or not readable");
+
+	if (!std::filesystem::is_directory(dir_status))
+		luaL_error(L, "not a directory");
+
+	lua_createtable(L, 0, 6);
+
+	if (request.empty())
+		lua_pushlstring(L, ".", 1);
+	else
+		lua_pushvalue(L, 1);
+	lua_setfield(L, -2, "path");
+
+	if (abs_path_contained || canon_path_contained)
+	{
+		std::filesystem::path rel_path = (abs_path_contained ? abs_path : canon_path).lexically_relative(sandbox);
+		lua_pushstring(L, rel_path.generic_string().c_str());
+		lua_setfield(L, -2, "relative");
+	}
+
+	if (trust == LuaHelpers::Trust::Admin)
+	{
+		lua_pushstring(L, abs_path.generic_string().c_str());
+		lua_setfield(L, -2, "absolute");
+
+		lua_pushstring(L, canon_path.generic_string().c_str());
+		lua_setfield(L, -2, "canonical");
+	}
+
+	std::filesystem::directory_iterator dir_end;
+	std::filesystem::directory_iterator dir_iter(canon_path, std::filesystem::directory_options::skip_permission_denied, ec);
+	if (ec)
+		luaL_error(L, "path error");
+
+	struct DirEntry
+	{
+		std::string name;
+
+		std::strong_ordering operator<=>(DirEntry const& rhs) const { return name <=> rhs.name; }
+		bool operator==(DirEntry const& rhs) const { return name == rhs.name; }
+	};
+
+	struct FileEntry
+	{
+		std::string name;
+		std::uintmax_t size;
+		std::filesystem::file_time_type mtime;
+
+		std::strong_ordering operator<=>(FileEntry const& rhs) const { return name <=> rhs.name; }
+		bool operator==(FileEntry const& rhs) const { return name == rhs.name; }
+	};
+
+	std::vector<DirEntry> subdirs;
+	std::vector<FileEntry> files;
+	subdirs.reserve(16);
+	files.reserve(64);
+
+	for (; dir_iter != dir_end; ++dir_iter)
+	{
+		if (trust == LuaHelpers::Trust::Untrusted)
+		{
+			std::filesystem::file_status sym_status = dir_iter->symlink_status(ec);
+			if (ec || std::filesystem::is_symlink(sym_status))
+				continue;
+		}
+
+		std::filesystem::file_status file_status = dir_iter->status(ec);
+		if (ec)
+			continue;
+
+		if (std::filesystem::is_directory(file_status))
+		{
+			std::string fname = dir_iter->path().filename();
+			if (!fname.starts_with('.'))
+				subdirs.emplace_back(std::move(fname));
+		}
+		else if (std::filesystem::is_regular_file(file_status))
+		{
+			std::string fname = dir_iter->path().filename();
+			if (!fname.starts_with('.'))
+				files.emplace_back(std::move(fname), dir_iter->file_size(), dir_iter->last_write_time());
+		}
+	}
+
+	std::ranges::sort(subdirs.begin(), subdirs.end());
+	std::ranges::sort(files.begin(), files.end());
+
+	lua_createtable(L, subdirs.size(), 0);
+	for (std::size_t i = 0; i < subdirs.size(); ++i)
+	{
+		DirEntry const& entry = subdirs[i];
+		lua_pushlstring(L, entry.name.data(), entry.name.size());
+		lua_rawseti(L, -2, i + 1);
+	}
+	lua_setfield(L, -2, "subdirs");
+
+	lua_createtable(L, files.size(), 0);
+	for (std::size_t i = 0; i < files.size(); ++i)
+	{
+		FileEntry const& entry = files[i];
+		auto file_time         = std::chrono::clock_cast<std::chrono::system_clock>(entry.mtime);
+		auto epoch_time        = std::chrono::duration_cast<std::chrono::seconds>(file_time.time_since_epoch());
+		lua_createtable(L, 3, 0);
+		lua_pushlstring(L, entry.name.data(), entry.name.size());
+		lua_rawseti(L, -2, 1);
+		lua_pushinteger(L, entry.size);
+		lua_rawseti(L, -2, 2);
+		lua_pushinteger(L, epoch_time.count());
+		lua_rawseti(L, -2, 3);
+		lua_rawseti(L, -2, i + 1);
+	}
+	lua_setfield(L, -2, "files");
+
 	return 1;
 }
