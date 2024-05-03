@@ -24,6 +24,7 @@ sources = files(
     'util_colour.cpp',
     'util_paths.cpp',
     'util_socket.cpp',
+    'util_text.cpp',
     'util_url.cpp',
 )
 

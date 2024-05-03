@@ -27,6 +27,8 @@
 #include <wordexp.h>
 #endif
 
+using namespace util;
+
 namespace
 {
 

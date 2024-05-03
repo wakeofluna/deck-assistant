@@ -17,6 +17,7 @@
  */
 
 #include "util_blob.h"
+#include "util_text.h"
 #include <cassert>
 #include <cstring>
 #include <random>
@@ -27,47 +28,10 @@
 #include <openssl/sha.h>
 #endif
 
+using namespace util;
+
 namespace
 {
-
-constexpr unsigned char hex_to_nibble(char ch)
-{
-	if (ch >= '0' && ch <= '9')
-		return ch - '0';
-	if (ch >= 'a' && ch <= 'f')
-		return ch - 'a' + 10;
-	if (ch >= 'A' && ch <= 'F')
-		return ch - 'A' + 10;
-	return 0;
-}
-
-constexpr unsigned char hex_to_nibble(char ch, bool& ok)
-{
-	if (ch >= '0' && ch <= '9')
-		return ch - '0';
-	if (ch >= 'a' && ch <= 'f')
-		return ch - 'a' + 10;
-	if (ch >= 'A' && ch <= 'F')
-		return ch - 'A' + 10;
-	ok = false;
-	return 0;
-}
-
-constexpr char nibble_to_hex(unsigned char nibble)
-{
-	if (nibble < 10)
-		return '0' + nibble;
-	else
-		return 'a' + (nibble - 10);
-}
-
-constexpr char nibble_to_hex_uc(unsigned char nibble)
-{
-	if (nibble < 10)
-		return '0' + nibble;
-	else
-		return 'A' + (nibble - 10);
-}
 
 char nibble_to_base64(unsigned char ch)
 {
@@ -100,28 +64,6 @@ unsigned char base64_to_nibble(char ch, bool& ok)
 }
 
 } // namespace
-
-unsigned char hex_to_char(char const* hex)
-{
-	return (hex_to_nibble(hex[0]) << 4) + hex_to_nibble(hex[1]);
-}
-
-unsigned char hex_to_char(char const* hex, bool& ok)
-{
-	return (hex_to_nibble(hex[0], ok) << 4) + hex_to_nibble(hex[1], ok);
-}
-
-void char_to_hex(unsigned char ch, char* hex)
-{
-	hex[0] = nibble_to_hex(ch >> 4);
-	hex[1] = nibble_to_hex(ch & 0x0f);
-}
-
-void char_to_hex_uc(unsigned char ch, char* hex)
-{
-	hex[0] = nibble_to_hex_uc(ch >> 4);
-	hex[1] = nibble_to_hex_uc(ch & 0x0f);
-}
 
 BlobView::BlobView()
 {

@@ -568,7 +568,7 @@ value = foo(15)
 
 		SECTION("Untrusted scripts")
 		{
-			Paths paths;
+			util::Paths paths;
 			Application::build_environment_tables(L, &paths);
 
 			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Untrusted));
@@ -580,7 +580,7 @@ value = foo(15)
 
 		SECTION("Trusted scripts")
 		{
-			Paths paths;
+			util::Paths paths;
 			Application::build_environment_tables(L, &paths);
 
 			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Trusted));
@@ -592,7 +592,7 @@ value = foo(15)
 
 		SECTION("Admin scripts")
 		{
-			Paths paths;
+			util::Paths paths;
 			Application::build_environment_tables(L, &paths);
 
 			REQUIRE(load_script_trust_tester(L, LuaHelpers::Trust::Admin));

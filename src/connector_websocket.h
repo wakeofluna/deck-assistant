@@ -62,8 +62,8 @@ private:
 		Connected,
 	};
 
-	Socket m_socket;
-	URL m_connect_url;
+	util::Socket m_socket;
+	util::URL m_connect_url;
 	lua_Integer m_connect_last_attempt;
 	State m_connect_state;
 	bool m_enabled;
@@ -73,7 +73,7 @@ private:
 	std::string m_remote_server_name;
 	std::string m_receive_buffer;
 	std::string m_received;
-	Blob m_websocket_key;
+	util::Blob m_websocket_key;
 	unsigned char m_pending_opcode;
 	std::string m_pending_frame;
 	std::mt19937 m_random;

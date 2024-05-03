@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef DECK_ASSISTANT_BLOB_H
-#define DECK_ASSISTANT_BLOB_H
+#ifndef DECK_ASSISTANT_UTIL_BLOB_H
+#define DECK_ASSISTANT_UTIL_BLOB_H
 
 #include <string>
 #include <string_view>
+
+namespace util
+{
 
 class Blob;
 
@@ -91,9 +94,6 @@ protected:
 	unsigned char* m_capacity;
 };
 
-unsigned char hex_to_char(char const* hex);
-unsigned char hex_to_char(char const* hex, bool& ok);
-void char_to_hex(unsigned char ch, char* hex);
-void char_to_hex_uc(unsigned char ch, char* hex);
+} // namespace util
 
-#endif // DECK_ASSISTANT_BLOB_H
+#endif // DECK_ASSISTANT_UTIL_BLOB_H

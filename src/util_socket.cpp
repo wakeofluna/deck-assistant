@@ -24,6 +24,8 @@
 #include <mutex>
 #include <string>
 
+using namespace util;
+
 struct Socket::SharedState
 {
 	SharedState()

@@ -23,6 +23,9 @@
 #include <string_view>
 #include <vector>
 
+namespace util
+{
+
 class Paths
 {
 public:
@@ -51,5 +54,7 @@ private:
 	std::vector<std::filesystem::path> m_system_path_dirs;
 	std::vector<std::filesystem::path> m_system_data_dirs;
 };
+
+} // namespace util
 
 #endif // DECK_ASSISTANT_UTIL_PATHS_H

@@ -17,10 +17,12 @@
  */
 
 #include "util_colour.h"
-#include "util_blob.h"
+#include "util_text.h"
 #include <algorithm>
 #include <cctype>
 #include <utility>
+
+using namespace util;
 
 namespace
 {

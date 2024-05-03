@@ -45,16 +45,16 @@ enum CloseReason : std::uint16_t
 
 #if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 
-Blob make_websocket_key_nonce()
+util::Blob make_websocket_key_nonce()
 {
-	return Blob::from_random(16);
+	return util::Blob::from_random(16);
 }
 
-Blob make_websocket_accept_nonce(Blob const& key)
+util::Blob make_websocket_accept_nonce(util::Blob const& key)
 {
 	constexpr std::string_view websocket_uuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-	Blob blob(60);
+	util::Blob blob(60);
 	blob += key.to_base64();
 	blob += websocket_uuid;
 	return blob.sha1();
@@ -64,15 +64,15 @@ Blob make_websocket_accept_nonce(Blob const& key)
 
 // Hardcoded due to absence of SHA1
 
-Blob make_websocket_key_nonce()
+util::Blob make_websocket_key_nonce()
 {
-	return Blob::from_literal("DeckAssistantWS!");
+	return util::Blob::from_literal("DeckAssistantWS!");
 }
 
-Blob make_websocket_accept_nonce(Blob const&)
+util::Blob make_websocket_accept_nonce(util::Blob const&)
 {
 	bool ok;
-	return Blob::from_base64("H3P/IhOIXOMiE9YV+WG5Jqe3G08=", ok);
+	return util::Blob::from_base64("H3P/IhOIXOMiE9YV+WG5Jqe3G08=", ok);
 }
 
 #endif
@@ -120,19 +120,19 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 
 	if (m_connect_state == State::Connecting)
 	{
-		Socket::State const socket_state = m_socket.get_state();
+		util::Socket::State const socket_state = m_socket.get_state();
 		switch (socket_state)
 		{
-			case Socket::State::Disconnected:
+			case util::Socket::State::Disconnected:
 				m_connect_state = State::Disconnected;
 				DeckLogger::log_message(L, DeckLogger::Level::Warning, "Websocket connection failed: ", m_socket.get_last_error());
 				LuaHelpers::emit_event(L, 1, "on_connect_failed", m_socket.get_last_error());
 				return;
 
-			case Socket::State::Connecting:
+			case util::Socket::State::Connecting:
 				return;
 
-			case Socket::State::Connected:
+			case util::Socket::State::Connected:
 				DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket connected, starting handshake");
 				std::string_view host = m_connect_url.get_host();
 
@@ -150,13 +150,13 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				http += "\r\n";
 				http += "Connection: upgrade\r\n";
 				http += "Upgrade: websocket\r\n";
-				http += "Sec-WebSocket-Version: 13\r\n";
-				http += "Sec-WebSocket-Key: ";
+				http += "Sec-Webutil::Socket-Version: 13\r\n";
+				http += "Sec-Webutil::Socket-Key: ";
 				http += m_websocket_key.to_base64();
 				http += "\r\n";
 				if (!m_accepted_protocols.empty())
 				{
-					http += "Sec-WebSocket-Protocol: ";
+					http += "Sec-Webutil::Socket-Protocol: ";
 					http += m_accepted_protocols;
 					http += "\r\n";
 				}
@@ -450,7 +450,7 @@ int ConnectorWebsocket::newindex(lua_State* L, std::string_view const& key)
 	{
 		std::string_view value = LuaHelpers::check_arg_string(L, 3);
 
-		URL new_url;
+		util::URL new_url;
 		if (!new_url.set_connection_string(std::string(value)))
 			luaL_argerror(L, 3, "connection string parsing failed");
 
@@ -531,16 +531,16 @@ bool ConnectorWebsocket::verify_http_upgrade_headers(std::string_view const& hea
 			has_upgrade = true;
 		}
 
-		if (key == "Sec-WebSocket-Accept")
+		if (key == "Sec-Webutil::Socket-Accept")
 		{
-			Blob expected = make_websocket_accept_nonce(m_websocket_key);
+			util::Blob expected = make_websocket_accept_nonce(m_websocket_key);
 			if (value != expected.to_base64())
 				return false;
 
 			has_accept = true;
 		}
 
-		if (key == "Sec-WebSocket-Protocol")
+		if (key == "Sec-Webutil::Socket-Protocol")
 			protocol = value;
 	}
 

@@ -26,7 +26,7 @@ DeckColour::DeckColour()
 	m_colour.clear();
 }
 
-DeckColour::DeckColour(Colour c)
+DeckColour::DeckColour(util::Colour c)
     : m_colour(c)
 {
 }

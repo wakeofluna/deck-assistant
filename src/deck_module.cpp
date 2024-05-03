@@ -220,8 +220,8 @@ int DeckModule::_lua_create_colour(lua_State* L)
 	{
 		std::string_view value = LuaHelpers::to_string_view(L, 2);
 
-		Colour col;
-		if (!Colour::parse_colour(value, col))
+		util::Colour col;
+		if (!util::Colour::parse_colour(value, col))
 		{
 			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "color value not understood");
 			col.set_pink();
@@ -232,7 +232,7 @@ int DeckModule::_lua_create_colour(lua_State* L)
 	}
 	else if (vtype == LUA_TTABLE)
 	{
-		DeckColour::push_new(L, Colour(0, 0, 0));
+		DeckColour::push_new(L, util::Colour(0, 0, 0));
 		lua_pushvalue(L, 2);
 		LuaHelpers::copy_table_fields(L);
 		return 1;

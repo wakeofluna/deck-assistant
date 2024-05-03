@@ -22,6 +22,9 @@
 #include <string>
 #include <string_view>
 
+namespace util
+{
+
 class URL
 {
 public:
@@ -49,5 +52,7 @@ private:
 	std::string_view m_path;
 	int m_port;
 };
+
+} // namespace util
 
 #endif // DECK_ASSISTANT_UTIL_URL_H

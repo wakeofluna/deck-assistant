@@ -25,6 +25,9 @@
 #include <string_view>
 #include <type_traits>
 
+namespace util
+{
+
 struct Colour
 {
 	constexpr Colour() = default;
@@ -57,5 +60,7 @@ struct Colour
 static_assert(sizeof(Colour) == 4);
 static_assert(std::is_trivial_v<Colour>);
 static_assert(std::is_standard_layout_v<Colour>);
+
+} // namespace util
 
 #endif // DECK_ASSISTENT_UTIL_COLOUR_H

@@ -71,7 +71,7 @@ private:
 	int m_font_size;
 	int m_outline_size;
 	int m_max_width;
-	Colour m_colour;
+	util::Colour m_colour;
 	Style m_style;
 	Alignment m_alignment;
 };

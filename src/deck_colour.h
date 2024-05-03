@@ -26,9 +26,9 @@ class DeckColour : public LuaClass<DeckColour>
 {
 public:
 	DeckColour();
-	DeckColour(Colour c);
+	DeckColour(util::Colour c);
 
-	inline Colour get_colour() const { return m_colour; }
+	inline util::Colour get_colour() const { return m_colour; }
 
 	static char const* LUA_TYPENAME;
 
@@ -37,7 +37,7 @@ public:
 	int tostring(lua_State* L) const;
 
 private:
-	Colour m_colour;
+	util::Colour m_colour;
 };
 
 #endif // DECK_ASSISTANT_DECK_COLOUR_H

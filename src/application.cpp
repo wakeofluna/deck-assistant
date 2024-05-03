@@ -134,7 +134,7 @@ int override_loadfile(lua_State* L)
 
 	int trust_level_max            = lua_tointeger(L, lua_upvalueindex(1));
 	int trust_level_wanted         = lua_tointeger(L, lua_upvalueindex(2));
-	Paths* paths                   = (Paths*)lua_touserdata(L, lua_upvalueindex(3));
+	util::Paths* paths             = (util::Paths*)lua_touserdata(L, lua_upvalueindex(3));
 	LuaHelpers::Trust trust_max    = static_cast<LuaHelpers::Trust>(trust_level_max);
 	LuaHelpers::Trust trust_wanted = static_cast<LuaHelpers::Trust>(trust_level_wanted);
 
@@ -169,7 +169,7 @@ int override_loadfile(lua_State* L)
 Application::Application()
 {
 	m_mem_resource = new std::pmr::unsynchronized_pool_resource({ 1024, 4096 }, std::pmr::new_delete_resource());
-	m_paths        = new Paths();
+	m_paths        = new util::Paths();
 
 	L = lua_newstate(&_lua_alloc, m_mem_resource);
 	lua_checkstack(L, 200);
@@ -302,7 +302,7 @@ int Application::run()
 	return exit_code;
 }
 
-void Application::build_environment_tables(lua_State* L, Paths* paths)
+void Application::build_environment_tables(lua_State* L, util::Paths* paths)
 {
 	int const oldtop  = lua_gettop(L);
 	int const oldtop1 = oldtop + 1;
@@ -342,7 +342,7 @@ void Application::install_function_overrides(lua_State* L)
 	lua_pop(L, 1);
 }
 
-void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust, Paths* paths)
+void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust, util::Paths* paths)
 {
 	// Insert our API
 	DeckModule::push_new(L);

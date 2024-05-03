@@ -514,7 +514,7 @@ std::string load_file(std::filesystem::path const& path)
 
 char const* DeckUtil::LUA_TYPENAME = "deck:DeckUtil";
 
-DeckUtil::DeckUtil(LuaHelpers::Trust trust, Paths const* paths)
+DeckUtil::DeckUtil(LuaHelpers::Trust trust, util::Paths const* paths)
     : m_paths(paths)
     , m_trust(trust)
 {
@@ -592,7 +592,7 @@ int DeckUtil::_lua_from_base64(lua_State* L)
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 	bool ok;
 
-	Blob blob = Blob::from_base64(input, ok);
+	util::Blob blob = util::Blob::from_base64(input, ok);
 	if (!ok)
 		luaL_error(L, "input is not valid base64");
 
@@ -604,8 +604,8 @@ int DeckUtil::_lua_to_base64(lua_State* L)
 {
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 
-	BlobView blob      = input;
-	std::string output = blob.to_base64();
+	util::BlobView blob = input;
+	std::string output  = blob.to_base64();
 
 	lua_pushlstring(L, output.data(), output.size());
 	return 1;
@@ -616,7 +616,7 @@ int DeckUtil::_lua_from_hex(lua_State* L)
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 	bool ok;
 
-	Blob blob = Blob::from_hex(input, ok);
+	util::Blob blob = util::Blob::from_hex(input, ok);
 	if (!ok)
 		luaL_error(L, "input is not valid hexadecimal");
 
@@ -628,8 +628,8 @@ int DeckUtil::_lua_to_hex(lua_State* L)
 {
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 
-	BlobView blob      = input;
-	std::string output = blob.to_hex();
+	util::BlobView blob = input;
+	std::string output  = blob.to_hex();
 
 	lua_pushlstring(L, output.data(), output.size());
 	return 1;
@@ -687,8 +687,8 @@ int DeckUtil::_lua_sha1(lua_State* L)
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 
 #if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
-	BlobView blob = input;
-	Blob output   = blob.sha1();
+	util::BlobView blob = input;
+	util::Blob output   = blob.sha1();
 
 	lua_pushlstring(L, (char const*)output.data(), output.size());
 	return 1;
@@ -704,8 +704,8 @@ int DeckUtil::_lua_sha256(lua_State* L)
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 
 #if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
-	BlobView blob = input;
-	Blob output   = blob.sha256();
+	util::BlobView blob = input;
+	util::Blob output   = blob.sha256();
 
 	lua_pushlstring(L, (char const*)output.data(), output.size());
 	return 1;
@@ -723,14 +723,14 @@ int DeckUtil::_lua_random_bytes(lua_State* L)
 	if (count <= 0)
 		luaL_argerror(L, 1, "count must be larger than zero");
 
-	Blob output = Blob::from_random(count);
+	util::Blob output = util::Blob::from_random(count);
 	lua_pushlstring(L, (char const*)output.data(), output.size());
 	return 1;
 }
 
 int DeckUtil::_lua_store_secret(lua_State* L)
 {
-	Paths const* paths = reinterpret_cast<Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
 
 	std::string_view key   = LuaHelpers::check_arg_string(L, 1);
 	std::string_view value = LuaHelpers::check_arg_string(L, 2);
@@ -764,7 +764,7 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 
 int DeckUtil::_lua_retrieve_secret(lua_State* L)
 {
-	Paths const* paths            = reinterpret_cast<Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+	util::Paths const* paths      = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
 	LuaHelpers::Trust const trust = static_cast<LuaHelpers::Trust>(lua_tointeger(L, lua_upvalueindex(2)));
 
 	std::string_view key = LuaHelpers::check_arg_string(L, 1);
@@ -793,7 +793,7 @@ int DeckUtil::_lua_retrieve_secret(lua_State* L)
 
 int DeckUtil::_lua_ls(lua_State* L)
 {
-	Paths const* paths            = reinterpret_cast<Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+	util::Paths const* paths      = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
 	LuaHelpers::Trust const trust = static_cast<LuaHelpers::Trust>(lua_tointeger(L, lua_upvalueindex(2)));
 
 	std::string_view request = LuaHelpers::check_arg_string_or_none(L, 1);
@@ -829,11 +829,11 @@ int DeckUtil::_lua_ls(lua_State* L)
 		luaL_error(L, "path error");
 	canon_path.make_preferred();
 
-	bool const canon_path_contained = Paths::verify_path_contains_path(canon_path, sandbox);
+	bool const canon_path_contained = util::Paths::verify_path_contains_path(canon_path, sandbox);
 	if (trust == LuaHelpers::Trust::Untrusted && !canon_path_contained)
 		luaL_error(L, "access denied");
 
-	bool const abs_path_contained = Paths::verify_path_contains_path(abs_path, sandbox);
+	bool const abs_path_contained = util::Paths::verify_path_contains_path(abs_path, sandbox);
 	if (trust != LuaHelpers::Trust::Admin && !abs_path_contained)
 		luaL_error(L, "access denied");
 
