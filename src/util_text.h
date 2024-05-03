@@ -42,8 +42,10 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 std::string load_file(std::filesystem::path const& path);
 
 std::string_view trim(std::string_view const& str);
-std::vector<std::string_view> split(std::string_view const& str, char split_char = '\n', std::size_t max_splits = std::size_t(-1));
-std::string_view for_each_split(std::string_view const& str, char split_char, SplitCallback const& callback);
+std::vector<std::string_view> split(std::string_view const& str, std::string_view const& split_str = "\n", std::size_t max_parts = 0);
+std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback);
+std::string join(std::vector<std::string_view> const& items, std::string_view const& join_str);
+std::string replace(std::string_view const& str, std::string_view const& from_str, std::string_view const& to_str);
 
 } // namespace util
 

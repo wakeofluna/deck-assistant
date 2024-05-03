@@ -37,7 +37,7 @@ SettingPairs parse_settings(std::string_view const& data)
 	SettingPairs result;
 	result.reserve(16);
 
-	util::for_each_split(data, '\n', [&](std::size_t line_nr, std::string_view const& line) {
+	util::for_each_split(data, "\n", [&](std::size_t line_nr, std::string_view const& line) {
 		std::string_view trimmed = util::trim(line);
 		if (!trimmed.empty() && !trimmed.starts_with('#'))
 		{

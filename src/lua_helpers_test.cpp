@@ -770,7 +770,7 @@ end
 		std::string dump                    = std::move(stream).str();
 		std::vector<std::string_view> lines = util::split(dump);
 
-		REQUIRE(lines.size() == 10);
+		REQUIRE(lines.size() == 11);
 		REQUIRE(lines[0].starts_with("=="));
 		REQUIRE(lines[0].find("unittest") != std::string_view::npos);
 		REQUIRE(lines[1] == "1: nil");
@@ -782,6 +782,7 @@ end
 		REQUIRE(lines[7].starts_with("7: function: "));
 		REQUIRE(lines[8].starts_with("8: userdata: "));
 		REQUIRE(lines[9].starts_with("9: thread: "));
+		REQUIRE(lines[10] == "");
 	}
 
 	lua_close(L);

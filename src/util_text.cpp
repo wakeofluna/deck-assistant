@@ -486,7 +486,13 @@ std::string convert_to_json(lua_State* L, int idx, bool pretty)
 
 std::string_view convert_from_json(lua_State* L, std::string_view const& input, std::size_t& offset)
 {
-	return convert_from_json_impl(L, input, offset);
+	int top = lua_gettop(L);
+
+	std::string_view err = convert_from_json_impl(L, input, offset);
+	if (!err.empty())
+		lua_settop(L, top);
+
+	return err;
 }
 
 std::string load_file(std::filesystem::path const& path)
@@ -526,46 +532,68 @@ std::string_view trim(std::string_view const& str)
 	return (start == end) ? std::string_view() : std::string_view(start, end);
 }
 
-std::vector<std::string_view> split(std::string_view const& str, char split_char, std::size_t max_splits)
+std::vector<std::string_view> split(std::string_view const& str, std::string_view const& split_str, std::size_t max_parts)
 {
+	assert(!split_str.empty());
+	char const split_size = split_str.size();
+	char const split_char = split_size == 1 ? split_str[0] : 0;
+
 	std::vector<std::string_view> result;
 
-	if (max_splits != std::size_t(-1))
-		result.reserve(max_splits + 1);
+	if (max_parts != 0)
+		result.reserve(max_parts);
 	else
 		result.reserve(64);
 
 	std::size_t offset    = 0;
 	std::size_t const end = str.size();
-	while (offset < end)
+	while (offset <= end)
 	{
-		std::size_t next = max_splits == 0 ? std::string_view::npos : str.find(split_char, offset);
+		--max_parts;
+
+		std::size_t next;
+		if (max_parts == 0 || offset == end)
+			next = std::string_view::npos;
+		else if (split_char)
+			next = str.find(split_char, offset);
+		else
+			next = str.find(split_str, offset);
+
 		if (next == std::string_view::npos)
 			next = end;
 
 		result.push_back(str.substr(offset, next - offset));
-		offset = next + 1;
-
-		--max_splits;
+		offset = next + split_size;
 	}
 
 	return result;
 }
 
-std::string_view for_each_split(std::string_view const& str, char split_char, SplitCallback const& callback)
+std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback)
 {
+	assert(!split_str.empty());
+	char const split_size = split_str.size();
+	char const split_char = split_size == 1 ? split_str[0] : 0;
+
 	std::size_t counter   = 0;
 	std::size_t offset    = 0;
 	std::size_t const end = str.size();
 
-	while (offset < end)
+	while (offset <= end)
 	{
-		std::size_t next = str.find(split_char, offset);
+		std::size_t next;
+		if (offset == end)
+			next = std::string_view::npos;
+		else if (split_char)
+			next = str.find(split_char, offset);
+		else
+			next = str.find(split_str, offset);
+
 		if (next == std::string_view::npos)
 			next = end;
 
 		std::string_view segment = str.substr(offset, next - offset);
-		offset                   = next + 1;
+		offset                   = next + split_size;
 
 		if (callback(counter, segment))
 			return segment;
@@ -574,6 +602,38 @@ std::string_view for_each_split(std::string_view const& str, char split_char, Sp
 	}
 
 	return std::string_view();
+}
+
+std::string join(std::vector<std::string_view> const& items, std::string_view const& join_str)
+{
+	if (items.empty())
+		return std::string();
+
+	std::size_t total_len = (items.size() - 1) * join_str.size();
+
+	for (std::string_view const& item : items)
+		total_len += item.size();
+
+	std::string result;
+	result.reserve(total_len + 1);
+
+	bool first = true;
+	for (std::string_view const& item : items)
+	{
+		if (first)
+			first = false;
+		else
+			result += join_str;
+
+		result += item;
+	}
+
+	return result;
+}
+
+std::string replace(std::string_view const& str, std::string_view const& from_str, std::string_view const& to_str)
+{
+	return join(split(str, from_str), to_str);
 }
 
 } // namespace util

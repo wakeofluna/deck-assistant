@@ -34,6 +34,7 @@ test_sources = files(
     'lua_helpers_test.cpp',
     'test_utils_test.cpp',
     'util_blob_test.cpp',
+    'util_text_test.cpp',
     'util_url_test.cpp',
 )
 

@@ -77,4 +77,11 @@ std::ostream& operator<<(std::ostream& stream, std::optional<T> const& value)
 	return stream;
 }
 
+template <typename T1, typename T2>
+std::ostream& operator<<(std::ostream& stream, std::pair<T1, T2> const& value)
+{
+	stream << '{' << value.first << ',' << value.second << '}';
+	return stream;
+}
+
 #endif // DECK_ASSISTANT_TEST_UTILS_TEST_H
