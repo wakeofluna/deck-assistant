@@ -321,40 +321,31 @@ TEST_CASE("Text", "[util]")
 		REQUIRE(result == Result { "env", "PATH=/usr/bin" });
 	}
 
-	SECTION("for_each_split")
+	SECTION("split1")
 	{
-		std::string_view result;
+		using Result = std::pair<std::string_view, std::string_view>;
+		Result result;
 
-		using Result = std::vector<std::pair<std::size_t, std::string_view>>;
-		Result collected;
+		result = util::split1("env=PATH=/usr/bin", "=");
+		REQUIRE(result == Result { "env", "PATH=/usr/bin" });
 
-		auto collect = [&](std::size_t part_nr, std::string_view const& part) {
-			collected.emplace_back(part_nr, part);
-			return part_nr == 5;
-		};
+		result = util::split1("line1\nline2\nline3\nline4\n", "\n");
+		REQUIRE(result == Result { "line1", "line2\nline3\nline4" });
 
-		collected.clear();
-		result = util::for_each_split("line1\nline2\nline3\nline4\n", "\n", collect);
-		REQUIRE(result.empty());
-		REQUIRE(collected == Result {
-		            {0,  "line1"},
-		            { 1, "line2"},
-		            { 2, "line3"},
-		            { 3, "line4"},
-		            { 4, ""     },
-        });
+		result = util::split1("line1\nline2\nline3\nline4\n", "\n", false);
+		REQUIRE(result == Result { "line1", "line2\nline3\nline4\n" });
 
-		collected.clear();
-		result = util::for_each_split("line1;line2;line3\nline3b;line4;line5;line6;line7;line8", ";", collect);
-		REQUIRE(result == "line6");
-		REQUIRE(collected == Result {
-		            {0,  "line1"        },
-		            { 1, "line2"        },
-		            { 2, "line3\nline3b"},
-		            { 3, "line4"        },
-		            { 4, "line5"        },
-		            { 5, "line6"        },
-        });
+		result = util::split1("setting = important value\n", "=");
+		REQUIRE(result == Result { "setting", "important value" });
+
+		result = util::split1("setting = important value\n", "=", false);
+		REQUIRE(result == Result { "setting ", " important value\n" });
+
+		result = util::split1("= empty\n", "=");
+		REQUIRE(result == Result { "", "empty" });
+
+		result = util::split1("no value\n", "=");
+		REQUIRE(result == Result { "no value", "" });
 	}
 
 	SECTION("join")
@@ -390,5 +381,41 @@ TEST_CASE("Text", "[util]")
 
 		std::string result = util::replace(input, "\n", join_str);
 		REQUIRE(result == expected);
+	}
+
+	SECTION("for_each_split")
+	{
+		std::string_view result;
+
+		using Result = std::vector<std::pair<std::size_t, std::string_view>>;
+		Result collected;
+
+		auto collect = [&](std::size_t part_nr, std::string_view const& part) {
+			collected.emplace_back(part_nr, part);
+			return part_nr == 5;
+		};
+
+		collected.clear();
+		result = util::for_each_split("line1\nline2\nline3\nline4\n", "\n", collect);
+		REQUIRE(result.empty());
+		REQUIRE(collected == Result {
+		            {0,  "line1"},
+		            { 1, "line2"},
+		            { 2, "line3"},
+		            { 3, "line4"},
+		            { 4, ""     },
+        });
+
+		collected.clear();
+		result = util::for_each_split("line1;line2;line3\nline3b;line4;line5;line6;line7;line8", ";", collect);
+		REQUIRE(result == "line6");
+		REQUIRE(collected == Result {
+		            {0,  "line1"        },
+		            { 1, "line2"        },
+		            { 2, "line3\nline3b"},
+		            { 3, "line4"        },
+		            { 4, "line5"        },
+		            { 5, "line6"        },
+        });
 	}
 }

@@ -41,13 +41,9 @@ SettingPairs parse_settings(std::string_view const& data)
 		std::string_view trimmed = util::trim(line);
 		if (!trimmed.empty() && !trimmed.starts_with('#'))
 		{
-			std::size_t found = line.find('=');
-			if (found != std::string_view::npos)
-			{
-				std::string_view key   = util::trim(line.substr(0, found));
-				std::string_view value = util::trim(line.substr(found + 1));
+			auto [key, value] = util::split1(line, "=");
+			if (!key.empty() && !value.empty())
 				result.emplace_back(key, value);
-			}
 		}
 		return false;
 	});

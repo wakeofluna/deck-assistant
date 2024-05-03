@@ -20,6 +20,7 @@
 #include "deck_logger.h"
 #include "lua_helpers.h"
 #include "util_blob.h"
+#include "util_text.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -508,12 +509,7 @@ bool ConnectorWebsocket::verify_http_upgrade_headers(std::string_view const& hea
 			continue;
 		}
 
-		std::size_t split = header.find(": ");
-		if (split == std::string_view::npos)
-			return false;
-
-		std::string_view key   = header.substr(0, split);
-		std::string_view value = header.substr(split + 2);
+		auto [key, value] = util::split1(header, ": ");
 
 		if (key == "Connection")
 		{

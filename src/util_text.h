@@ -24,6 +24,7 @@
 #include <lua.hpp>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace util
@@ -43,9 +44,11 @@ std::string load_file(std::filesystem::path const& path);
 
 std::string_view trim(std::string_view const& str);
 std::vector<std::string_view> split(std::string_view const& str, std::string_view const& split_str = "\n", std::size_t max_parts = 0);
-std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback);
+std::pair<std::string_view, std::string_view> split1(std::string_view const& str, std::string_view const& split_str, bool trim_parts = true);
 std::string join(std::vector<std::string_view> const& items, std::string_view const& join_str);
 std::string replace(std::string_view const& str, std::string_view const& from_str, std::string_view const& to_str);
+
+std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback);
 
 } // namespace util
 

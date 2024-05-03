@@ -569,6 +569,54 @@ std::vector<std::string_view> split(std::string_view const& str, std::string_vie
 	return result;
 }
 
+std::pair<std::string_view, std::string_view> split1(std::string_view const& str, std::string_view const& split_str, bool trim_parts)
+{
+	assert(!split_str.empty());
+	char const split_size = split_str.size();
+
+	std::size_t split = (split_size == 1) ? str.find(split_str[0]) : str.find(split_str);
+
+	std::string_view key = str.substr(0, split);
+	std::string_view value;
+
+	if (split != std::string_view::npos)
+		value = str.substr(split + split_size);
+
+	return trim_parts ? std::make_pair(trim(key), trim(value)) : std::make_pair(key, value);
+}
+
+std::string join(std::vector<std::string_view> const& items, std::string_view const& join_str)
+{
+	if (items.empty())
+		return std::string();
+
+	std::size_t total_len = (items.size() - 1) * join_str.size();
+
+	for (std::string_view const& item : items)
+		total_len += item.size();
+
+	std::string result;
+	result.reserve(total_len + 1);
+
+	bool first = true;
+	for (std::string_view const& item : items)
+	{
+		if (first)
+			first = false;
+		else
+			result += join_str;
+
+		result += item;
+	}
+
+	return result;
+}
+
+std::string replace(std::string_view const& str, std::string_view const& from_str, std::string_view const& to_str)
+{
+	return join(split(str, from_str), to_str);
+}
+
 std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback)
 {
 	assert(!split_str.empty());
@@ -602,38 +650,6 @@ std::string_view for_each_split(std::string_view const& str, std::string_view co
 	}
 
 	return std::string_view();
-}
-
-std::string join(std::vector<std::string_view> const& items, std::string_view const& join_str)
-{
-	if (items.empty())
-		return std::string();
-
-	std::size_t total_len = (items.size() - 1) * join_str.size();
-
-	for (std::string_view const& item : items)
-		total_len += item.size();
-
-	std::string result;
-	result.reserve(total_len + 1);
-
-	bool first = true;
-	for (std::string_view const& item : items)
-	{
-		if (first)
-			first = false;
-		else
-			result += join_str;
-
-		result += item;
-	}
-
-	return result;
-}
-
-std::string replace(std::string_view const& str, std::string_view const& from_str, std::string_view const& to_str)
-{
-	return join(split(str, from_str), to_str);
 }
 
 } // namespace util
