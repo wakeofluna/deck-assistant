@@ -130,29 +130,6 @@ bool get_and_pop_key_value_in_table(lua_State* L, int idx)
 	return true;
 }
 
-std::vector<std::string_view> split_string(std::string_view const& text, char split_char)
-{
-	std::vector<std::string_view> result;
-
-	std::size_t offset = 0;
-	while (offset < text.size())
-	{
-		std::size_t next = text.find(split_char, offset);
-		if (next == std::string_view::npos)
-		{
-			result.push_back(text.substr(offset));
-			break;
-		}
-		else
-		{
-			result.push_back(text.substr(offset, next - offset));
-			offset = next + 1;
-		}
-	}
-
-	return result;
-}
-
 std::optional<int> to_int(lua_State* L, int idx)
 {
 	if (lua_type(L, idx) == LUA_TNUMBER)

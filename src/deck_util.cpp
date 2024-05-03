@@ -20,447 +20,37 @@
 #include "lua_helpers.h"
 #include "util_blob.h"
 #include "util_paths.h"
+#include "util_text.h"
 #include <algorithm>
 #include <cassert>
-#include <charconv>
 #include <chrono>
 #include <fstream>
-#include <sstream>
 
 namespace
 {
 
-void add_indent(std::ostream& stream, int indent, bool pretty)
-{
-	if (pretty)
-	{
-		stream << '\n';
-		std::fill_n(std::ostreambuf_iterator<char>(stream), indent, ' ');
-	}
-}
-
-bool is_convertible_to_json(lua_State* L, int idx)
-{
-	int const vtype = lua_type(L, idx);
-	return vtype == LUA_TNIL || vtype == LUA_TBOOLEAN || vtype == LUA_TNUMBER || vtype == LUA_TSTRING || vtype == LUA_TTABLE;
-}
-
-void convert_to_json(lua_State* L, int idx, std::ostream& stream, bool pretty, int indent)
-{
-	lua_checkstack(L, lua_gettop(L) + 6);
-
-	int const vtype = lua_type(L, idx);
-	switch (vtype)
-	{
-		case LUA_TNONE:
-		case LUA_TNIL:
-			stream << "null";
-			break;
-
-		case LUA_TBOOLEAN:
-			{
-				bool value = lua_toboolean(L, idx);
-				stream << (value ? "true" : "false");
-			}
-			break;
-
-		case LUA_TNUMBER:
-			{
-				lua_Number value = lua_tonumber(L, idx);
-
-				char buf[32];
-				auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::fixed);
-				if (ec != std::errc())
-					stream << "null";
-				else
-					stream.write(buf, end - buf);
-			}
-			break;
-
-		case LUA_TSTRING:
-			{
-				std::string_view value = LuaHelpers::to_string_view(L, idx);
-				stream << '"';
-
-				std::size_t offset = 0;
-				while (offset < value.size())
-				{
-					std::size_t next = value.find_first_of("\"\\/\b\f\n\r\t", offset);
-					if (next == std::string_view::npos)
-						break;
-
-					if (next > offset)
-						stream << value.substr(offset, next - offset);
-
-					stream << '\\';
-
-					char const v = value[next];
-					switch (v)
-					{
-						case '\b':
-							stream << 'b';
-							break;
-						case '\f':
-							stream << 'f';
-							break;
-						case '\n':
-							stream << 'n';
-							break;
-						case '\r':
-							stream << 'r';
-							break;
-						case '\t':
-							stream << 't';
-							break;
-						default:
-							stream << v;
-							break;
-					}
-					offset = next + 1;
-				}
-
-				stream << value.substr(offset);
-				stream << '"';
-			}
-			break;
-
-		case LUA_TTABLE:
-			idx = LuaHelpers::absidx(L, idx);
-
-			// Check if its an array or object
-			lua_rawgeti(L, idx, 1);
-			if (lua_type(L, -1) != LUA_TNIL)
-			{
-				// Is array
-
-				stream << '[';
-				indent += 2;
-
-				int raw_index = 1;
-				while (lua_type(L, -1) != LUA_TNIL)
-				{
-					if (is_convertible_to_json(L, -1))
-					{
-						if (raw_index > 1)
-							stream << ',';
-
-						add_indent(stream, indent, pretty);
-						convert_to_json(L, -1, stream, pretty, indent);
-					}
-
-					lua_pop(L, 1);
-					++raw_index;
-					lua_rawgeti(L, idx, raw_index);
-				}
-
-				lua_pop(L, 1);
-
-				indent -= 2;
-				add_indent(stream, indent, pretty);
-				stream << ']';
-			}
-			else
-			{
-				// Is object
-
-				stream << '{';
-				indent += 2;
-
-				bool first = true;
-				while (lua_next(L, idx))
-				{
-					if (lua_type(L, -2) == LUA_TSTRING && is_convertible_to_json(L, -1))
-					{
-						if (!first)
-							stream << ',';
-						else
-							first = false;
-
-						add_indent(stream, indent, pretty);
-
-						convert_to_json(L, -2, stream, pretty, indent);
-
-						stream << ':';
-						if (pretty)
-							stream << ' ';
-
-						convert_to_json(L, -1, stream, pretty, indent);
-					}
-
-					lua_pop(L, 1);
-				}
-
-				indent -= 2;
-
-				if (!first)
-					add_indent(stream, indent, pretty);
-
-				stream << '}';
-			}
-			break;
-
-		default:
-			{
-				std::string_view value = LuaHelpers::push_converted_to_string(L, idx);
-				stream << value;
-				lua_pop(L, 1);
-				break;
-			}
-	}
-}
-
-std::string_view convert_from_json(lua_State* L, std::string_view const& input, std::size_t& offset)
-{
-	std::size_t const end = input.size();
-
-	while (offset < end && input[offset] <= 32)
-		++offset;
-
-	if (offset == end)
-		return "unexpected end of file, expected value";
-
-	char const token = input[offset];
-
-	if (token == '{')
-	{
-		lua_createtable(L, 0, 8);
-		++offset;
-
-		bool first = true;
-		while (offset < end)
-		{
-			while (offset < end && input[offset] <= 32)
-				++offset;
-
-			if (offset == end)
-				return "unexpected end of file, expected }";
-
-			if (input[offset] == '}')
-				break;
-
-			if (!first)
-			{
-				if (input[offset] != ',')
-					return "expected ,";
-				++offset;
-			}
-
-			std::string_view err = convert_from_json(L, input, offset);
-			if (!err.empty())
-				return err;
-
-			if (lua_type(L, -1) != LUA_TSTRING)
-				return "object key must be string";
-
-			while (offset < end && input[offset] <= 32)
-				++offset;
-
-			if (offset == end)
-				return "unexpected end of file, expected :";
-
-			if (input[offset] != ':')
-				return "expected :";
-
-			++offset;
-
-			err = convert_from_json(L, input, offset);
-			if (!err.empty())
-				return err;
-
-			first = false;
-			lua_rawset(L, -3);
-		}
-
-		++offset;
-	}
-	else if (token == '[')
-	{
-		lua_createtable(L, 0, 8);
-		++offset;
-
-		int raw_index = 0;
-		while (offset < end)
-		{
-			while (offset < end && input[offset] <= 32)
-				++offset;
-
-			if (offset == end)
-				return "unexpected end of file, expected ]";
-
-			if (input[offset] == ']')
-				break;
-
-			if (raw_index > 0)
-			{
-				if (input[offset] != ',')
-					return "expected ,";
-				++offset;
-			}
-
-			std::string_view err = convert_from_json(L, input, offset);
-			if (!err.empty())
-				return err;
-
-			++raw_index;
-			lua_rawseti(L, -2, raw_index);
-		}
-
-		++offset;
-	}
-	else if (token == '"')
-	{
-		luaL_Buffer buf;
-		luaL_buffinit(L, &buf);
-
-		++offset;
-		while (offset < end)
-		{
-			std::size_t next = offset;
-			while (next < end)
-			{
-				if (input[next] == '"' || input[next] == '\\')
-					break;
-
-				++next;
-			}
-
-			if (next == end)
-				return "unexpected end of file, expected \"";
-
-			if (next > offset)
-			{
-				luaL_addlstring(&buf, input.data() + offset, next - offset);
-				offset = next;
-			}
-
-			if (input[offset] == '"')
-				break;
-
-			++offset;
-
-			char const v = input[offset];
-			switch (v)
-			{
-				case '"':
-				case '\\':
-				case '/':
-					luaL_addchar(&buf, v);
-					break;
-				case 'b':
-					luaL_addchar(&buf, '\b');
-					break;
-				case 'f':
-					luaL_addchar(&buf, '\f');
-					break;
-				case 'n':
-					luaL_addchar(&buf, '\n');
-					break;
-				case 'r':
-					luaL_addchar(&buf, '\r');
-					break;
-				case 't':
-					luaL_addchar(&buf, '\t');
-					break;
-				default:
-					luaL_addchar(&buf, '\\');
-					luaL_addchar(&buf, v);
-					break;
-			}
-
-			++offset;
-		}
-
-		++offset;
-		luaL_pushresult(&buf);
-	}
-	else if (token == '-' || (token >= '0' && token <= '9'))
-	{
-		lua_Number number;
-		auto [ptr, ec] = std::from_chars(input.data() + offset, input.data() + input.size(), number);
-		if (ec != std::errc())
-			return "invalid number literal";
-
-		lua_pushnumber(L, number);
-		offset = ptr - input.data();
-	}
-	else if (token == 't')
-	{
-		if (input.substr(offset, 4) != "true")
-			return "invalid literal, expected true";
-
-		lua_pushboolean(L, true);
-		offset += 4;
-	}
-	else if (token == 'f')
-	{
-		if (input.substr(offset, 5) != "false")
-			return "invalid literal, expected false";
-
-		lua_pushboolean(L, false);
-		offset += 5;
-	}
-	else if (token == 'n')
-	{
-		if (input.substr(offset, 4) != "null")
-			return "invalid literal, expected null";
-
-		lua_pushnil(L);
-		offset += 4;
-	}
-	else
-	{
-		return "invalid character";
-	}
-
-	return std::string_view();
-}
-
 using SettingPair  = std::pair<std::string_view, std::string_view>;
 using SettingPairs = std::vector<SettingPair>;
-
-std::string_view trim(std::string_view const& str)
-{
-	char const* start = str.data();
-	char const* end   = start + str.size();
-
-	while (end > start && end[-1] <= 32)
-		--end;
-
-	while (start < end && start[0] <= 32)
-		++start;
-
-	return (start == end) ? std::string_view() : std::string_view(start, end);
-}
 
 SettingPairs parse_settings(std::string_view const& data)
 {
 	SettingPairs result;
 	result.reserve(16);
 
-	std::size_t offset    = 0;
-	std::size_t const end = data.size();
-
-	while (offset < end)
-	{
-		std::size_t found = data.find('\n', offset);
-		if (found == std::string_view::npos)
-			found = end;
-
-		std::string_view line = trim(data.substr(offset, found - offset));
-		offset                = found + 1;
-
-		if (line.empty() || line.starts_with('#'))
-			continue;
-
-		found = line.find('=');
-		if (found == std::string_view::npos)
-			continue;
-
-		std::string_view key   = trim(line.substr(0, found));
-		std::string_view value = trim(line.substr(found + 1));
-
-		result.emplace_back(key, value);
-	}
+	util::for_each_split(data, '\n', [&](std::size_t line_nr, std::string_view const& line) {
+		std::string_view trimmed = util::trim(line);
+		if (!trimmed.empty() && !trimmed.starts_with('#'))
+		{
+			std::size_t found = line.find('=');
+			if (found != std::string_view::npos)
+			{
+				std::string_view key   = util::trim(line.substr(0, found));
+				std::string_view value = util::trim(line.substr(found + 1));
+				result.emplace_back(key, value);
+			}
+		}
+		return false;
+	});
 
 	return result;
 }
@@ -485,29 +75,6 @@ bool store_settings(std::filesystem::path const& path, SettingPairs const& setti
 	}
 
 	return true;
-}
-
-std::string load_file(std::filesystem::path const& path)
-{
-	assert(path.is_absolute() && "load_file requires an absolute path");
-
-	std::ifstream fp(path.c_str(), std::ios::in | std::ios::binary);
-	if (!fp.good())
-		return std::string();
-
-	fp.seekg(0, std::ios::end);
-	auto file_size = fp.tellg();
-
-	if (file_size == 0)
-		return std::string();
-
-	fp.seekg(0, std::ios::beg);
-
-	std::string contents;
-	contents.reserve(std::size_t(file_size) + 1);
-
-	std::copy_n(std::istreambuf_iterator(fp), file_size, std::back_inserter(contents));
-	return contents;
 }
 
 } // namespace
@@ -640,7 +207,7 @@ int DeckUtil::_lua_from_json(lua_State* L)
 	std::string_view input = LuaHelpers::to_string_view(L, 1);
 	std::size_t offset     = 0;
 
-	std::string_view err = convert_from_json(L, input, offset);
+	std::string_view err = util::convert_from_json(L, input, offset);
 	if (!err.empty())
 	{
 		luaL_Buffer buf;
@@ -670,15 +237,8 @@ int DeckUtil::_lua_to_json(lua_State* L)
 
 	lua_settop(L, 1);
 
-	std::string buf;
-	buf.reserve(1024);
-
-	std::stringstream stream(std::move(buf));
-
-	convert_to_json(L, 1, stream, pretty, 0);
-	buf = std::move(stream).str();
-
-	lua_pushlstring(L, buf.data(), buf.size());
+	std::string result = util::convert_to_json(L, 1, pretty);
+	lua_pushlstring(L, result.data(), result.size());
 	return 1;
 }
 
@@ -738,7 +298,7 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 	// TODO check key and value for invalid/dangerous characters
 
 	std::filesystem::path path = paths->get_sandbox_dir() / "secrets.conf";
-	std::string file_data      = load_file(path);
+	std::string file_data      = util::load_file(path);
 	SettingPairs settings      = parse_settings(file_data);
 
 	bool found = false;
@@ -772,7 +332,7 @@ int DeckUtil::_lua_retrieve_secret(lua_State* L)
 	for (std::filesystem::path const& base_path : { paths->get_sandbox_dir(), paths->get_user_config_dir() })
 	{
 		std::filesystem::path path = base_path / "secrets.conf";
-		std::string file_data      = load_file(path);
+		std::string file_data      = util::load_file(path);
 		SettingPairs settings      = parse_settings(file_data);
 
 		for (SettingPair const& pair : settings)

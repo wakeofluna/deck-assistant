@@ -16,6 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "util_text.h"
+#include "lua_helpers.h"
+#include <algorithm>
+#include <cassert>
+#include <charconv>
+#include <fstream>
+
 namespace
 {
 
@@ -58,6 +65,390 @@ constexpr char nibble_to_hex_uc(unsigned char nibble)
 		return 'A' + (nibble - 10);
 }
 
+void add_indent(std::string& target, int indent, bool pretty)
+{
+	if (pretty)
+	{
+		target += '\n';
+		target.append(indent, ' ');
+	}
+}
+
+bool is_convertible_to_json(lua_State* L, int idx)
+{
+	int const vtype = lua_type(L, idx);
+	return vtype == LUA_TNIL || vtype == LUA_TBOOLEAN || vtype == LUA_TNUMBER || vtype == LUA_TSTRING || vtype == LUA_TTABLE;
+}
+
+void convert_to_json_impl(lua_State* L, int idx, std::string& target, bool pretty, int indent)
+{
+	lua_checkstack(L, lua_gettop(L) + 6);
+
+	int const vtype = lua_type(L, idx);
+	switch (vtype)
+	{
+		case LUA_TNONE:
+		case LUA_TNIL:
+			target += "null";
+			break;
+
+		case LUA_TBOOLEAN:
+			{
+				bool value  = lua_toboolean(L, idx);
+				target     += (value ? "true" : "false");
+			}
+			break;
+
+		case LUA_TNUMBER:
+			{
+				lua_Number value = lua_tonumber(L, idx);
+
+				char buf[32];
+				auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::fixed);
+				if (ec != std::errc())
+					target += "null";
+				else
+					target.append(buf, end - buf);
+			}
+			break;
+
+		case LUA_TSTRING:
+			{
+				std::string_view value  = LuaHelpers::to_string_view(L, idx);
+				target                 += '"';
+
+				std::size_t offset = 0;
+				while (offset < value.size())
+				{
+					std::size_t next = value.find_first_of("\"\\/\b\f\n\r\t", offset);
+					if (next == std::string_view::npos)
+						break;
+
+					if (next > offset)
+						target.append(value, offset, next - offset);
+
+					target += '\\';
+
+					char const v = value[next];
+					switch (v)
+					{
+						case '\b':
+							target += 'b';
+							break;
+						case '\f':
+							target += 'f';
+							break;
+						case '\n':
+							target += 'n';
+							break;
+						case '\r':
+							target += 'r';
+							break;
+						case '\t':
+							target += 't';
+							break;
+						default:
+							target += v;
+							break;
+					}
+					offset = next + 1;
+				}
+
+				target.append(value, offset);
+				target += '"';
+			}
+			break;
+
+		case LUA_TTABLE:
+			idx = LuaHelpers::absidx(L, idx);
+
+			// Check if its an array or object
+			lua_rawgeti(L, idx, 1);
+			if (lua_type(L, -1) != LUA_TNIL)
+			{
+				// Is array
+
+				target += '[';
+				indent += 2;
+
+				int raw_index = 1;
+				while (lua_type(L, -1) != LUA_TNIL)
+				{
+					if (is_convertible_to_json(L, -1))
+					{
+						if (raw_index > 1)
+							target += ',';
+
+						add_indent(target, indent, pretty);
+						convert_to_json_impl(L, -1, target, pretty, indent);
+					}
+
+					lua_pop(L, 1);
+					++raw_index;
+					lua_rawgeti(L, idx, raw_index);
+				}
+
+				lua_pop(L, 1);
+
+				indent -= 2;
+				add_indent(target, indent, pretty);
+				target += ']';
+			}
+			else
+			{
+				// Is object
+
+				target += '{';
+				indent += 2;
+
+				bool first = true;
+				while (lua_next(L, idx))
+				{
+					if (lua_type(L, -2) == LUA_TSTRING && is_convertible_to_json(L, -1))
+					{
+						if (!first)
+							target += ',';
+						else
+							first = false;
+
+						add_indent(target, indent, pretty);
+
+						convert_to_json_impl(L, -2, target, pretty, indent);
+
+						target += ':';
+						if (pretty)
+							target += ' ';
+
+						convert_to_json_impl(L, -1, target, pretty, indent);
+					}
+
+					lua_pop(L, 1);
+				}
+
+				indent -= 2;
+
+				if (!first)
+					add_indent(target, indent, pretty);
+
+				target += '}';
+			}
+			break;
+
+		default:
+			{
+				std::string_view value  = LuaHelpers::push_converted_to_string(L, idx);
+				target                 += value;
+				lua_pop(L, 1);
+				break;
+			}
+	}
+}
+
+std::string_view convert_from_json_impl(lua_State* L, std::string_view const& input, std::size_t& offset)
+{
+	std::size_t const end = input.size();
+
+	while (offset < end && input[offset] <= 32)
+		++offset;
+
+	if (offset == end)
+		return "unexpected end of file, expected value";
+
+	char const token = input[offset];
+
+	if (token == '{')
+	{
+		lua_createtable(L, 0, 8);
+		++offset;
+
+		bool first = true;
+		while (offset < end)
+		{
+			while (offset < end && input[offset] <= 32)
+				++offset;
+
+			if (offset == end)
+				return "unexpected end of file, expected }";
+
+			if (input[offset] == '}')
+				break;
+
+			if (!first)
+			{
+				if (input[offset] != ',')
+					return "expected ,";
+				++offset;
+			}
+
+			std::string_view err = convert_from_json_impl(L, input, offset);
+			if (!err.empty())
+				return err;
+
+			if (lua_type(L, -1) != LUA_TSTRING)
+				return "object key must be string";
+
+			while (offset < end && input[offset] <= 32)
+				++offset;
+
+			if (offset == end)
+				return "unexpected end of file, expected :";
+
+			if (input[offset] != ':')
+				return "expected :";
+
+			++offset;
+
+			err = convert_from_json_impl(L, input, offset);
+			if (!err.empty())
+				return err;
+
+			first = false;
+			lua_rawset(L, -3);
+		}
+
+		++offset;
+	}
+	else if (token == '[')
+	{
+		lua_createtable(L, 0, 8);
+		++offset;
+
+		int raw_index = 0;
+		while (offset < end)
+		{
+			while (offset < end && input[offset] <= 32)
+				++offset;
+
+			if (offset == end)
+				return "unexpected end of file, expected ]";
+
+			if (input[offset] == ']')
+				break;
+
+			if (raw_index > 0)
+			{
+				if (input[offset] != ',')
+					return "expected ,";
+				++offset;
+			}
+
+			std::string_view err = convert_from_json_impl(L, input, offset);
+			if (!err.empty())
+				return err;
+
+			++raw_index;
+			lua_rawseti(L, -2, raw_index);
+		}
+		++offset;
+	}
+	else if (token == '"')
+	{
+		luaL_Buffer buf;
+		luaL_buffinit(L, &buf);
+
+		++offset;
+		while (offset < end)
+		{
+			std::size_t next = offset;
+			while (next < end)
+			{
+				if (input[next] == '"' || input[next] == '\\')
+					break;
+
+				++next;
+			}
+
+			if (next == end)
+				return "unexpected end of file, expected \"";
+
+			if (next > offset)
+			{
+				luaL_addlstring(&buf, input.data() + offset, next - offset);
+				offset = next;
+			}
+
+			if (input[offset] == '"')
+				break;
+
+			++offset;
+
+			char const v = input[offset];
+			switch (v)
+			{
+				case '"':
+				case '\\':
+				case '/':
+					luaL_addchar(&buf, v);
+					break;
+				case 'b':
+					luaL_addchar(&buf, '\b');
+					break;
+				case 'f':
+					luaL_addchar(&buf, '\f');
+					break;
+				case 'n':
+					luaL_addchar(&buf, '\n');
+					break;
+				case 'r':
+					luaL_addchar(&buf, '\r');
+					break;
+				case 't':
+					luaL_addchar(&buf, '\t');
+					break;
+				default:
+					luaL_addchar(&buf, '\\');
+					luaL_addchar(&buf, v);
+					break;
+			}
+
+			++offset;
+		}
+
+		++offset;
+		luaL_pushresult(&buf);
+	}
+	else if (token == '-' || (token >= '0' && token <= '9'))
+	{
+		lua_Number number;
+		auto [ptr, ec] = std::from_chars(input.data() + offset, input.data() + input.size(), number);
+		if (ec != std::errc())
+			return "invalid number literal";
+
+		lua_pushnumber(L, number);
+		offset = ptr - input.data();
+	}
+	else if (token == 't')
+	{
+		if (input.substr(offset, 4) != "true")
+			return "invalid literal, expected true";
+
+		lua_pushboolean(L, true);
+		offset += 4;
+	}
+	else if (token == 'f')
+	{
+		if (input.substr(offset, 5) != "false")
+			return "invalid literal, expected false";
+
+		lua_pushboolean(L, false);
+		offset += 5;
+	}
+	else if (token == 'n')
+	{
+		if (input.substr(offset, 4) != "null")
+			return "invalid literal, expected null";
+
+		lua_pushnil(L);
+		offset += 4;
+	}
+	else
+	{
+		return "invalid character";
+	}
+
+	return std::string_view();
+}
+
 } // namespace
 
 namespace util
@@ -83,6 +474,106 @@ void char_to_hex_uc(unsigned char ch, char* hex)
 {
 	hex[0] = nibble_to_hex_uc(ch >> 4);
 	hex[1] = nibble_to_hex_uc(ch & 0x0f);
+}
+
+std::string convert_to_json(lua_State* L, int idx, bool pretty)
+{
+	std::string result;
+	result.reserve(1024);
+	convert_to_json_impl(L, idx, result, pretty, 0);
+	return result;
+}
+
+std::string_view convert_from_json(lua_State* L, std::string_view const& input, std::size_t& offset)
+{
+	return convert_from_json_impl(L, input, offset);
+}
+
+std::string load_file(std::filesystem::path const& path)
+{
+	assert(path.is_absolute() && "load_file requires an absolute path");
+
+	std::ifstream fp(path.c_str(), std::ios::in | std::ios::binary);
+	if (!fp.good())
+		return std::string();
+
+	fp.seekg(0, std::ios::end);
+	auto file_size = fp.tellg();
+
+	if (file_size == 0)
+		return std::string();
+
+	fp.seekg(0, std::ios::beg);
+
+	std::string contents;
+	contents.reserve(std::size_t(file_size) + 1);
+
+	std::copy_n(std::istreambuf_iterator(fp), file_size, std::back_inserter(contents));
+	return contents;
+}
+
+std::string_view trim(std::string_view const& str)
+{
+	char const* start = str.data();
+	char const* end   = start + str.size();
+
+	while (end > start && end[-1] <= 32)
+		--end;
+
+	while (start < end && start[0] <= 32)
+		++start;
+
+	return (start == end) ? std::string_view() : std::string_view(start, end);
+}
+
+std::vector<std::string_view> split(std::string_view const& str, char split_char, std::size_t max_splits)
+{
+	std::vector<std::string_view> result;
+
+	if (max_splits != std::size_t(-1))
+		result.reserve(max_splits + 1);
+	else
+		result.reserve(64);
+
+	std::size_t offset    = 0;
+	std::size_t const end = str.size();
+	while (offset < end)
+	{
+		std::size_t next = max_splits == 0 ? std::string_view::npos : str.find(split_char, offset);
+		if (next == std::string_view::npos)
+			next = end;
+
+		result.push_back(str.substr(offset, next - offset));
+		offset = next + 1;
+
+		--max_splits;
+	}
+
+	return result;
+}
+
+std::string_view for_each_split(std::string_view const& str, char split_char, SplitCallback const& callback)
+{
+	std::size_t counter   = 0;
+	std::size_t offset    = 0;
+	std::size_t const end = str.size();
+
+	while (offset < end)
+	{
+		std::size_t next = str.find(split_char, offset);
+		if (next == std::string_view::npos)
+			next = end;
+
+		std::string_view segment = str.substr(offset, next - offset);
+		offset                   = next + 1;
+
+		if (callback(counter, segment))
+			return segment;
+
+		++counter;
+	}
+
+	return std::string_view();
 }
 
 } // namespace util

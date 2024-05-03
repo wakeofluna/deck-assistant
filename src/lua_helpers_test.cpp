@@ -21,6 +21,7 @@
 #include "lua_helpers.h"
 #include "test_utils_test.h"
 #include "util_paths.h"
+#include "util_text.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -767,7 +768,7 @@ end
 		REQUIRE(lua_gettop(L) == 9);
 
 		std::string dump                    = std::move(stream).str();
-		std::vector<std::string_view> lines = split_string(dump);
+		std::vector<std::string_view> lines = util::split(dump);
 
 		REQUIRE(lines.size() == 10);
 		REQUIRE(lines[0].starts_with("=="));
