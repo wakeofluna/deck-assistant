@@ -399,7 +399,7 @@ bool LuaHelpers::load_script(lua_State* L, std::filesystem::path const& file, Tr
 	std::string file_name;
 	file_name.reserve(64);
 	file_name  = "@";
-	file_name += file.filename();
+	file_name += file.filename().string();
 
 	g_last_error_context.clear();
 

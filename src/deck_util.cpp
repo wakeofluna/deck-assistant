@@ -467,13 +467,13 @@ int DeckUtil::_lua_ls(lua_State* L)
 
 		if (std::filesystem::is_directory(file_status))
 		{
-			std::string fname = dir_iter->path().filename();
+			std::string fname = dir_iter->path().filename().string();
 			if (!fname.starts_with('.'))
 				subdirs.emplace_back(std::move(fname));
 		}
 		else if (std::filesystem::is_regular_file(file_status))
 		{
-			std::string fname = dir_iter->path().filename();
+			std::string fname = dir_iter->path().filename().string();
 			if (!fname.starts_with('.'))
 				files.emplace_back(std::move(fname), dir_iter->file_size(), dir_iter->last_write_time());
 		}
