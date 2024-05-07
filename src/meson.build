@@ -1,6 +1,5 @@
 sources = files(
     'application.cpp',
-    'builtins.cpp',
     'connector_base.cpp',
     'connector_elgato_streamdeck.cpp',
     'connector_vnc.cpp',
@@ -38,16 +37,21 @@ test_sources = files(
     'util_url_test.cpp',
 )
 
+builtin_sources = files(
+    'builtins/Vera.ttf',
+)
+
 if build_machine.system() != 'windows'
     noexcept = ['-fno-exceptions']
 else
     noexcept = []
 endif
 
+builtins = embedder.process(builtin_sources)
 
 slib = static_library(
     'deck-assistant',
-    sources: sources,
+    sources: [sources, builtins],
     dependencies: [lua, sdl, sdl_image, sdl_net, sdl_ttf, ssl, vnc],
     cpp_args: noexcept + buildflags,
 )

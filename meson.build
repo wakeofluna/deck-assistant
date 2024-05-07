@@ -153,4 +153,5 @@ summary(
     section: 'Runtime dependencies',
 )
 
+subdir('tools')
 subdir('src')

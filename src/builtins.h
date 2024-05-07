@@ -22,10 +22,19 @@
 namespace builtins
 {
 
-using Blob = std::basic_string_view<unsigned char>;
+// List of generated builtins
+extern std::basic_string_view<unsigned char> vera_ttf;
 
-Blob font();
+using BuiltinData = std::basic_string_view<unsigned char>;
 
-SDL_RWops* as_rwops(Blob const& builtin);
+inline BuiltinData font()
+{
+	return vera_ttf;
+}
+
+inline SDL_RWops* as_rwops(BuiltinData const& builtin)
+{
+	return SDL_RWFromConstMem(builtin.data(), builtin.size());
+}
 
 } // namespace builtins
