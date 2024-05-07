@@ -62,6 +62,9 @@ void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 			case SDL_MOUSEBUTTONDOWN:
 				handle_button_event(L, event);
 				break;
+			case SDL_MOUSEWHEEL:
+				handle_wheel_event(L, event);
+				break;
 		}
 	}
 
@@ -366,6 +369,12 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
+	else if (event->type == SDL_MOUSEWHEEL && event->wheel.windowID == window_id)
+	{
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse wheel ", event->wheel.x, ',', -event->wheel.y, " at ", event->wheel.x, ',', event->wheel.y);
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
 	else if (event->type == SDL_WINDOWEVENT && event->window.windowID == window_id)
 	{
 		std::lock_guard guard(self->m_mutex);
@@ -481,7 +490,47 @@ void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
 		lua_getfield(L, 1, "hotspots");
 		if (DeckRectangleList::from_stack(L, -1, false))
 		{
-			DeckRectangleList::push_any_contains(L, event.motion.x, event.motion.y);
+			DeckRectangleList::push_any_contains(L, event.button.x, event.button.y);
+			lua_replace(L, -2);
+		}
+		else
+		{
+			lua_pop(L, 1);
+			lua_pushnil(L);
+		}
+
+		LuaHelpers::yieldable_call(L, 6);
+	}
+	else
+	{
+		lua_pop(L, 1);
+	}
+}
+
+void ConnectorWindow::handle_wheel_event(lua_State* L, SDL_Event const& event)
+{
+	lua_getfield(L, 1, "on_mouse_scroll");
+	if (lua_type(L, -1) == LUA_TFUNCTION)
+	{
+		lua_pushvalue(L, 1);
+		lua_pushinteger(L, event.wheel.mouseX);
+		lua_pushinteger(L, event.wheel.mouseY);
+
+		if (event.wheel.direction == SDL_MOUSEWHEEL_NORMAL)
+		{
+			lua_pushnumber(L, event.wheel.preciseX);
+			lua_pushnumber(L, -event.wheel.preciseY);
+		}
+		else
+		{
+			lua_pushnumber(L, -event.wheel.preciseX);
+			lua_pushnumber(L, event.wheel.preciseY);
+		}
+
+		lua_getfield(L, 1, "hotspots");
+		if (DeckRectangleList::from_stack(L, -1, false))
+		{
+			DeckRectangleList::push_any_contains(L, event.wheel.mouseX, event.wheel.mouseY);
 			lua_replace(L, -2);
 		}
 		else

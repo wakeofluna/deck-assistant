@@ -54,6 +54,7 @@ private:
 	void handle_window_event(lua_State* L, SDL_Event const& event);
 	void handle_motion_event(lua_State* L, SDL_Event const& event);
 	void handle_button_event(lua_State* L, SDL_Event const& event);
+	void handle_wheel_event(lua_State* L, SDL_Event const& event);
 
 private:
 	// Window physicals
