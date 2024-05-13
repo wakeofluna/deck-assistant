@@ -22,6 +22,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+// Comment to prevent clang-format from reordering the includes
 #include <processenv.h>
 #else
 #include <wordexp.h>
@@ -211,11 +212,11 @@ void Paths::set_sandbox_path(std::filesystem::path path)
 	m_sandbox_dir = std::move(path);
 }
 
-std::filesystem::path Paths::find_data_file(std::string_view const& file_name, bool allow_home, bool allow_system) const
+std::filesystem::path Paths::find_data_file(std::string_view const& file_name, bool allow_local, bool allow_home, bool allow_system) const
 {
 	std::filesystem::path target;
 
-	if (find_file_in(m_sandbox_dir, file_name, target))
+	if (allow_local && find_file_in(m_sandbox_dir, file_name, target))
 		return target;
 
 	if (allow_home && find_file_in(m_user_data_dir, file_name, target))

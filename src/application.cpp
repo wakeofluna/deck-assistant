@@ -134,7 +134,7 @@ int override_loadfile(lua_State* L)
 
 	int trust_level_max            = lua_tointeger(L, lua_upvalueindex(1));
 	int trust_level_wanted         = lua_tointeger(L, lua_upvalueindex(2));
-	util::Paths* paths             = (util::Paths*)lua_touserdata(L, lua_upvalueindex(3));
+	util::Paths const* paths       = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(2)));
 	LuaHelpers::Trust trust_max    = static_cast<LuaHelpers::Trust>(trust_level_max);
 	LuaHelpers::Trust trust_wanted = static_cast<LuaHelpers::Trust>(trust_level_wanted);
 
@@ -145,7 +145,7 @@ int override_loadfile(lua_State* L)
 	}
 
 	bool const allow_home        = (trust_max != LuaHelpers::Trust::Untrusted);
-	std::filesystem::path target = paths->find_data_file(name, allow_home, true);
+	std::filesystem::path target = paths->find_data_file(name, true, allow_home, true);
 
 	if (target.empty())
 	{
@@ -162,6 +162,83 @@ int override_loadfile(lua_State* L)
 	lua_pushnil(L);
 	lua_pushlstring(L, error.data(), error.size());
 	return 2;
+}
+
+int override_require(lua_State* L)
+{
+	std::string_view name = LuaHelpers::check_arg_string(L, 1);
+
+	int trust_level          = lua_tointeger(L, lua_upvalueindex(1));
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(2)));
+	LuaHelpers::Trust trust  = static_cast<LuaHelpers::Trust>(trust_level);
+
+	// Check the package.loaded table (upvalueindex 3)
+	lua_pushvalue(L, 1);
+	lua_rawget(L, lua_upvalueindex(3));
+	if (lua_type(L, -1) != LUA_TNIL)
+		return 1;
+
+	std::string file_name_copy;
+	std::string_view file_name = name;
+	if (!file_name.ends_with(".lua"))
+	{
+		file_name_copy.reserve(name.size() + 5);
+		file_name_copy = name;
+		file_name_copy.append(".lua");
+		file_name = file_name_copy;
+	}
+
+	std::filesystem::path file_path;
+	LuaHelpers::Trust load_trust = LuaHelpers::Trust::Untrusted;
+
+	if (file_path.empty())
+	{
+		file_path = paths->find_data_file(file_name, true, false, false);
+		if (!file_path.empty())
+			load_trust = LuaHelpers::Trust::Untrusted;
+	}
+	if (file_path.empty() && trust != LuaHelpers::Trust::Untrusted)
+	{
+		file_path = paths->find_data_file(file_name, false, true, false);
+		if (!file_path.empty())
+			load_trust = LuaHelpers::Trust::Trusted;
+	}
+	if (file_path.empty())
+	{
+		file_path = paths->find_data_file(file_name, false, false, true);
+		if (!file_path.empty())
+			load_trust = LuaHelpers::Trust::Admin;
+	}
+	if (file_path.empty())
+	{
+		luaL_error(L, "module '%s' not found", name.data());
+		return 0;
+	}
+
+	if (!LuaHelpers::load_script(L, file_path, load_trust, false))
+	{
+		luaL_error(L, "error loading module '%s': %s", name.data(), LuaHelpers::get_last_error_context().message.c_str());
+		return 0;
+	}
+
+	if (!LuaHelpers::pcall(L, 0, 1, false))
+	{
+		luaL_error(L, "error loading module '%s': %s", name.data(), LuaHelpers::get_last_error_context().message.c_str());
+		return 0;
+	}
+
+	if (lua_type(L, -1) != LUA_TTABLE)
+	{
+		luaL_error(L, "module '%s' invalid: missing return table", name.data());
+		return 0;
+	}
+
+	// Duplicate value into package table
+	lua_pushvalue(L, 1);
+	lua_pushvalue(L, -2);
+	lua_rawset(L, lua_upvalueindex(3));
+
+	return 1;
 }
 
 } // namespace
@@ -302,7 +379,7 @@ int Application::run()
 	return exit_code;
 }
 
-void Application::build_environment_tables(lua_State* L, util::Paths* paths)
+void Application::build_environment_tables(lua_State* L, util::Paths const* paths)
 {
 	int const oldtop  = lua_gettop(L);
 	int const oldtop1 = oldtop + 1;
@@ -342,20 +419,9 @@ void Application::install_function_overrides(lua_State* L)
 	lua_pop(L, 1);
 }
 
-void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust, util::Paths* paths)
+void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust, util::Paths const* paths)
 {
-	// Insert our API
-	DeckModule::push_new(L);
-	lua_setfield(L, -2, "deck");
-
-	DeckLogger::push_new(L);
-	lua_setfield(L, -2, "logger");
-
-	DeckUtil::push_new(L, trust, paths);
-	lua_setfield(L, -2, "util");
-
-	DeckFont::insert_enum_values(L);
-
+	// Copy functions that are allowed for all clients
 	char const* const untrusted_keys[] = {
 		// basic
 		"_VERSION",
@@ -414,6 +480,38 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust,
 	}
 	lua_pop(L, 1);
 
+	// Create the package table
+	if (trust == LuaHelpers::Trust::Admin)
+	{
+		lua_getglobal(L, "package");
+		lua_setfield(L, -2, "package");
+	}
+	else
+	{
+		lua_createtable(L, 0, 1);
+		lua_createtable(L, 0, 16);
+		for (auto module : { "coroutine", "math", "string", "table", "os" })
+		{
+			lua_getfield(L, -3, module);
+			lua_setfield(L, -2, module);
+		}
+		lua_setfield(L, -2, "loaded");
+		lua_setfield(L, -2, "package");
+	}
+
+	// Add our API to the package table
+	lua_getfield(L, -1, "package");
+	lua_getfield(L, -1, "loaded");
+	DeckModule::push_new(L);
+	lua_setfield(L, -2, "deck");
+	DeckLogger::push_new(L);
+	lua_setfield(L, -2, "deck.logger");
+	DeckUtil::push_new(L, trust, paths);
+	lua_setfield(L, -2, "deck.util");
+	lua_pop(L, 2);
+
+	DeckFont::insert_enum_values(L);
+
 	// Build script loader functions
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Untrusted));
@@ -432,21 +530,29 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust,
 
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Untrusted));
-	lua_pushlightuserdata(L, paths);
+	lua_pushlightuserdata(L, (void*)paths);
 	lua_pushcclosure(L, &override_loadfile, 3);
 	lua_setfield(L, -2, "loadfile");
 
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Trusted));
-	lua_pushlightuserdata(L, paths);
+	lua_pushlightuserdata(L, (void*)paths);
 	lua_pushcclosure(L, &override_loadfile, 3);
 	lua_setfield(L, -2, "loadfile_trusted");
 
 	lua_pushinteger(L, int(trust));
 	lua_pushinteger(L, int(LuaHelpers::Trust::Admin));
-	lua_pushlightuserdata(L, paths);
+	lua_pushlightuserdata(L, (void*)paths);
 	lua_pushcclosure(L, &override_loadfile, 3);
 	lua_setfield(L, -2, "loadfile_admin");
+
+	lua_pushinteger(L, int(trust));
+	lua_pushlightuserdata(L, (void*)paths);
+	lua_getfield(L, -3, "package");
+	lua_getfield(L, -1, "loaded");
+	lua_replace(L, -2);
+	lua_pushcclosure(L, &override_require, 3);
+	lua_setfield(L, -2, "require");
 
 	if (trust == LuaHelpers::Trust::Untrusted)
 		return;
@@ -475,20 +581,8 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust,
 
 	// Functions for at-least Admin
 
-	char const* const admin_keys[] = {
-		// basic
-		"module",
-		"require",
-	};
-
-	for (auto key : admin_keys)
-	{
-		lua_getglobal(L, key);
-		lua_setfield(L, -2, key);
-	}
-
 	// Modules are fully accessible instead of copies
-	for (auto module : { "coroutine", "debug", "io", "math", "os", "package", "string", "table" })
+	for (auto module : { "coroutine", "debug", "io", "math", "os", "string", "table" })
 	{
 		lua_getglobal(L, module);
 		lua_setfield(L, -2, module);

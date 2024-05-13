@@ -37,14 +37,17 @@ int at_panic(lua_State* L)
 lua_State* new_test_state()
 {
 	lua_State* L = luaL_newstate();
+
 	lua_atpanic(L, &at_panic);
-	lua_checkstack(L, 100);
 	if (setjmp(g_panic_jmp))
 	{
 		std::string full_message  = "Unhandled panic: ";
 		full_message             += g_panic_msg;
 		FAIL(full_message);
 	}
+
+	lua_checkstack(L, 100);
+	luaL_openlibs(L);
 
 	// Disable logging by default
 	DeckLogger::override_min_level(DeckLogger::Level::Error);

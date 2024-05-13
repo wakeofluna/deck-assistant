@@ -35,7 +35,7 @@ public:
 	void resolve_standard_paths();
 	void set_sandbox_path(std::filesystem::path path);
 
-	std::filesystem::path find_data_file(std::string_view const& file_name, bool allow_home, bool allow_system) const;
+	std::filesystem::path find_data_file(std::string_view const& file_name, bool allow_local, bool allow_home, bool allow_system) const;
 	std::filesystem::path find_config_file(std::string_view const& file_name, bool allow_home) const;
 	std::filesystem::path find_executable(std::string_view const& file_name, bool allow_path) const;
 
