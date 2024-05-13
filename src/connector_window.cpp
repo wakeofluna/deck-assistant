@@ -19,6 +19,7 @@
 #include "connector_window.h"
 #include "deck_card.h"
 #include "deck_logger.h"
+#include "deck_rectangle.h"
 #include "lua_helpers.h"
 
 char const* ConnectorWindow::LUA_TYPENAME = "deck:ConnectorWindow";
@@ -327,6 +328,10 @@ bool ConnectorWindow::attempt_create_window(lua_State* L)
 int ConnectorWindow::_lua_redraw(lua_State* L)
 {
 	ConnectorWindow* self = from_stack(L, 1);
+	// DeckRectangle* rect = nullptr;
+
+	if (!lua_isnoneornil(L, 2))
+		/*rect =*/DeckRectangle::from_stack(L, 2);
 
 	std::lock_guard guard(self->m_mutex);
 	self->m_event_surface_dirty = true;

@@ -17,6 +17,7 @@
  */
 
 #include "application.h"
+#include "builtins.h"
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
@@ -278,20 +279,26 @@ bool Application::init(std::vector<std::string_view>&& args)
 {
 	int const oldtop = lua_gettop(L);
 
-	std::string_view file_name;
-	if (args.size() <= 1)
-		file_name = "deckfile.lua";
+	std::string_view filename = (args.size() > 1) ? args[1] : "deckfile.lua";
+
+	if (!filename.empty())
+	{
+		std::error_code ec;
+		std::filesystem::path full_path = std::filesystem::absolute(filename, ec);
+		full_path.make_preferred();
+
+		if (!LuaHelpers::load_script(L, full_path, LuaHelpers::Trust::Trusted))
+			return false;
+
+		m_paths->set_sandbox_path(full_path.parent_path());
+	}
 	else
-		file_name = args[1];
+	{
+		if (!LuaHelpers::load_script_inline(L, "main-window-script", builtins::main_window_script(), LuaHelpers::Trust::Admin))
+			return false;
 
-	std::error_code ec;
-	std::filesystem::path full_path = std::filesystem::absolute(file_name, ec);
-	full_path.make_preferred();
-
-	if (!LuaHelpers::load_script(L, full_path, LuaHelpers::Trust::Trusted))
-		return false;
-
-	m_paths->set_sandbox_path(full_path.parent_path());
+		m_paths->set_sandbox_path(".");
+	}
 
 	// XXX remove me
 	lua_pushvalue(L, -1);
@@ -401,6 +408,24 @@ void Application::build_environment_tables(lua_State* L, util::Paths const* path
 	LuaHelpers::push_global_environment_table(L, LuaHelpers::Trust::Untrusted);
 	build_environment_table(L, LuaHelpers::Trust::Untrusted, paths);
 	assert(lua_gettop(L) == oldtop1 && "Application Untrusted environment table build is not stack balanced");
+	lua_pop(L, 1);
+
+	// Now the environment tables are set up, load internal scripts
+	if (!LuaHelpers::load_script_inline(L, "builtins", builtins::builtins_script(), LuaHelpers::Trust::Admin))
+		assert(false && "Error loading builtins script");
+
+	for (LuaHelpers::Trust trust : { LuaHelpers::Trust::Untrusted, LuaHelpers::Trust::Trusted, LuaHelpers::Trust::Admin })
+	{
+		LuaHelpers::push_global_environment_table(L, trust);
+		lua_getfield(L, -1, "package");
+		lua_getfield(L, -1, "loaded");
+		lua_pushvalue(L, -4);
+		assert(LuaHelpers::pcall(L, 0, 1) && "Error running builtins script");
+		assert(lua_type(L, -1) == LUA_TTABLE && "Builtins script did not return a table");
+		lua_setfield(L, -2, "builtins");
+		lua_pop(L, 3);
+	}
+
 	lua_pop(L, 1);
 }
 

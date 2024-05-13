@@ -28,7 +28,7 @@ public:
 	DeckRectangleList();
 	~DeckRectangleList();
 
-	static void push_any_contains(lua_State* L, int x, int y);
+	static void push_any_contains(lua_State* L, int x, int y, bool reversed = false);
 
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
@@ -42,6 +42,7 @@ protected:
 	static int _lua_clear(lua_State* L);
 	static int _lua_remove(lua_State* L);
 	static int _lua_any_contains(lua_State* L);
+	static int _lua_any_contains_reverse(lua_State* L);
 	static int _lua_all_contains(lua_State* L);
 	static int _lua_foreach(lua_State* L);
 

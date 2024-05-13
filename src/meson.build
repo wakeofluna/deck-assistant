@@ -39,6 +39,8 @@ test_sources = files(
 
 builtin_sources = files(
     'builtins/Vera.ttf',
+    'builtins/builtins.lua',
+    'builtins/main_window_script.lua',
 )
 
 if build_machine.system() != 'windows'

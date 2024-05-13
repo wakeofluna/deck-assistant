@@ -23,16 +23,27 @@ namespace builtins
 {
 
 // List of generated builtins
+extern std::basic_string_view<unsigned char> builtins_lua;
+extern std::basic_string_view<unsigned char> main_window_script_lua;
 extern std::basic_string_view<unsigned char> vera_ttf;
 
-using BuiltinData = std::basic_string_view<unsigned char>;
-
-inline BuiltinData font()
+inline std::basic_string_view<unsigned char> font()
 {
 	return vera_ttf;
 }
 
-inline SDL_RWops* as_rwops(BuiltinData const& builtin)
+inline std::string_view builtins_script()
+{
+	return std::string_view((char const*)builtins_lua.data(), builtins_lua.size());
+}
+
+inline std::string_view main_window_script()
+{
+	return std::string_view((char const*)main_window_script_lua.data(), main_window_script_lua.size());
+}
+
+template <typename T>
+inline SDL_RWops* as_rwops(std::basic_string_view<T> const& builtin)
 {
 	return SDL_RWFromConstMem(builtin.data(), builtin.size());
 }

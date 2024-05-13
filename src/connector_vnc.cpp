@@ -21,7 +21,7 @@
 #include "connector_vnc.h"
 #include "deck_card.h"
 #include "deck_logger.h"
-#include "deck_rectangle_list.h"
+#include "deck_rectangle.h"
 #include "lua_helpers.h"
 #include <algorithm>
 #include <cassert>
@@ -416,7 +416,12 @@ void ConnectorVnc::close_vnc()
 
 int ConnectorVnc::_lua_redraw(lua_State* L)
 {
-	ConnectorVnc* self             = from_stack(L, 1);
+	ConnectorVnc* self = from_stack(L, 1);
+	// DeckRectangle* rect = nullptr;
+
+	if (!lua_isnoneornil(L, 2))
+		/*rect =*/DeckRectangle::from_stack(L, 2);
+
 	self->m_dirty_flags[DirtyCard] = true;
 	return 0;
 }

@@ -26,16 +26,25 @@ char const* DeckRectangleList::LUA_TYPENAME = "deck:RectangleList";
 DeckRectangleList::DeckRectangleList()  = default;
 DeckRectangleList::~DeckRectangleList() = default;
 
-void DeckRectangleList::push_any_contains(lua_State* L, int x, int y)
+void DeckRectangleList::push_any_contains(lua_State* L, int x, int y, bool reverse)
 {
 	DeckRectangleList const* self = from_stack(L, -1, false);
 	assert(self != nullptr && "DeckRectangleList::push_any_contains requires self on top of stack");
 
+	if (self->m_refs.empty())
+	{
+		lua_pushnil(L);
+		return;
+	}
+
 	LuaHelpers::push_instance_table(L, -1);
 
-	for (int raw_idx : self->m_refs)
+	size_t const max_idx = self->m_refs.size() - 1;
+	for (size_t raw_idx = 0; raw_idx <= max_idx; ++raw_idx)
 	{
-		lua_rawgeti(L, -1, raw_idx);
+		size_t const n = self->m_refs[reverse ? (max_idx - raw_idx) : raw_idx];
+		lua_rawgeti(L, -1, n);
+
 		DeckRectangle* rect = DeckRectangle::from_stack(L, -1);
 		if (rect->contains(x, y))
 		{
@@ -63,6 +72,9 @@ void DeckRectangleList::init_class_table(lua_State* L)
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "contains");
 	lua_setfield(L, -2, "any");
+
+	lua_pushcfunction(L, &_lua_any_contains_reverse);
+	lua_setfield(L, -2, "reverse_any");
 
 	lua_pushcfunction(L, &_lua_all_contains);
 	lua_setfield(L, -2, "all");
@@ -182,7 +194,18 @@ int DeckRectangleList::_lua_any_contains(lua_State* L)
 	int y = LuaHelpers::check_arg_int(L, 3);
 
 	lua_settop(L, 1);
-	push_any_contains(L, x, y);
+	push_any_contains(L, x, y, false);
+	return 1;
+}
+
+int DeckRectangleList::_lua_any_contains_reverse(lua_State* L)
+{
+	from_stack(L, 1);
+	int x = LuaHelpers::check_arg_int(L, 2);
+	int y = LuaHelpers::check_arg_int(L, 3);
+
+	lua_settop(L, 1);
+	push_any_contains(L, x, y, true);
 	return 1;
 }
 
