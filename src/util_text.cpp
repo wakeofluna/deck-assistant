@@ -17,11 +17,13 @@
  */
 
 #include "util_text.h"
+#include "deck_logger.h"
 #include "lua_helpers.h"
 #include <algorithm>
 #include <cassert>
 #include <charconv>
 #include <fstream>
+#include <set>
 
 namespace
 {
@@ -80,7 +82,7 @@ bool is_convertible_to_json(lua_State* L, int idx)
 	return vtype == LUA_TNIL || vtype == LUA_TBOOLEAN || vtype == LUA_TNUMBER || vtype == LUA_TSTRING || vtype == LUA_TTABLE;
 }
 
-void convert_to_json_impl(lua_State* L, int idx, std::string& target, bool pretty, int indent)
+void convert_to_json_impl(lua_State* L, int idx, std::string& target, std::set<void const*>& seen, bool pretty, int indent)
 {
 	lua_checkstack(L, lua_gettop(L) + 6);
 
@@ -160,77 +162,90 @@ void convert_to_json_impl(lua_State* L, int idx, std::string& target, bool prett
 			break;
 
 		case LUA_TTABLE:
-			idx = LuaHelpers::absidx(L, idx);
-
-			// Check if its an array or object
-			lua_rawgeti(L, idx, 1);
-			if (lua_type(L, -1) != LUA_TNIL)
 			{
-				// Is array
+				idx = LuaHelpers::absidx(L, idx);
 
-				target += '[';
-				indent += 2;
-
-				int raw_index = 1;
-				while (lua_type(L, -1) != LUA_TNIL)
+				void const* this_table_ptr = lua_topointer(L, idx);
+				if (seen.contains(this_table_ptr))
 				{
-					if (is_convertible_to_json(L, -1))
-					{
-						if (raw_index > 1)
-							target += ',';
+					DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "recursion detected, setting value to null");
+					target.append("null", 4);
+					break;
+				}
 
-						add_indent(target, indent, pretty);
-						convert_to_json_impl(L, -1, target, pretty, indent);
+				// Check if its an array or object
+				lua_rawgeti(L, idx, 1);
+				if (lua_type(L, -1) != LUA_TNIL)
+				{
+					// Is array
+
+					target += '[';
+					indent += 2;
+
+					int raw_index = 1;
+					while (lua_type(L, -1) != LUA_TNIL)
+					{
+						if (is_convertible_to_json(L, -1))
+						{
+							if (raw_index > 1)
+								target += ',';
+
+							seen.insert(this_table_ptr);
+							add_indent(target, indent, pretty);
+							convert_to_json_impl(L, -1, target, seen, pretty, indent);
+							seen.erase(this_table_ptr);
+						}
+
+						lua_pop(L, 1);
+						++raw_index;
+						lua_rawgeti(L, idx, raw_index);
 					}
 
 					lua_pop(L, 1);
-					++raw_index;
-					lua_rawgeti(L, idx, raw_index);
-				}
 
-				lua_pop(L, 1);
-
-				indent -= 2;
-				add_indent(target, indent, pretty);
-				target += ']';
-			}
-			else
-			{
-				// Is object
-
-				target += '{';
-				indent += 2;
-
-				bool first = true;
-				while (lua_next(L, idx))
-				{
-					if (lua_type(L, -2) == LUA_TSTRING && is_convertible_to_json(L, -1))
-					{
-						if (!first)
-							target += ',';
-						else
-							first = false;
-
-						add_indent(target, indent, pretty);
-
-						convert_to_json_impl(L, -2, target, pretty, indent);
-
-						target += ':';
-						if (pretty)
-							target += ' ';
-
-						convert_to_json_impl(L, -1, target, pretty, indent);
-					}
-
-					lua_pop(L, 1);
-				}
-
-				indent -= 2;
-
-				if (!first)
+					indent -= 2;
 					add_indent(target, indent, pretty);
+					target += ']';
+				}
+				else
+				{
+					// Is object
 
-				target += '}';
+					target += '{';
+					indent += 2;
+
+					bool first = true;
+					while (lua_next(L, idx))
+					{
+						if (lua_type(L, -2) == LUA_TSTRING && is_convertible_to_json(L, -1))
+						{
+							if (!first)
+								target += ',';
+							else
+								first = false;
+
+							add_indent(target, indent, pretty);
+							convert_to_json_impl(L, -2, target, seen, pretty, indent);
+
+							target += ':';
+							if (pretty)
+								target += ' ';
+
+							seen.insert(this_table_ptr);
+							convert_to_json_impl(L, -1, target, seen, pretty, indent);
+							seen.erase(this_table_ptr);
+						}
+
+						lua_pop(L, 1);
+					}
+
+					indent -= 2;
+
+					if (!first)
+						add_indent(target, indent, pretty);
+
+					target += '}';
+				}
 			}
 			break;
 
@@ -239,8 +254,8 @@ void convert_to_json_impl(lua_State* L, int idx, std::string& target, bool prett
 				std::string_view value  = LuaHelpers::push_converted_to_string(L, idx);
 				target                 += value;
 				lua_pop(L, 1);
-				break;
 			}
+			break;
 	}
 }
 
@@ -478,9 +493,10 @@ void char_to_hex_uc(unsigned char ch, char* hex)
 
 std::string convert_to_json(lua_State* L, int idx, bool pretty)
 {
+	std::set<void const*> seen;
 	std::string result;
 	result.reserve(1024);
-	convert_to_json_impl(L, idx, result, pretty, 0);
+	convert_to_json_impl(L, idx, result, seen, pretty, 0);
 	return result;
 }
 
