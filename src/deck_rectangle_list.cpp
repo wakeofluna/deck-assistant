@@ -66,6 +66,9 @@ void DeckRectangleList::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_all_contains);
 	lua_setfield(L, -2, "all");
+
+	lua_pushcfunction(L, &_lua_foreach);
+	lua_setfield(L, -2, "foreach");
 }
 
 int DeckRectangleList::index(lua_State* L, std::string_view const& key) const
@@ -215,4 +218,40 @@ int DeckRectangleList::_lua_all_contains(lua_State* L)
 	assert(lua_type(L, -1) == LUA_TTABLE);
 	assert(lua_objlen(L, -1) == nr_found);
 	return 1;
+}
+
+int DeckRectangleList::_lua_foreach(lua_State* L)
+{
+	DeckRectangleList* self = from_stack(L, 1);
+	int const max_arg_idx   = lua_gettop(L);
+
+	if (lua_type(L, 2) != LUA_TFUNCTION)
+		luaL_typerror(L, 2, "function");
+
+	LuaHelpers::push_instance_table(L, 1);
+
+	auto iter = self->m_refs.cbegin();
+	auto end  = self->m_refs.cend();
+	for (; iter != end; ++iter)
+	{
+		lua_pushvalue(L, 2);
+		lua_rawgeti(L, -2, *iter);
+
+		for (int x = 3; x <= max_arg_idx; ++x)
+			lua_pushvalue(L, x);
+
+		if (!LuaHelpers::pcall(L, max_arg_idx - 1, 1))
+			return 0;
+
+		bool const found = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+
+		if (found)
+		{
+			lua_rawgeti(L, -2, *iter);
+			return 1;
+		}
+	}
+
+	return 0;
 }

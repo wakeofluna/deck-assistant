@@ -43,6 +43,7 @@ protected:
 	static int _lua_remove(lua_State* L);
 	static int _lua_any_contains(lua_State* L);
 	static int _lua_all_contains(lua_State* L);
+	static int _lua_foreach(lua_State* L);
 
 protected:
 	std::vector<int> m_refs;

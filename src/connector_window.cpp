@@ -153,8 +153,6 @@ void ConnectorWindow::init_class_table(lua_State* L)
 
 void ConnectorWindow::init_instance_table(lua_State* L)
 {
-	DeckRectangleList::push_new(L);
-	lua_setfield(L, -2, "hotspots");
 }
 
 int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
@@ -276,13 +274,6 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 
 		m_card                = card;
 		m_event_surface_dirty = true;
-		LuaHelpers::newindex_store_in_instance_table(L);
-	}
-	else if (key == "hotspots")
-	{
-		if (lua_type(L, 3) != LUA_TNIL)
-			DeckRectangleList::from_stack(L, 3);
-
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	else if (key.starts_with("on_"))
@@ -455,20 +446,7 @@ void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
 		lua_pushvalue(L, 1);
 		lua_pushinteger(L, event.motion.x);
 		lua_pushinteger(L, event.motion.y);
-
-		lua_getfield(L, 1, "hotspots");
-		if (DeckRectangleList::from_stack(L, -1, false))
-		{
-			DeckRectangleList::push_any_contains(L, event.motion.x, event.motion.y);
-			lua_replace(L, -2);
-		}
-		else
-		{
-			lua_pop(L, 1);
-			lua_pushnil(L);
-		}
-
-		LuaHelpers::yieldable_call(L, 4);
+		LuaHelpers::yieldable_call(L, 3);
 	}
 	else
 	{
@@ -486,20 +464,7 @@ void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
 		lua_pushinteger(L, event.button.y);
 		lua_pushinteger(L, event.button.button);
 		lua_pushboolean(L, event.type == SDL_MOUSEBUTTONDOWN);
-
-		lua_getfield(L, 1, "hotspots");
-		if (DeckRectangleList::from_stack(L, -1, false))
-		{
-			DeckRectangleList::push_any_contains(L, event.button.x, event.button.y);
-			lua_replace(L, -2);
-		}
-		else
-		{
-			lua_pop(L, 1);
-			lua_pushnil(L);
-		}
-
-		LuaHelpers::yieldable_call(L, 6);
+		LuaHelpers::yieldable_call(L, 5);
 	}
 	else
 	{
@@ -527,19 +492,7 @@ void ConnectorWindow::handle_wheel_event(lua_State* L, SDL_Event const& event)
 			lua_pushnumber(L, event.wheel.preciseY);
 		}
 
-		lua_getfield(L, 1, "hotspots");
-		if (DeckRectangleList::from_stack(L, -1, false))
-		{
-			DeckRectangleList::push_any_contains(L, event.wheel.mouseX, event.wheel.mouseY);
-			lua_replace(L, -2);
-		}
-		else
-		{
-			lua_pop(L, 1);
-			lua_pushnil(L);
-		}
-
-		LuaHelpers::yieldable_call(L, 6);
+		LuaHelpers::yieldable_call(L, 5);
 	}
 	else
 	{

@@ -127,19 +127,11 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 
 	if (!m_pointer_events.empty())
 	{
-		lua_getfield(L, 1, "hotspots");
-		bool const have_hotspots = DeckRectangleList::from_stack(L, -1, false);
-
 		for (PointerState const& pointer_event : m_pointer_events)
 		{
 			if (pointer_event.x != m_pointer_state.x || pointer_event.y != m_pointer_state.y)
 			{
-				if (have_hotspots)
-					DeckRectangleList::push_any_contains(L, pointer_event.x, pointer_event.y);
-				else
-					lua_pushnil(L);
-
-				LuaHelpers::emit_event(L, 1, "on_mouse_motion", pointer_event.x, pointer_event.y, LuaHelpers::StackValue(L, -1));
+				LuaHelpers::emit_event(L, 1, "on_mouse_motion", pointer_event.x, pointer_event.y);
 				lua_pop(L, 1);
 
 				m_pointer_state.x = pointer_event.x;
@@ -156,12 +148,7 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 
 					if (was_clicked != is_clicked)
 					{
-						if (have_hotspots)
-							DeckRectangleList::push_any_contains(L, pointer_event.x, pointer_event.y);
-						else
-							lua_pushnil(L);
-
-						LuaHelpers::emit_event(L, 1, "on_mouse_button", m_pointer_state.x, m_pointer_state.y, button_idx + 1, is_clicked, LuaHelpers::StackValue(L, -1));
+						LuaHelpers::emit_event(L, 1, "on_mouse_button", m_pointer_state.x, m_pointer_state.y, button_idx + 1, is_clicked);
 						lua_pop(L, 1);
 					}
 				}
@@ -278,8 +265,6 @@ void ConnectorVnc::init_class_table(lua_State* L)
 
 void ConnectorVnc::init_instance_table(lua_State* L)
 {
-	DeckRectangleList::push_new(L);
-	lua_setfield(L, -2, "hotspots");
 }
 
 int ConnectorVnc::index(lua_State* L, std::string_view const& key) const
@@ -382,13 +367,6 @@ int ConnectorVnc::newindex(lua_State* L, std::string_view const& key)
 
 		m_card                   = card;
 		m_dirty_flags[DirtyCard] = true;
-		LuaHelpers::newindex_store_in_instance_table(L);
-	}
-	else if (key == "hotspots")
-	{
-		if (lua_type(L, 3) != LUA_TNIL)
-			DeckRectangleList::from_stack(L, 3);
-
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
 	else if (key.starts_with("on_"))
