@@ -149,15 +149,15 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				http += ':';
 				http += std::to_string(m_connect_url.get_port());
 				http += "\r\n";
-				http += "Connection: upgrade\r\n";
+				http += "Connection: Upgrade\r\n";
 				http += "Upgrade: websocket\r\n";
-				http += "Sec-Webutil::Socket-Version: 13\r\n";
-				http += "Sec-Webutil::Socket-Key: ";
+				http += "Sec-WebSocket-Version: 13\r\n";
+				http += "Sec-WebSocket-Key: ";
 				http += m_websocket_key.to_base64();
 				http += "\r\n";
 				if (!m_accepted_protocols.empty())
 				{
-					http += "Sec-Webutil::Socket-Protocol: ";
+					http += "Sec-WebSocket-Protocol: ";
 					http += m_accepted_protocols;
 					http += "\r\n";
 				}
@@ -187,7 +187,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 
 	std::string_view received_data(m_receive_buffer.data(), received);
 	DeckLogger::log_message(L, DeckLogger::Level::Debug, "== Received ", received, " bytes from socket ==");
-	// DeckLogger::log_message(L, DeckLogger::Level::Debug, received_data);
+	DeckLogger::log_message(L, DeckLogger::Level::Debug, received_data);
 
 	m_received += received_data;
 
@@ -527,7 +527,7 @@ bool ConnectorWebsocket::verify_http_upgrade_headers(std::string_view const& hea
 			has_upgrade = true;
 		}
 
-		if (key == "Sec-Webutil::Socket-Accept")
+		if (key == "Sec-WebSocket-Accept")
 		{
 			util::Blob expected = make_websocket_accept_nonce(m_websocket_key);
 			if (value != expected.to_base64())
@@ -536,7 +536,7 @@ bool ConnectorWebsocket::verify_http_upgrade_headers(std::string_view const& hea
 			has_accept = true;
 		}
 
-		if (key == "Sec-Webutil::Socket-Protocol")
+		if (key == "Sec-WebSocket-Protocol")
 			protocol = value;
 	}
 

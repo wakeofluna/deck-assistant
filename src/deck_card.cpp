@@ -563,7 +563,8 @@ int DeckCard::_lua_subcard(lua_State* L)
 	SDL_Rect clip_rect = DeckRectangle::clip(self_rect, sub_rect);
 	if (clip_rect.w <= 0 || clip_rect.h <= 0)
 	{
-		luaL_error(L, "provided area is not within the card dimensions");
+		luaL_error(L, "provided area is not within the card dimensions: card=[w:%d h:%d] sub_rect=[x:%d y:%d w:%d h:%d]",
+		           self_rect.w, self_rect.h, sub_rect.x, sub_rect.y, sub_rect.w, sub_rect.h);
 		return 0;
 	}
 

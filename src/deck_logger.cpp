@@ -21,7 +21,6 @@
 #include <chrono>
 #include <format>
 #include <iostream>
-#include <sstream>
 
 namespace
 {

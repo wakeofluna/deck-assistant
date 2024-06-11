@@ -132,8 +132,6 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 			if (pointer_event.x != m_pointer_state.x || pointer_event.y != m_pointer_state.y)
 			{
 				LuaHelpers::emit_event(L, 1, "on_mouse_motion", pointer_event.x, pointer_event.y);
-				lua_pop(L, 1);
-
 				m_pointer_state.x = pointer_event.x;
 				m_pointer_state.y = pointer_event.y;
 			}
@@ -147,16 +145,11 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 					bool const is_clicked    = pointer_event.button_mask & button_mask;
 
 					if (was_clicked != is_clicked)
-					{
 						LuaHelpers::emit_event(L, 1, "on_mouse_button", m_pointer_state.x, m_pointer_state.y, button_idx + 1, is_clicked);
-						lua_pop(L, 1);
-					}
 				}
 				m_pointer_state.button_mask = pointer_event.button_mask;
 			}
 		}
-
-		lua_pop(L, 1);
 		m_pointer_events.clear();
 	}
 }

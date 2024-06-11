@@ -240,16 +240,16 @@ int DeckRectangleList::_lua_foreach(lua_State* L)
 		for (int x = 3; x <= max_arg_idx; ++x)
 			lua_pushvalue(L, x);
 
-		if (!LuaHelpers::pcall(L, max_arg_idx - 1, 1))
-			return 0;
-
-		bool const found = lua_toboolean(L, -1);
-		lua_pop(L, 1);
-
-		if (found)
+		if (LuaHelpers::pcall(L, max_arg_idx - 1, 1))
 		{
-			lua_rawgeti(L, -2, *iter);
-			return 1;
+			bool const found = lua_toboolean(L, -1);
+			lua_pop(L, 1);
+
+			if (found)
+			{
+				lua_rawgeti(L, -1, *iter);
+				return 1;
+			}
 		}
 	}
 

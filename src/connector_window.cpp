@@ -19,7 +19,6 @@
 #include "connector_window.h"
 #include "deck_card.h"
 #include "deck_logger.h"
-#include "deck_rectangle_list.h"
 #include "lua_helpers.h"
 
 char const* ConnectorWindow::LUA_TYPENAME = "deck:ConnectorWindow";
