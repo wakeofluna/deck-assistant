@@ -318,8 +318,11 @@ local function connect(widget, ...)
         end
     end
 
+    local first_connector = targets[1]
+
     if widget.resize then
-        local f = function(connector)
+        -- First connector is leading for widget size
+        first_connector.on_resize = function(connector)
             if connector.pixel_width then
                 widget:resize(connector.pixel_width, connector.pixel_height)
             else
@@ -328,10 +331,9 @@ local function connect(widget, ...)
             if widget.redraw then
                 widget:redraw()
             end
-            connector.card = widget.card
-        end
-        for _, connector in ipairs(targets) do
-            connector.on_resize = f
+            for _, c in ipairs(targets) do
+                c.card = widget.card
+            end
         end
     end
 
@@ -342,9 +344,8 @@ local function connect(widget, ...)
             end
         end
     else
-        local connector = targets[1]
         widget.on_update = function(widget, rect)
-            connector:redraw(rect)
+            first_connector:redraw(rect)
         end
     end
 end

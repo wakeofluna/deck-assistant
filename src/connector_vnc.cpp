@@ -129,11 +129,22 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 	{
 		for (PointerState const& pointer_event : m_pointer_events)
 		{
-			if (pointer_event.x != m_pointer_state.x || pointer_event.y != m_pointer_state.y)
+			int pointer_x = pointer_event.x;
+			int pointer_y = pointer_event.y;
+			if (m_screen_surface && m_card)
 			{
-				LuaHelpers::emit_event(L, 1, "on_mouse_motion", pointer_event.x, pointer_event.y);
-				m_pointer_state.x = pointer_event.x;
-				m_pointer_state.y = pointer_event.y;
+				if (int w1 = m_screen_surface->w, w2 = m_card->get_surface()->w; w1 != w2)
+					pointer_x = pointer_x * w2 / w1;
+
+				if (int h1 = m_screen_surface->h, h2 = m_card->get_surface()->h; h1 != h2)
+					pointer_y = pointer_y * h2 / h1;
+			}
+
+			if (pointer_x != m_pointer_state.x || pointer_y != m_pointer_state.y)
+			{
+				LuaHelpers::emit_event(L, 1, "on_mouse_motion", pointer_x, pointer_y);
+				m_pointer_state.x = pointer_x;
+				m_pointer_state.y = pointer_y;
 			}
 
 			if (pointer_event.button_mask != m_pointer_state.button_mask)

@@ -24,6 +24,26 @@
 
 char const* ConnectorWindow::LUA_TYPENAME = "deck:ConnectorWindow";
 
+namespace
+{
+
+void adjust_coordinates_for_scale(SDL_Window const* window, DeckCard const* card, int& x, int& y)
+{
+	if (window && card)
+	{
+		int w1, h1;
+		SDL_GetWindowSize(const_cast<SDL_Window*>(window), &w1, &h1);
+
+		if (int w2 = card->get_surface()->w; w1 != w2)
+			x = x * w2 / w1;
+
+		if (int h2 = card->get_surface()->h; h1 != h2)
+			y = y * h2 / h1;
+	}
+}
+
+} // namespace
+
 ConnectorWindow::ConnectorWindow()
     : m_window(nullptr)
     , m_wanted_width(1600)
@@ -447,9 +467,13 @@ void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
 	lua_getfield(L, 1, "on_mouse_motion");
 	if (lua_type(L, -1) == LUA_TFUNCTION)
 	{
+		int pointer_x = event.motion.x;
+		int pointer_y = event.motion.y;
+		adjust_coordinates_for_scale(m_window, m_card, pointer_x, pointer_y);
+
 		lua_pushvalue(L, 1);
-		lua_pushinteger(L, event.motion.x);
-		lua_pushinteger(L, event.motion.y);
+		lua_pushinteger(L, pointer_x);
+		lua_pushinteger(L, pointer_y);
 		LuaHelpers::yieldable_call(L, 3);
 	}
 	else
@@ -463,9 +487,13 @@ void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
 	lua_getfield(L, 1, "on_mouse_button");
 	if (lua_type(L, -1) == LUA_TFUNCTION)
 	{
+		int pointer_x = event.button.x;
+		int pointer_y = event.button.y;
+		adjust_coordinates_for_scale(m_window, m_card, pointer_x, pointer_y);
+
 		lua_pushvalue(L, 1);
-		lua_pushinteger(L, event.button.x);
-		lua_pushinteger(L, event.button.y);
+		lua_pushinteger(L, pointer_x);
+		lua_pushinteger(L, pointer_y);
 		lua_pushinteger(L, event.button.button);
 		lua_pushboolean(L, event.type == SDL_MOUSEBUTTONDOWN);
 		LuaHelpers::yieldable_call(L, 5);
