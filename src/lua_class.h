@@ -91,7 +91,7 @@ public:
 	static int push_metatable(lua_State* L);
 
 	template <typename... ARGS>
-	static T* push_new(lua_State* L, ARGS... args)
+	static T* push_new(lua_State* L, ARGS&&... args)
 	{
 		T* object = check_global_instance(L);
 		if (!object)

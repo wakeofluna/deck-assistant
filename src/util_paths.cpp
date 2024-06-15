@@ -17,6 +17,7 @@
  */
 
 #include "util_paths.h"
+#include <cassert>
 #include <cstdlib>
 
 #ifdef _WIN32
@@ -209,6 +210,8 @@ void Paths::resolve_standard_paths()
 
 void Paths::set_sandbox_path(std::filesystem::path path)
 {
+	assert(!path.empty());
+	assert(path.is_absolute());
 	m_sandbox_dir = std::move(path);
 }
 
@@ -256,6 +259,12 @@ std::filesystem::path Paths::find_executable(std::string_view const& file_name, 
 				return target;
 
 	return std::filesystem::path();
+}
+
+std::filesystem::path const& Paths::get_sandbox_dir() const
+{
+	assert(!m_sandbox_dir.empty());
+	return m_sandbox_dir;
 }
 
 bool Paths::verify_path_contains_path(std::filesystem::path const& p, std::filesystem::path const& base, bool allow_subdirs)

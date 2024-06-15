@@ -30,7 +30,7 @@ class Paths;
 class DeckUtil : public LuaClass<DeckUtil>
 {
 public:
-	DeckUtil(LuaHelpers::Trust trust, util::Paths const* paths);
+	DeckUtil(LuaHelpers::Trust trust, util::Paths const& paths);
 
 	static char const* LUA_TYPENAME;
 
@@ -50,9 +50,13 @@ private:
 	static int _lua_random_bytes(lua_State* L);
 	static int _lua_store_secret(lua_State* L);
 	static int _lua_retrieve_secret(lua_State* L);
+	static int _lua_store_table(lua_State* L);
+	static int _lua_retrieve_table(lua_State* L);
+	static int _lua_append_event_log(lua_State* L);
+	static int _lua_retrieve_event_log(lua_State* L);
 	static int _lua_ls(lua_State* L);
 
-	util::Paths const* m_paths;
+	util::Paths const& m_paths;
 	LuaHelpers::Trust m_trust;
 };
 

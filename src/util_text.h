@@ -40,7 +40,9 @@ void char_to_hex_uc(unsigned char ch, char* hex);
 std::string convert_to_json(lua_State* L, int idx, bool pretty = false);
 std::string_view convert_from_json(lua_State* L, std::string_view const& input, std::size_t& offset);
 
-std::string load_file(std::filesystem::path const& path);
+std::string load_file(std::filesystem::path const& path, std::string& err);
+bool save_file(std::filesystem::path const& path, std::string_view const& input, std::string& err);
+bool append_to_file(std::filesystem::path const& path, std::string_view const& input, std::string& err);
 
 std::string_view trim(std::string_view const& str);
 std::vector<std::string_view> split(std::string_view const& str, std::string_view const& split_str = "\n", std::size_t max_parts = 0);

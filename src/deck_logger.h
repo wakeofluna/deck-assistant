@@ -50,10 +50,10 @@ public:
 	static void log_message(lua_State* L, Level level, std::string_view const& message);
 
 	template <typename T, typename... ARGS>
-	static void log_message(lua_State* L, Level level, std::string_view const& message, T arg, ARGS... args);
+	static void log_message(lua_State* L, Level level, std::string_view const& message, T arg, ARGS&&... args);
 
 	template <typename... ARGS>
-	static void lua_log_message(lua_State* L, Level level, std::string_view const& message, ARGS... args);
+	static void lua_log_message(lua_State* L, Level level, std::string_view const& message, ARGS&&... args);
 
 	static void init_class_table(lua_State* L);
 	void init_instance_table(lua_State* L);
@@ -65,10 +65,10 @@ private:
 	static int _lua_logger(lua_State* L);
 
 	template <typename T, typename... ARGS>
-	static inline void _string_stream(std::stringstream& sstream, T value, ARGS... args);
+	static inline void _string_stream(std::stringstream& sstream, T value, ARGS&&... args);
 
 	template <typename... ARGS>
-	static inline void _string_stream(std::stringstream& sstream, wchar_t const* value, ARGS... args);
+	static inline void _string_stream(std::stringstream& sstream, wchar_t const* value, ARGS&&... args);
 
 private:
 	mutable bool m_block_logs;
@@ -76,7 +76,7 @@ private:
 };
 
 template <typename T, typename... ARGS>
-inline void DeckLogger::_string_stream(std::stringstream& sstream, T value, ARGS... args)
+inline void DeckLogger::_string_stream(std::stringstream& sstream, T value, ARGS&&... args)
 {
 	sstream << value;
 	if constexpr (sizeof...(args) > 0)
@@ -84,7 +84,7 @@ inline void DeckLogger::_string_stream(std::stringstream& sstream, T value, ARGS
 }
 
 template <typename... ARGS>
-inline void DeckLogger::_string_stream(std::stringstream& sstream, wchar_t const* value, ARGS... args)
+inline void DeckLogger::_string_stream(std::stringstream& sstream, wchar_t const* value, ARGS&&... args)
 {
 	std::mbstate_t state = std::mbstate_t();
 	std::size_t len      = 1 + std::wcsrtombs(nullptr, &value, 0, &state);
@@ -99,7 +99,7 @@ inline void DeckLogger::_string_stream(std::stringstream& sstream, wchar_t const
 }
 
 template <typename T, typename... ARGS>
-void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message, T arg, ARGS... args)
+void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& message, T arg, ARGS&&... args)
 {
 	if (int(level) < int(m_min_level))
 		return;
@@ -115,7 +115,7 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 }
 
 template <typename... ARGS>
-void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, ARGS... args)
+void DeckLogger::lua_log_message(lua_State* L, Level level, std::string_view const& message, ARGS&&... args)
 {
 	if (int(level) < int(m_min_level))
 		return;

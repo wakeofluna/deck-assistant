@@ -51,13 +51,16 @@ SettingPairs parse_settings(std::string_view const& data)
 	return result;
 }
 
-bool store_settings(std::filesystem::path const& path, SettingPairs const& settings)
+bool store_settings(std::filesystem::path const& path, SettingPairs const& settings, std::string& err)
 {
 	assert(path.is_absolute() && "store_settings requires an absolute path");
 
 	std::ofstream fp(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 	if (!fp.good())
+	{
+		err = "failed to open file for writing";
 		return false;
+	}
 
 	for (SettingPair const& pair : settings)
 	{
@@ -73,11 +76,30 @@ bool store_settings(std::filesystem::path const& path, SettingPairs const& setti
 	return true;
 }
 
+bool is_alphanumeric(std::string_view const& str)
+{
+	if (str.empty())
+		return false;
+
+	for (char ch : str)
+	{
+		if (ch >= 'a' && ch <= 'z')
+			continue;
+		if (ch >= 'A' && ch <= 'Z')
+			continue;
+		if (ch >= '0' && ch <= '9')
+			continue;
+		return false;
+	}
+
+	return true;
+}
+
 } // namespace
 
 char const* DeckUtil::LUA_TYPENAME = "deck:DeckUtil";
 
-DeckUtil::DeckUtil(LuaHelpers::Trust trust, util::Paths const* paths)
+DeckUtil::DeckUtil(LuaHelpers::Trust trust, util::Paths const& paths)
     : m_paths(paths)
     , m_trust(trust)
 {
@@ -129,19 +151,35 @@ void DeckUtil::init_instance_table(lua_State* L)
 	}
 	lua_setfield(L, -2, "trust");
 
-	lua_pushlightuserdata(L, (void*)m_paths);
+	lua_pushlightuserdata(L, (void*)&m_paths);
 	lua_pushinteger(L, int(m_trust));
 	lua_pushcclosure(L, &_lua_ls, 2);
 	lua_setfield(L, -2, "ls");
 
-	lua_pushlightuserdata(L, (void*)m_paths);
+	lua_pushlightuserdata(L, (void*)&m_paths);
 	lua_pushcclosure(L, &_lua_store_secret, 1);
 	lua_setfield(L, -2, "store_secret");
 
-	lua_pushlightuserdata(L, (void*)m_paths);
+	lua_pushlightuserdata(L, (void*)&m_paths);
 	lua_pushinteger(L, int(m_trust));
 	lua_pushcclosure(L, &_lua_retrieve_secret, 2);
 	lua_setfield(L, -2, "retrieve_secret");
+
+	lua_pushlightuserdata(L, (void*)&m_paths);
+	lua_pushcclosure(L, &_lua_store_table, 1);
+	lua_setfield(L, -2, "store_table");
+
+	lua_pushlightuserdata(L, (void*)&m_paths);
+	lua_pushcclosure(L, &_lua_retrieve_table, 1);
+	lua_setfield(L, -2, "retrieve_table");
+
+	lua_pushlightuserdata(L, (void*)&m_paths);
+	lua_pushcclosure(L, &_lua_append_event_log, 1);
+	lua_setfield(L, -2, "append_event_log");
+
+	lua_pushlightuserdata(L, (void*)&m_paths);
+	lua_pushcclosure(L, &_lua_retrieve_event_log, 1);
+	lua_setfield(L, -2, "retrieve_event_log");
 }
 
 int DeckUtil::newindex(lua_State* L)
@@ -152,7 +190,7 @@ int DeckUtil::newindex(lua_State* L)
 
 int DeckUtil::_lua_from_base64(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 	bool ok;
 
 	util::Blob blob = util::Blob::from_base64(input, ok);
@@ -165,7 +203,7 @@ int DeckUtil::_lua_from_base64(lua_State* L)
 
 int DeckUtil::_lua_to_base64(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 
 	util::BlobView blob = input;
 	std::string output  = blob.to_base64();
@@ -176,7 +214,7 @@ int DeckUtil::_lua_to_base64(lua_State* L)
 
 int DeckUtil::_lua_from_hex(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 	bool ok;
 
 	util::Blob blob = util::Blob::from_hex(input, ok);
@@ -189,7 +227,7 @@ int DeckUtil::_lua_from_hex(lua_State* L)
 
 int DeckUtil::_lua_to_hex(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 
 	util::BlobView blob = input;
 	std::string output  = blob.to_hex();
@@ -200,7 +238,7 @@ int DeckUtil::_lua_to_hex(lua_State* L)
 
 int DeckUtil::_lua_from_json(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 	std::size_t offset     = 0;
 
 	std::string_view err = util::convert_from_json(L, input, offset);
@@ -240,7 +278,7 @@ int DeckUtil::_lua_to_json(lua_State* L)
 
 int DeckUtil::_lua_sha1(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 
 #if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	util::BlobView blob = input;
@@ -257,7 +295,7 @@ int DeckUtil::_lua_sha1(lua_State* L)
 
 int DeckUtil::_lua_sha256(lua_State* L)
 {
-	std::string_view input = LuaHelpers::to_string_view(L, 1);
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
 
 #if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	util::BlobView blob = input;
@@ -291,11 +329,17 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 	std::string_view key   = LuaHelpers::check_arg_string(L, 1);
 	std::string_view value = LuaHelpers::check_arg_string(L, 2);
 
-	// TODO check key and value for invalid/dangerous characters
+	luaL_argcheck(L, is_alphanumeric(key), 1, "secret key must be alphanumeric");
+	// TODO check value for invalid/dangerous characters
 
+	std::string err;
 	std::filesystem::path path = paths->get_sandbox_dir() / "secrets.conf";
-	std::string file_data      = util::load_file(path);
-	SettingPairs settings      = parse_settings(file_data);
+	std::string file_data      = util::load_file(path, err);
+
+	if (!err.empty())
+		luaL_error(L, "store secret failed: %s", err.c_str());
+
+	SettingPairs settings = parse_settings(file_data);
 
 	bool found = false;
 	for (SettingPair& pair : settings)
@@ -314,7 +358,11 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 	if (!found)
 		settings.emplace_back(key, value);
 
-	store_settings(path, settings);
+	store_settings(path, settings, err);
+
+	if (!err.empty())
+		luaL_error(L, "store secret failed: %s", err.c_str());
+
 	return 0;
 }
 
@@ -327,9 +375,14 @@ int DeckUtil::_lua_retrieve_secret(lua_State* L)
 
 	for (std::filesystem::path const& base_path : { paths->get_sandbox_dir(), paths->get_user_config_dir() })
 	{
+		std::string err;
 		std::filesystem::path path = base_path / "secrets.conf";
-		std::string file_data      = util::load_file(path);
-		SettingPairs settings      = parse_settings(file_data);
+		std::string file_data      = util::load_file(path, err);
+
+		if (!err.empty())
+			continue;
+
+		SettingPairs settings = parse_settings(file_data);
 
 		for (SettingPair const& pair : settings)
 		{
@@ -345,6 +398,145 @@ int DeckUtil::_lua_retrieve_secret(lua_State* L)
 	}
 
 	return 0;
+}
+
+int DeckUtil::_lua_store_table(lua_State* L)
+{
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	std::string_view store_name = LuaHelpers::check_arg_string(L, 1);
+	luaL_argcheck(L, is_alphanumeric(store_name), 1, "store name must be alphanumeric");
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	std::string json = util::convert_to_json(L, 2, true);
+	if (json.empty())
+		luaL_error(L, "error converting table to json");
+
+	std::string store_filename  = "table-";
+	store_filename             += store_name;
+	store_filename             += ".json";
+
+	std::filesystem::path path = paths->get_sandbox_dir() / store_filename;
+
+	std::string err;
+	if (!util::save_file(path, json, err))
+		luaL_error(L, "%s: error storing table: %s", store_filename.c_str(), err.c_str());
+
+	return 0;
+}
+
+int DeckUtil::_lua_retrieve_table(lua_State* L)
+{
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	std::string_view store_name = LuaHelpers::check_arg_string(L, 1);
+	luaL_argcheck(L, is_alphanumeric(store_name), 1, "store name must be alphanumeric");
+
+	lua_settop(L, 1);
+
+	std::string store_filename  = "table-";
+	store_filename             += store_name;
+	store_filename             += ".json";
+
+	std::string err;
+	std::filesystem::path path = paths->get_sandbox_dir() / store_filename;
+	std::string file_data      = util::load_file(path, err);
+
+	if (file_data.empty())
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+
+	std::size_t offset = 0;
+
+	err = util::convert_from_json(L, file_data, offset);
+	if (!err.empty())
+		luaL_error(L, "%s: parse error: %s at offset %d", store_filename.c_str(), err.c_str(), int(offset));
+
+	if (lua_gettop(L) == 1)
+		lua_createtable(L, 0, 0);
+
+	return 1;
+}
+
+int DeckUtil::_lua_append_event_log(lua_State* L)
+{
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	std::string_view const store_name = LuaHelpers::check_arg_string(L, 1);
+	int const vtype                   = lua_type(L, 2);
+
+	luaL_argcheck(L, is_alphanumeric(store_name), 1, "store name must be alphanumeric");
+	luaL_argcheck(L, (vtype == LUA_TNUMBER || vtype == LUA_TSTRING || vtype == LUA_TBOOLEAN || vtype == LUA_TTABLE), 2, "value cannot be serialised");
+
+	std::string json = util::convert_to_json(L, 2, false);
+	if (json.empty())
+		luaL_error(L, "error converting value to json");
+
+	json += '\n';
+
+	std::string store_filename  = "event-";
+	store_filename             += store_name;
+	store_filename             += ".log";
+
+	std::string err;
+	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
+	if (!util::append_to_file(path, json, err))
+		luaL_error(L, "%s: error appending event log: %s", store_filename.c_str(), err.c_str());
+
+	return 0;
+}
+
+int DeckUtil::_lua_retrieve_event_log(lua_State* L)
+{
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+	std::string_view const store_name = LuaHelpers::check_arg_string(L, 1);
+
+	lua_Integer limit = 0;
+	if (!lua_isnoneornil(L, 2))
+		limit = LuaHelpers::check_arg_int(L, 2);
+
+	luaL_argcheck(L, is_alphanumeric(store_name), 1, "store name must be alphanumeric");
+	luaL_argcheck(L, limit >= 0, 2, "limit must be a positive integer");
+
+	std::string store_filename  = "event-";
+	store_filename             += store_name;
+	store_filename             += ".log";
+
+	std::string err;
+	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
+	std::string const file_data      = util::load_file(path, err);
+
+	std::vector<std::string_view> lines = util::split(file_data);
+	while (!lines.empty() && lines.back().empty())
+		lines.pop_back();
+
+	std::size_t const last_idx  = lines.size();
+	std::size_t const start_idx = (limit > 0 && std::size_t(limit) < last_idx) ? last_idx - limit : 0;
+	std::size_t const count     = last_idx - start_idx;
+
+	lua_createtable(L, count, 0);
+
+	for (std::size_t idx = 0; idx < count; ++idx)
+	{
+		std::size_t offset = 0;
+
+		err = util::convert_from_json(L, lines[start_idx + idx], offset);
+		if (err.empty() && offset == 0)
+			continue;
+
+		if (!err.empty())
+		{
+			luaL_error(L, "%s: parse error on line %d: %s", store_filename.c_str(), start_idx + idx + 1, err.c_str());
+			return 0;
+		}
+
+		lua_rawseti(L, -2, idx + 1);
+	}
+
+	return 1;
 }
 
 int DeckUtil::_lua_ls(lua_State* L)

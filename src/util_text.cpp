@@ -511,13 +511,16 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 	return err;
 }
 
-std::string load_file(std::filesystem::path const& path)
+std::string load_file(std::filesystem::path const& path, std::string& err)
 {
 	assert(path.is_absolute() && "load_file requires an absolute path");
 
 	std::ifstream fp(path.c_str(), std::ios::in | std::ios::binary);
 	if (!fp.good())
+	{
+		err = "failed to open file for reading";
 		return std::string();
+	}
 
 	fp.seekg(0, std::ios::end);
 	auto file_size = fp.tellg();
@@ -532,6 +535,56 @@ std::string load_file(std::filesystem::path const& path)
 
 	std::copy_n(std::istreambuf_iterator(fp), file_size, std::back_inserter(contents));
 	return contents;
+}
+
+bool save_file(std::filesystem::path const& path, std::string_view const& input, std::string& err)
+{
+	assert(path.is_absolute() && "save_file requires an absolute path");
+
+	if (input.empty())
+	{
+		std::error_code ec;
+		if (!std::filesystem::remove(path, ec))
+		{
+			err = ec.message();
+			return false;
+		}
+	}
+	else
+	{
+		std::ofstream fp(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+		if (!fp.good())
+		{
+			err = "failed to open file for writing";
+			return false;
+		}
+
+		fp.write(input.data(), input.size());
+		fp.close();
+	}
+
+	return true;
+}
+
+bool append_to_file(std::filesystem::path const& path, std::string_view const& input, std::string& err)
+{
+	assert(path.is_absolute() && "save_file requires an absolute path");
+
+	if (input.empty())
+		return true;
+
+	// std::cout << "WOULD APPEND TO FILE: " << path.c_str() << std::endl;
+	std::ofstream fp(path.c_str(), std::ios::out | std::ios::binary | std::ios::ate | std::ios::app);
+	if (!fp.good())
+	{
+		err = "failed to open file for appending";
+		return false;
+	}
+
+	fp.write(input.data(), input.size());
+	fp.close();
+
+	return true;
 }
 
 std::string_view trim(std::string_view const& str)

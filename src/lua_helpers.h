@@ -82,7 +82,7 @@ void newindex_store_in_instance_table(lua_State* L);
 void copy_table_fields(lua_State* L);
 
 template <typename... ARGS>
-bool emit_event(lua_State* L, int idx, char const* function_name, ARGS... args);
+bool emit_event(lua_State* L, int idx, char const* function_name, ARGS&&... args);
 
 bool load_script(lua_State* L, std::filesystem::path const& file, Trust trust, bool log_error = true);
 bool load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, Trust trust, bool log_error = true);
@@ -172,7 +172,7 @@ inline void push_argument(lua_State* L, StackValue value)
 }
 
 template <typename T, typename... ARGS>
-inline void push_arguments(lua_State* L, T arg, ARGS... args)
+inline void push_arguments(lua_State* L, T arg, ARGS&&... args)
 {
 	push_argument(L, std::forward<T>(arg));
 	if constexpr (sizeof...(args) > 0)
@@ -182,7 +182,7 @@ inline void push_arguments(lua_State* L, T arg, ARGS... args)
 } // namespace LuaHelpers
 
 template <typename... ARGS>
-bool LuaHelpers::emit_event(lua_State* L, int idx, char const* function_name, ARGS... args)
+bool LuaHelpers::emit_event(lua_State* L, int idx, char const* function_name, ARGS&&... args)
 {
 	idx = absidx(L, idx);
 	lua_getfield(L, idx, function_name);

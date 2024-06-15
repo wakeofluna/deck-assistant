@@ -531,7 +531,7 @@ void Application::build_environment_table(lua_State* L, LuaHelpers::Trust trust,
 	lua_setfield(L, -2, "deck");
 	DeckLogger::push_new(L);
 	lua_setfield(L, -2, "deck.logger");
-	DeckUtil::push_new(L, trust, paths);
+	DeckUtil::push_new(L, trust, *paths);
 	lua_setfield(L, -2, "deck.util");
 	lua_pop(L, 2);
 

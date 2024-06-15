@@ -39,7 +39,7 @@ public:
 	std::filesystem::path find_config_file(std::string_view const& file_name, bool allow_home) const;
 	std::filesystem::path find_executable(std::string_view const& file_name, bool allow_path) const;
 
-	inline std::filesystem::path const& get_sandbox_dir() const { return m_sandbox_dir; }
+	std::filesystem::path const& get_sandbox_dir() const;
 	inline std::filesystem::path const& get_user_data_dir() const { return m_user_data_dir; }
 	inline std::filesystem::path const& get_user_config_dir() const { return m_user_config_dir; }
 	inline std::vector<std::filesystem::path> const& get_system_path_dirs() const { return m_system_path_dirs; }
