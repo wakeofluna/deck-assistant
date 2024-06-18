@@ -16,30 +16,37 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef DECK_ASSISTANT_DECK_PROMISE_LIST_H
-#define DECK_ASSISTANT_DECK_PROMISE_LIST_H
+#ifndef DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_CLIENT_H
+#define DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_CLIENT_H
 
 #include "lua_class.h"
-#include <string_view>
+#include "util_socket.h"
 
-class DeckPromiseList : public LuaClass<DeckPromiseList>
+class ConnectorServerSocketClient : public LuaClass<ConnectorServerSocketClient>
 {
 public:
-	DeckPromiseList() noexcept;
+	ConnectorServerSocketClient(util::Socket&& client_socket);
+	~ConnectorServerSocketClient();
 
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
-	void init_instance_table(lua_State* L);
+	void finalize(lua_State* L);
 	int index(lua_State* L, std::string_view const& key) const;
-	int newindex(lua_State* L);
-	int tostring(lua_State* L) const;
+	int newindex(lua_State* L, std::string_view const& key);
+
+	std::string const& get_remote_host() const;
+	int get_remote_port() const;
+
+	int read_nonblock(void* data, int maxlen);
+	bool is_connected() const;
+	void close();
 
 private:
-	static int _lua_new_promise(lua_State* L);
-	static int _lua_fulfill_promise(lua_State* L);
+	static int _lua_send(lua_State* L);
+	static int _lua_close(lua_State* L);
 
 private:
-	int m_default_timeout;
+	util::Socket m_socket;
 };
 
-#endif // DECK_ASSISTANT_DECK_PROMISE_LIST_H
+#endif // DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_CLIENT_H

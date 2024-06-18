@@ -21,6 +21,7 @@
 
 #include "lua_class.h"
 #include <SDL_rect.h>
+#include <string_view>
 
 class DeckPromise : public LuaClass<DeckPromise>
 {

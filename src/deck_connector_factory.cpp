@@ -18,6 +18,7 @@
 
 #include "deck_connector_factory.h"
 #include "connector_elgato_streamdeck.h"
+#include "connector_server_socket.h"
 #include "connector_vnc.h"
 #include "connector_websocket.h"
 #include "connector_window.h"
@@ -52,6 +53,11 @@ void DeckConnectorFactory::init_class_table(lua_State* L)
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "ElgatoStreamDeck");
 	lua_setfield(L, -2, "StreamDeck");
+
+	lua_pushcfunction(L, &new_connector<ConnectorServerSocket>);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "ServerSocket");
+	lua_setfield(L, -2, "Server");
 
 #ifdef HAVE_VNC
 	lua_pushcfunction(L, &new_connector<ConnectorVnc>);

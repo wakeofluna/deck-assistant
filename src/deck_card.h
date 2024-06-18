@@ -21,6 +21,7 @@
 
 #include "lua_class.h"
 #include <SDL_surface.h>
+#include <string_view>
 #include <vector>
 
 class DeckCard : public LuaClass<DeckCard>

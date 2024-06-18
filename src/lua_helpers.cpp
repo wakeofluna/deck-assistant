@@ -91,6 +91,36 @@ char const* _lua_file_reader(lua_State* L, void* data, std::size_t* size)
 	return nullptr;
 }
 
+int _lua_no_such_callback(lua_State* L)
+{
+	luaL_argcheck(L, (lua_type(L, 1) == LUA_TUSERDATA), 1, "Callback not called as an instance method (internal error?)");
+
+	std::string_view function_name = LuaHelpers::to_string_view(L, lua_upvalueindex(1));
+	std::string_view class_name;
+
+	lua_getmetatable(L, 1);
+	if (lua_istable(L, -1))
+	{
+		lua_getfield(L, -1, "__name");
+		class_name = LuaHelpers::to_string_view(L, -1);
+	}
+
+	if (class_name.empty())
+		DeckLogger::log_message(L, DeckLogger::Level::Warning, "No callback \"", function_name, "\" on instance");
+	else
+		DeckLogger::log_message(L, DeckLogger::Level::Warning, "No callback \"", function_name, "\" on instance of class ", class_name);
+
+	LuaHelpers::push_instance_table(L, 1);
+	if (lua_istable(L, -1))
+	{
+		lua_pushvalue(L, lua_upvalueindex(1));
+		lua_pushnil(L);
+		lua_settable(L, -3);
+	}
+
+	return 0;
+}
+
 } // namespace
 
 void LuaHelpers::ErrorContext::clear()
@@ -392,6 +422,14 @@ void LuaHelpers::copy_table_fields(lua_State* L)
 
 	// Pop the original table, leaving only the target
 	lua_pop(L, 1);
+}
+
+void LuaHelpers::create_callback_warning(lua_State* L, std::string_view const& function_name)
+{
+	lua_pushlstring(L, function_name.data(), function_name.size());
+	lua_pushvalue(L, -1);
+	lua_pushcclosure(L, &_lua_no_such_callback, 1);
+	lua_settable(L, -3);
 }
 
 bool LuaHelpers::load_script(lua_State* L, std::filesystem::path const& file, Trust trust, bool log_error)

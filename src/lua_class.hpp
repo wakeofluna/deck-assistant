@@ -696,6 +696,19 @@ void LuaClass<T>::push_this(lua_State* L)
 }
 
 template <typename T>
+void LuaClass<T>::set_lua_ref_id(int ref_id)
+{
+	if constexpr (is_push_this_enabled<T>())
+	{
+		assert(false && "attempted to set lua_ref_id on push-this-enabled class");
+	}
+	else
+	{
+		m_lua_ref_id = ref_id;
+	}
+}
+
+template <typename T>
 T* LuaClass<T>::push_global_instance(lua_State* L)
 {
 	if constexpr (is_global<T>())
@@ -709,6 +722,30 @@ T* LuaClass<T>::push_global_instance(lua_State* L)
 	{
 		assert(false && "attempted to get global instance of non-global class");
 		return nullptr;
+	}
+}
+
+template <typename T>
+T* LuaClass<T>::push_from_ref_id(lua_State* L, int lua_ref_id)
+{
+	if constexpr (is_push_this_enabled<T>())
+	{
+		push_instance_list_table(L);
+		lua_rawgeti(L, -1, lua_ref_id);
+
+		T* instance = from_stack(L, -1, false);
+		assert(instance || lua_isnil(L, -1));
+
+		if (instance)
+			lua_replace(L, -2);
+		else
+			lua_pop(L, 2);
+
+		return instance;
+	}
+	else
+	{
+		assert(false && "attempted to push_from_ref_id of non-push-this-enabled class");
 	}
 }
 

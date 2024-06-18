@@ -2,6 +2,8 @@ sources = files(
     'application.cpp',
     'connector_base.cpp',
     'connector_elgato_streamdeck.cpp',
+    'connector_server_socket.cpp',
+    'connector_server_socket_client.cpp',
     'connector_vnc.cpp',
     'connector_websocket.cpp',
     'connector_window.cpp',

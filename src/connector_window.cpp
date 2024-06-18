@@ -173,6 +173,10 @@ void ConnectorWindow::init_class_table(lua_State* L)
 
 void ConnectorWindow::init_instance_table(lua_State* L)
 {
+	LuaHelpers::create_callback_warning(L, "on_mouse_button");
+	LuaHelpers::create_callback_warning(L, "on_mouse_motion");
+	LuaHelpers::create_callback_warning(L, "on_mouse_scroll");
+	LuaHelpers::create_callback_warning(L, "on_resize");
 }
 
 int ConnectorWindow::index(lua_State* L, std::string_view const& key) const

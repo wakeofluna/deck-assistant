@@ -81,6 +81,8 @@ std::string_view push_converted_to_string(lua_State* L, int idx);
 void newindex_store_in_instance_table(lua_State* L);
 void copy_table_fields(lua_State* L);
 
+void create_callback_warning(lua_State* L, std::string_view const& function_name);
+
 template <typename... ARGS>
 bool emit_event(lua_State* L, int idx, char const* function_name, ARGS&&... args);
 
@@ -100,18 +102,13 @@ void debug_dump_table(lua_State* L, int idx, bool recursive = false, char const*
 
 struct StackValue
 {
-	StackValue(int idx)
-	    : index(idx)
-	{
-	}
-
-	StackValue(lua_State* L, int idx)
+	inline StackValue(lua_State* L, int idx)
 	    : index(absidx(L, idx))
 	{
 	}
 
-	StackValue(StackValue const&) = default;
-	StackValue(StackValue&&)      = default;
+	constexpr inline StackValue(StackValue const&) = default;
+	constexpr inline StackValue(StackValue&&)      = default;
 
 	int index;
 };

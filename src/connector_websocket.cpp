@@ -22,7 +22,6 @@
 #include "util_blob.h"
 #include "util_text.h"
 #include <algorithm>
-#include <cassert>
 #include <cstring>
 #include <random>
 
@@ -83,7 +82,9 @@ util::Blob make_websocket_accept_nonce(util::Blob const&)
 char const* ConnectorWebsocket::LUA_TYPENAME = "deck:ConnectorWebsocket";
 
 ConnectorWebsocket::ConnectorWebsocket()
-    : m_connect_last_attempt(-5000)
+    : m_socketset(util::SocketSet::create(1))
+    , m_socket(m_socketset)
+    , m_connect_last_attempt(-5000)
     , m_connect_state(State::Disconnected)
     , m_enabled(true)
     , m_close_sent(false)
@@ -169,6 +170,9 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		}
 	}
 
+	if (!m_socketset->poll())
+		return;
+
 	int received = m_socket.read_nonblock(m_receive_buffer.data(), m_receive_buffer.size());
 	if (received < 0)
 	{
@@ -186,7 +190,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		return;
 
 	std::string_view received_data(m_receive_buffer.data(), received);
-	DeckLogger::log_message(L, DeckLogger::Level::Debug, "== Received ", received, " bytes from socket ==");
+	DeckLogger::log_message(L, DeckLogger::Level::Debug, "== Received ", received, " bytes from websocket ==");
 	DeckLogger::log_message(L, DeckLogger::Level::Debug, received_data);
 
 	m_received += received_data;
@@ -214,8 +218,10 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 			m_socket.close();
 			m_received.clear();
 			m_connect_state = State::Disconnected;
+
 			DeckLogger::log_message(L, DeckLogger::Level::Error, "Websocket upgrade failed");
 			LuaHelpers::emit_event(L, 1, "on_connect_failed", "Websocket upgrade failed");
+
 			return;
 		}
 
@@ -320,7 +326,7 @@ void ConnectorWebsocket::tick_outputs(lua_State* L)
 		m_close_sent = true;
 
 		std::string_view error_message = "Websocket disabled, closing connection";
-		DeckLogger::log_message(L, DeckLogger::Level::Debug, error_message);
+		DeckLogger::log_message(L, DeckLogger::Level::Info, error_message);
 		LuaHelpers::emit_event(L, 1, "on_disconnect", error_message);
 	}
 }
@@ -350,6 +356,10 @@ void ConnectorWebsocket::init_class_table(lua_State* L)
 
 void ConnectorWebsocket::init_instance_table(lua_State* L)
 {
+	LuaHelpers::create_callback_warning(L, "on_connect");
+	LuaHelpers::create_callback_warning(L, "on_connect_failed");
+	LuaHelpers::create_callback_warning(L, "on_disconnect");
+	LuaHelpers::create_callback_warning(L, "on_message");
 }
 
 int ConnectorWebsocket::index(lua_State* L, std::string_view const& key) const

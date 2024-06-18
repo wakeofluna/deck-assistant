@@ -18,8 +18,7 @@
 
 #include "util_socket.h"
 #include <SDL_net.h>
-#include <cerrno>
-#include <cstdio>
+#include <cassert>
 #include <fcntl.h>
 #include <mutex>
 #include <string>
@@ -32,8 +31,12 @@ struct Socket::SharedState
 	    : state(State::Disconnected)
 	    , port(0)
 	    , socket(nullptr)
-	    , socket_set(nullptr)
 	{
+	}
+
+	~SharedState()
+	{
+		assert(!socket && "socket not closed at SharedState destruction");
 	}
 
 	State state;
@@ -45,12 +48,54 @@ struct Socket::SharedState
 	int port;
 
 	TCPsocket socket;
-	SDLNet_SocketSet socket_set;
+	std::shared_ptr<SocketSet> socket_set;
+
+	void fill_remote_address()
+	{
+		assert(socket);
+
+		host.clear();
+		port = 0;
+
+		IPaddress const* address = SDLNet_TCP_GetPeerAddress(socket);
+		if (address)
+		{
+			union
+			{
+				struct
+				{
+					Uint8 a, b, c, d;
+				} parts;
+				Uint32 ip;
+			} helper;
+
+			helper.ip = address->host;
+
+			host.reserve(16);
+			host  = std::to_string(helper.parts.a);
+			host += '.';
+			host += std::to_string(helper.parts.b);
+			host += '.';
+			host += std::to_string(helper.parts.c);
+			host += '.';
+			host += std::to_string(helper.parts.d);
+
+			port = SDL_SwapBE16(address->port);
+		}
+	}
 };
 
-Socket::Socket()
+Socket::Socket(std::shared_ptr<SocketSet> const& socket_set)
     : m_shared_state(new SharedState)
 {
+	assert(m_shared_state && "failed to allocate shared state for new Socket instance");
+	m_shared_state->socket_set = socket_set;
+}
+
+Socket::Socket(Socket&& other)
+{
+	m_shared_state.swap(other.m_shared_state);
+	m_worker_thread.swap(other.m_worker_thread);
 }
 
 Socket::~Socket()
@@ -91,9 +136,8 @@ int Socket::read_nonblock(void* data, int maxlen)
 		return -1;
 	}
 
-	int ready = SDLNet_CheckSockets(m_shared_state->socket_set, 0);
-	if (!ready)
-		return 0;
+	if (!SDLNet_SocketReady(m_shared_state->socket))
+		return -1;
 
 	int result = SDLNet_TCP_Recv(m_shared_state->socket, data, maxlen);
 	if (result == 0)
@@ -138,13 +182,67 @@ bool Socket::write(void const* data, int len)
 
 void Socket::close()
 {
+	if (m_shared_state)
+	{
+		std::lock_guard guard(m_shared_state->mutex);
+		close_impl();
+	}
+}
+
+std::optional<Socket> Socket::accept_nonblock()
+{
 	std::lock_guard guard(m_shared_state->mutex);
-	close_impl();
+
+	if (!m_shared_state->socket)
+	{
+		m_shared_state->last_error = "Socket is not connected";
+		close_impl();
+		return std::nullopt;
+	}
+
+	if (!SDLNet_SocketReady(m_shared_state->socket))
+		return std::nullopt;
+
+	TCPsocket new_socket = SDLNet_TCP_Accept(m_shared_state->socket);
+	if (!new_socket)
+	{
+		m_shared_state->last_error_buffer = SDLNet_GetError();
+		m_shared_state->last_error        = m_shared_state->last_error_buffer;
+		close_impl();
+		return std::nullopt;
+	}
+
+	if (SDLNet_TCP_AddSocket(reinterpret_cast<SDLNet_SocketSet>(m_shared_state->socket_set->m_data), new_socket) == -1)
+	{
+		SDLNet_TCP_Close(new_socket);
+		m_shared_state->last_error_buffer.clear();
+		m_shared_state->last_error = "unable to accept new client: SocketSet is full";
+		return std::nullopt;
+	}
+
+	std::optional<Socket> client = std::make_optional<Socket>(m_shared_state->socket_set);
+
+	SharedState* client_state = client->m_shared_state.get();
+	client_state->socket      = new_socket;
+	client_state->state       = State::Connected;
+	client_state->fill_remote_address();
+
+	return client;
 }
 
 Socket::State Socket::get_state() const
 {
 	return m_shared_state->state;
+}
+
+std::string const& Socket::get_remote_host() const
+{
+	return m_shared_state->host;
+}
+
+int Socket::get_remote_port() const
+{
+	return m_shared_state->port;
 }
 
 std::string_view Socket::get_last_error() const
@@ -160,14 +258,9 @@ void Socket::close_impl()
 		m_worker_thread.detach();
 	}
 
-	if (m_shared_state->socket_set)
-	{
-		SDLNet_FreeSocketSet(m_shared_state->socket_set);
-		m_shared_state->socket_set = nullptr;
-	}
-
 	if (m_shared_state->socket)
 	{
+		SDLNet_TCP_DelSocket(reinterpret_cast<SDLNet_SocketSet>(m_shared_state->socket_set->m_data), m_shared_state->socket);
 		SDLNet_TCP_Close(m_shared_state->socket);
 		m_shared_state->socket = nullptr;
 	}
@@ -189,12 +282,21 @@ void Socket::worker(std::stop_token stop_token, std::shared_ptr<SharedState> sha
 	IPaddress address;
 	int result;
 
-	guard.unlock();
-	result = SDLNet_ResolveHost(&address, host.empty() ? "localhost" : host.c_str(), port);
-	guard.lock();
+	if (!host.empty())
+	{
+		guard.unlock();
+		result = SDLNet_ResolveHost(&address, host.c_str(), port);
+		guard.lock();
 
-	if (stop_token.stop_requested())
-		return;
+		if (stop_token.stop_requested())
+			return;
+	}
+	else
+	{
+		address.host = INADDR_ANY;
+		address.port = SDL_SwapBE16(port);
+		result       = 0;
+	}
 
 	if (result == -1)
 	{
@@ -224,13 +326,43 @@ void Socket::worker(std::stop_token stop_token, std::shared_ptr<SharedState> sha
 		return;
 	}
 
-	shared_state->socket = socket;
+	if (SDLNet_TCP_AddSocket(reinterpret_cast<SDLNet_SocketSet>(shared_state->socket_set->m_data), socket) == -1)
+	{
+		SDLNet_TCP_Close(socket);
+		shared_state->last_error = "unable to connect socket: SocketSet is full";
+		return;
+	}
 
-	if (!shared_state->socket_set)
-		shared_state->socket_set = SDLNet_AllocSocketSet(1);
-
-	SDLNet_AddSocket(shared_state->socket_set, (SDLNet_GenericSocket)shared_state->socket);
-
+	shared_state->socket     = socket;
 	shared_state->last_error = std::string_view();
 	shared_state->state      = State::Connected;
+}
+
+SocketSet::SocketSet(int max_sockets)
+{
+	assert(max_sockets > 0);
+	m_data = SDLNet_AllocSocketSet(max_sockets);
+}
+
+SocketSet::~SocketSet()
+{
+	SDLNet_FreeSocketSet(reinterpret_cast<SDLNet_SocketSet>(m_data));
+}
+
+std::shared_ptr<SocketSet> SocketSet::create(int max_sockets)
+{
+	struct enabler : public SocketSet
+	{
+		enabler(int max_sockets)
+		    : SocketSet(max_sockets)
+		{
+		}
+	};
+
+	return std::make_shared<enabler>(max_sockets);
+}
+
+bool SocketSet::poll(int timeout_msec) const
+{
+	return SDLNet_CheckSockets(reinterpret_cast<SDLNet_SocketSet>(m_data), timeout_msec) > 0;
 }

@@ -16,26 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef DECK_ASSISTANT_CONNECTOR_WEBSOCKET_H
-#define DECK_ASSISTANT_CONNECTOR_WEBSOCKET_H
+#ifndef DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_H
+#define DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_H
 
 #include "connector_base.h"
-#include "util_blob.h"
 #include "util_socket.h"
-#include "util_url.h"
-#include <random>
-#include <string>
-#include <utility>
+#include <vector>
 
-class ConnectorWebsocket : public ConnectorBase<ConnectorWebsocket>
+class ConnectorServerSocket : public ConnectorBase<ConnectorServerSocket>
 {
 public:
-	ConnectorWebsocket();
-	~ConnectorWebsocket();
+	ConnectorServerSocket();
+	~ConnectorServerSocket();
 
 	void tick_inputs(lua_State* L, lua_Integer clock) override;
 	void tick_outputs(lua_State* L) override;
 	void shutdown(lua_State* L) override;
+
+	void tick_server_input(lua_State* L, lua_Integer clock);
+	void tick_clients_input(lua_State* L, lua_Integer clock);
+	void tick_server_output(lua_State* L);
+	void tick_clients_output(lua_State* L);
 
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
@@ -44,40 +45,22 @@ public:
 	int newindex(lua_State* L, std::string_view const& key);
 
 private:
-	using Frame = std::pair<unsigned char, std::string_view>;
-
-	bool verify_http_upgrade_headers(std::string_view const& headers);
-	bool check_for_complete_frame(Frame& frame, std::uint16_t& close_reason);
-	bool send_frame(Frame const& frame);
-	bool send_close_frame(std::uint16_t close_code);
-
-	static int _lua_send_message(lua_State* L);
-
-private:
 	enum class State : char
 	{
 		Disconnected,
-		Connecting,
-		Handshaking,
-		Connected,
+		Binding,
+		Listening,
 	};
 
 	std::shared_ptr<util::SocketSet> m_socketset;
 	util::Socket m_socket;
-	util::URL m_connect_url;
-	lua_Integer m_connect_last_attempt;
-	State m_connect_state;
+	State m_server_state;
+	unsigned short m_wanted_port;
+	unsigned short m_active_port;
 	bool m_enabled;
-	bool m_close_sent;
-	std::string m_accepted_protocols;
-	std::string m_active_protocol;
-	std::string m_remote_server_name;
-	std::string m_receive_buffer;
-	std::string m_received;
-	util::Blob m_websocket_key;
-	unsigned char m_pending_opcode;
-	std::string m_pending_frame;
-	std::mt19937 m_random;
+	lua_Integer m_listen_last_attempt;
+	unsigned int m_num_clients;
+	std::vector<char> m_read_buffer;
 };
 
-#endif // DECK_ASSISTANT_CONNECTOR_WEBSOCKET_H
+#endif // DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_H

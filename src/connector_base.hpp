@@ -20,6 +20,7 @@
 #define DECK_ASSISTANT_CONNECTOR_BASE_HPP
 
 #include "connector_base.h"
+#include "deck_logger.h"
 #include "lua_helpers.h"
 
 template <typename T>

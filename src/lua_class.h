@@ -20,8 +20,6 @@
 #define DECK_ASSISTANT_LUA_CLASS_H_
 
 #include <lua.hpp>
-#include <new>
-#include <string_view>
 #include <utility>
 
 /**
@@ -31,9 +29,10 @@
  *
  * __gc       : void finalize(lua_State *L)
  *                callback called before destruction
- *                NOTE: you can resurrect the instance by storing it somewhere
- *                      but lua5.1 still considers the object finalized so
- *                      the finalizer will not be called again after this.
+ *                NOTE: you could in theory resurrect the instance by storing it
+ *                      somewhere but lua5.1 still considers the object finalized
+ *                      so the finalizer will not be called again after this
+ *                      AND the underlying C++ object will be destroyed anyway!
  * __tostring : For full control:
  *                int tostring(lua_State *L) const
  *              Or convenience function:
@@ -47,7 +46,7 @@
  *                int index(lua_State *L, lua_Integer key)
  *                int index(lua_State *L, std::string_view const& key)
  * __newindex : For full control:
-                  int newindex(lua_State *L)
+ *                int newindex(lua_State *L)
  *              Or convenience functions:
  *                int newindex(lua_State *L, lua_Integer key)
  *                int newindex(lua_State *L, std::string_view const& key)
@@ -85,8 +84,10 @@ public:
 	static void push_instance_list_table(lua_State* L);
 	void push_this(lua_State* L);
 	inline int get_lua_ref_id() const { return m_lua_ref_id; }
+	void set_lua_ref_id(int ref_id);
 
 	static T* push_global_instance(lua_State* L);
+	static T* push_from_ref_id(lua_State* L, int lua_ref_id);
 	static T* from_stack(lua_State* L, int idx, bool throw_error = true);
 	static int push_metatable(lua_State* L);
 

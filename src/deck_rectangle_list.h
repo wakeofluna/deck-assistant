@@ -20,6 +20,7 @@
 #define DECK_ASSISTANT_DECK_RECTANGLE_LIST_H
 
 #include "lua_class.h"
+#include <string_view>
 #include <vector>
 
 class DeckRectangleList : public LuaClass<DeckRectangleList>

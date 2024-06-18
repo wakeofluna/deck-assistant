@@ -269,6 +269,9 @@ void ConnectorVnc::init_class_table(lua_State* L)
 
 void ConnectorVnc::init_instance_table(lua_State* L)
 {
+	LuaHelpers::create_callback_warning(L, "on_mouse_button");
+	LuaHelpers::create_callback_warning(L, "on_mouse_motion");
+	LuaHelpers::create_callback_warning(L, "on_resize");
 }
 
 int ConnectorVnc::index(lua_State* L, std::string_view const& key) const

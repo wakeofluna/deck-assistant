@@ -18,6 +18,8 @@
 
 #include "lua_class.hpp"
 #include "connector_elgato_streamdeck.h"
+#include "connector_server_socket.h"
+#include "connector_server_socket_client.h"
 #include "connector_vnc.h"
 #include "connector_websocket.h"
 #include "connector_window.h"
@@ -35,6 +37,8 @@
 #include "deck_util.h"
 
 template class LuaClass<ConnectorElgatoStreamDeck>;
+template class LuaClass<ConnectorServerSocketClient>;
+template class LuaClass<ConnectorServerSocket>;
 template class LuaClass<ConnectorWebsocket>;
 template class LuaClass<ConnectorWindow>;
 template class LuaClass<DeckCard>;
