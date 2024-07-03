@@ -422,7 +422,7 @@ void Application::build_environment_tables(lua_State* L, util::Paths const* path
 		lua_pushvalue(L, -4);
 		assert(LuaHelpers::pcall(L, 0, 1) && "Error running builtins script");
 		assert(lua_type(L, -1) == LUA_TTABLE && "Builtins script did not return a table");
-		lua_setfield(L, -2, "builtins");
+		lua_setfield(L, -2, "deck.builtins");
 		lua_pop(L, 3);
 	}
 

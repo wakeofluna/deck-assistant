@@ -36,7 +36,7 @@ To run example code, create a file called `deckfile.lua` and call the compiled p
 local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
-local builtins = require('builtins')
+local builtins = require('deck.builtins')
 ```
 
 ## Create a window and link it to both a PC desktop and VNC output
