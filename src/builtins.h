@@ -24,6 +24,7 @@ namespace builtins
 
 // List of generated builtins
 extern std::basic_string_view<unsigned char> builtins_lua;
+extern std::basic_string_view<unsigned char> connectors_lua;
 extern std::basic_string_view<unsigned char> main_window_script_lua;
 extern std::basic_string_view<unsigned char> vera_ttf;
 
@@ -35,6 +36,11 @@ inline std::basic_string_view<unsigned char> font()
 inline std::string_view builtins_script()
 {
 	return std::string_view((char const*)builtins_lua.data(), builtins_lua.size());
+}
+
+inline std::string_view connectors_script()
+{
+	return std::string_view((char const*)connectors_lua.data(), connectors_lua.size());
 }
 
 inline std::string_view main_window_script()

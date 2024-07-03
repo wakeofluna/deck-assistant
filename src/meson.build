@@ -42,6 +42,7 @@ test_sources = files(
 builtin_sources = files(
     'builtins/Vera.ttf',
     'builtins/builtins.lua',
+    'builtins/connectors.lua',
     'builtins/main_window_script.lua',
 )
 

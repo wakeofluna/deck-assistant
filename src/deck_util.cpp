@@ -263,11 +263,11 @@ int DeckUtil::_lua_from_json(lua_State* L)
 
 int DeckUtil::_lua_to_json(lua_State* L)
 {
-	luaL_checktype(L, 1, LUA_TTABLE);
+	luaL_checkany(L, 1);
 
 	bool pretty = false;
-	if (lua_type(L, 2) == LUA_TBOOLEAN)
-		pretty = lua_toboolean(L, 2);
+	if (lua_type(L, 2) != LUA_TNONE)
+		pretty = LuaHelpers::check_arg_bool(L, 2);
 
 	lua_settop(L, 1);
 

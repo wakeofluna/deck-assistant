@@ -427,6 +427,11 @@ void Application::build_environment_tables(lua_State* L, util::Paths const* path
 	}
 
 	lua_pop(L, 1);
+
+	if (!LuaHelpers::load_script_inline(L, "builtin-connectors", builtins::connectors_script(), LuaHelpers::Trust::Admin))
+		assert(false && "Error loading builtin-connectors script");
+
+	assert(LuaHelpers::pcall(L, 0, 0) && "Error running builtin-connectors script");
 }
 
 void Application::install_function_overrides(lua_State* L)

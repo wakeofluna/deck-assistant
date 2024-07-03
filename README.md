@@ -50,8 +50,6 @@ builtins.connect(wm, window, vnc)
 
 ## Connect to OBS
 
-(Note: the OBS connector is not published yet)
-
 ```lua
 obs = deck:Connector('OBS', 'obs', { password = '...' })
 ```
