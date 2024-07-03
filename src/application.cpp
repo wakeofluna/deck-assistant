@@ -370,7 +370,7 @@ int Application::run()
 		// Wait for the next cycle. Skips ticks if we can't keep up.
 		auto const lower_limit = std::chrono::steady_clock::now();
 		while (clock_tick < lower_limit)
-			clock_tick += std::chrono::milliseconds(10);
+			clock_tick += std::chrono::milliseconds(20);
 
 		std::this_thread::sleep_until(clock_tick);
 	}
