@@ -18,6 +18,7 @@
 
 #include "deck_promise.h"
 #include "deck_module.h"
+#include "lua_helpers.h"
 
 namespace
 {
@@ -60,6 +61,15 @@ void DeckPromise::mark_as_fulfilled()
 {
 	if (m_time_fulfilled == NotFulfilled || m_time_fulfilled == IsTimedOut)
 		m_time_fulfilled = IsFulfilled;
+}
+
+void DeckPromise::init_class_table(lua_State* L)
+{
+	lua_pushcfunction(L, &_lua_fulfill);
+	lua_setfield(L, -2, "fulfill");
+
+	lua_pushcfunction(L, &_lua_wait);
+	lua_setfield(L, -2, "wait");
 }
 
 void DeckPromise::init_instance_table(lua_State* L)
@@ -113,6 +123,52 @@ int DeckPromise::tostring(lua_State* L) const
 		lua_pushfstring(L, "%s { ready=false, time_promised=%d, timeout=%d, timed_out }", LUA_TYPENAME, m_time_promised, m_timeout);
 	else
 		lua_pushfstring(L, "%s { ready=false, time_promised=%d, timeout=%d }", LUA_TYPENAME, m_time_promised, m_timeout);
+
+	return 1;
+}
+
+int DeckPromise::_lua_fulfill(lua_State* L)
+{
+	DeckPromise* self = from_stack(L, 1);
+	luaL_checkany(L, 2);
+
+	LuaHelpers::push_instance_table(L, 1);
+	lua_pushliteral(L, "value");
+	lua_pushvalue(L, 2);
+	lua_rawset(L, -3);
+
+	self->mark_as_fulfilled();
+
+	return 0;
+}
+
+int DeckPromise::_lua_wait(lua_State* L)
+{
+	DeckPromise* self       = from_stack(L, 1);
+	lua_Integer new_timeout = self->m_timeout;
+
+	if (!lua_isnone(L, 2))
+	{
+		new_timeout = LuaHelpers::check_arg_int(L, 2);
+		luaL_argcheck(L, (new_timeout >= 0), 2, "timeout must be zero or positive (in msec)");
+	}
+
+	if (self->m_time_promised == NotPromised)
+		return 0;
+
+	if (self->m_time_fulfilled == IsTimedOut)
+		self->m_time_fulfilled = NotFulfilled;
+
+	if (self->m_time_fulfilled == NotFulfilled)
+	{
+		self->m_timeout = new_timeout;
+		lua_settop(L, 1);
+		return lua_yield(L, 1);
+	}
+
+	LuaHelpers::push_instance_table(L, 1);
+	lua_pushliteral(L, "value");
+	lua_rawget(L, -2);
 
 	return 1;
 }

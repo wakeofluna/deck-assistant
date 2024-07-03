@@ -32,10 +32,15 @@ public:
 	void mark_as_fulfilled();
 
 	static char const* LUA_TYPENAME;
+	static void init_class_table(lua_State* L);
 	void init_instance_table(lua_State* L);
 	int index(lua_State* L, std::string_view const& key) const;
 	int newindex(lua_State* L);
 	int tostring(lua_State* L) const;
+
+private:
+	static int _lua_fulfill(lua_State* L);
+	static int _lua_wait(lua_State* L);
 
 private:
 	lua_Integer m_time_promised;
