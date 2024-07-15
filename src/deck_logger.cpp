@@ -25,6 +25,7 @@
 namespace
 {
 
+constexpr char const g_TRACE   = char(DeckLogger::Level::Trace);
 constexpr char const g_DEBUG   = char(DeckLogger::Level::Debug);
 constexpr char const g_INFO    = char(DeckLogger::Level::Info);
 constexpr char const g_WARNING = char(DeckLogger::Level::Warning);
@@ -34,6 +35,9 @@ void push_level(lua_State* L, DeckLogger::Level level)
 {
 	switch (level)
 	{
+		case DeckLogger::Level::Trace:
+			lua_pushlightuserdata(L, (void*)&g_TRACE);
+			break;
 		case DeckLogger::Level::Debug:
 			lua_pushlightuserdata(L, (void*)&g_DEBUG);
 			break;
@@ -53,7 +57,9 @@ bool to_level(lua_State* L, int idx, DeckLogger::Level& level)
 {
 	bool valid_level = true;
 	void const* ud   = lua_touserdata(L, idx);
-	if (ud == &g_DEBUG)
+	if (ud == &g_TRACE)
+		level = DeckLogger::Level::Trace;
+	else if (ud == &g_DEBUG)
 		level = DeckLogger::Level::Debug;
 	else if (ud == &g_INFO)
 		level = DeckLogger::Level::Info;
@@ -126,6 +132,9 @@ void DeckLogger::log_message(lua_State* L, Level level, std::string_view const& 
 
 void DeckLogger::init_class_table(lua_State* L)
 {
+	push_level(L, Level::Trace);
+	lua_setfield(L, -2, "TRACE");
+
 	push_level(L, Level::Debug);
 	lua_setfield(L, -2, "DEBUG");
 
@@ -182,6 +191,7 @@ void DeckLogger::stream_output(std::ostream& out, Level level, std::string_view 
 	std::string_view level_str;
 	switch (level)
 	{
+		case Level::Trace: level_str = "[TRACE] "; break;
 		case Level::Debug: level_str = "[DEBUG] "; break;
 		case Level::Info: break;
 		case Level::Warning: level_str = "[WARNING] "; break;

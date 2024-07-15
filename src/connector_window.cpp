@@ -372,25 +372,25 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 
 	if (event->type == SDL_MOUSEMOTION && event->motion.windowID == window_id)
 	{
-		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse motion at ", event->motion.x, ',', event->motion.y);
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window mouse motion at ", event->motion.x, ',', event->motion.y);
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
 	else if (event->type == SDL_MOUSEBUTTONDOWN && event->button.windowID == window_id)
 	{
-		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse button ", int(event->button.button), " down at ", event->button.x, ',', event->button.y);
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window mouse button ", int(event->button.button), " down at ", event->button.x, ',', event->button.y);
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
 	else if (event->type == SDL_MOUSEBUTTONUP && event->button.windowID == window_id)
 	{
-		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse button ", int(event->button.button), " up at ", event->button.x, ',', event->button.y);
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window mouse button ", int(event->button.button), " up at ", event->button.x, ',', event->button.y);
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
 	else if (event->type == SDL_MOUSEWHEEL && event->wheel.windowID == window_id)
 	{
-		DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window mouse wheel ", event->wheel.x, ',', -event->wheel.y, " at ", event->wheel.x, ',', event->wheel.y);
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window mouse wheel ", event->wheel.x, ',', -event->wheel.y, " at ", event->wheel.x, ',', event->wheel.y);
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
@@ -408,60 +408,60 @@ void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
 	switch (event.window.event)
 	{
 		case SDL_WINDOWEVENT_EXPOSED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window redraw requested");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window redraw requested");
 			m_event_surface_dirty = true;
 			break;
 		case SDL_WINDOWEVENT_SIZE_CHANGED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window changed size to ", event.window.data1, 'x', event.window.data2);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window changed size to ", event.window.data1, 'x', event.window.data2);
 			m_event_surface_dirty = true;
 			m_event_size_changed  = true;
 			break;
 		case SDL_WINDOWEVENT_SHOWN:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became shown");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became shown");
 			m_event_surface_dirty = true;
 			break;
 		case SDL_WINDOWEVENT_HIDDEN:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became hidden");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became hidden");
 			break;
 		case SDL_WINDOWEVENT_MOVED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window moved to ", event.window.data1, 'x', event.window.data2);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window moved to ", event.window.data1, 'x', event.window.data2);
 			break;
 		case SDL_WINDOWEVENT_RESIZED:
 			// DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event.window.data1, 'x', event.window.data2);
 			break;
 		case SDL_WINDOWEVENT_MINIMIZED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became minimized");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became minimized");
 			break;
 		case SDL_WINDOWEVENT_MAXIMIZED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became maximized");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became maximized");
 			break;
 		case SDL_WINDOWEVENT_RESTORED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became restored");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became restored");
 			m_event_surface_dirty = true;
 			break;
 		case SDL_WINDOWEVENT_ENTER:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window received pointer focus");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window received pointer focus");
 			break;
 		case SDL_WINDOWEVENT_LEAVE:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window lost pointer focus");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window lost pointer focus");
 			break;
 		case SDL_WINDOWEVENT_FOCUS_GAINED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became focused");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became focused");
 			break;
 		case SDL_WINDOWEVENT_FOCUS_LOST:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window became unfocused");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became unfocused");
 			break;
 		case SDL_WINDOWEVENT_CLOSE:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window got request to close");
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window got request to close");
 			break;
 		case SDL_WINDOWEVENT_TAKE_FOCUS:
 		case SDL_WINDOWEVENT_HIT_TEST:
 		case SDL_WINDOWEVENT_ICCPROF_CHANGED:
 		case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window event with type ", event.window.event);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window event with type ", event.window.event);
 			break;
 		default:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window UNKNOWN event with type ", event.window.event);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window UNKNOWN event with type ", event.window.event);
 			break;
 	}
 }

@@ -32,6 +32,7 @@ class DeckLogger : public LuaClass<DeckLogger>
 public:
 	enum class Level : char
 	{
+		Trace,
 		Debug,
 		Info,
 		Warning,

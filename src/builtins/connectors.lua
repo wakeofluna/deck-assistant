@@ -165,7 +165,7 @@ local function obs_connector()
         instance[key] = value
         instance[key .. '_event'] = event
         instance[event] = function(self, data)
-            print('OBS.' .. event .. ': ' .. util.to_json(data, true))
+            logger(logger.DEBUG, 'OBS.' .. event .. ': ' .. util.to_json(data, true))
         end
     end
 

@@ -121,7 +121,7 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 
 	if (m_screen_surface && (m_screen_surface->w != m_screen_width || m_screen_surface->h != m_screen_height))
 	{
-		DeckLogger::log_message(L, DeckLogger::Level::Info, "VNC resize requested to ", m_screen_width, 'x', m_screen_height);
+		DeckLogger::log_message(L, DeckLogger::Level::Debug, "VNC resize requested to ", m_screen_width, 'x', m_screen_height);
 		LuaHelpers::emit_event(L, 1, "on_resize", m_screen_width, m_screen_height);
 	}
 

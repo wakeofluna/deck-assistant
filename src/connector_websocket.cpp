@@ -127,7 +127,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		{
 			case util::Socket::State::Disconnected:
 				m_connect_state = State::Disconnected;
-				DeckLogger::log_message(L, DeckLogger::Level::Warning, "Websocket connection failed: ", m_socket.get_last_error());
+				DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket connection failed: ", m_socket.get_last_error());
 				LuaHelpers::emit_event(L, 1, "on_connect_failed", m_socket.get_last_error());
 				return;
 
@@ -178,7 +178,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 	{
 		m_connect_state = State::Disconnected;
 		m_received.clear();
-		DeckLogger::log_message(L, DeckLogger::Level::Error, "Websocket disconnected: ", m_socket.get_last_error());
+		DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket disconnected: ", m_socket.get_last_error());
 
 		char const* function_name = (m_connect_state == State::Handshaking) ? "on_connect_failed" : "on_disconnect";
 		LuaHelpers::emit_event(L, 1, function_name, m_socket.get_last_error());
@@ -190,8 +190,8 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		return;
 
 	std::string_view received_data(m_receive_buffer.data(), received);
-	DeckLogger::log_message(L, DeckLogger::Level::Debug, "== Received ", received, " bytes from websocket ==");
-	DeckLogger::log_message(L, DeckLogger::Level::Debug, received_data);
+	DeckLogger::log_message(L, DeckLogger::Level::Trace, "== Received ", received, " bytes from websocket ==");
+	DeckLogger::log_message(L, DeckLogger::Level::Trace, received_data);
 
 	m_received += received_data;
 
@@ -206,7 +206,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				m_received.clear();
 				m_connect_state = State::Disconnected;
 
-				DeckLogger::log_message(L, DeckLogger::Level::Error, "Websocket upgrade failed");
+				DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket upgrade failed");
 				LuaHelpers::emit_event(L, 1, "on_connect_failed", "Websocket upgrade failed");
 			}
 			return;
@@ -219,7 +219,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 			m_received.clear();
 			m_connect_state = State::Disconnected;
 
-			DeckLogger::log_message(L, DeckLogger::Level::Error, "Websocket upgrade failed");
+			DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket upgrade failed");
 			LuaHelpers::emit_event(L, 1, "on_connect_failed", "Websocket upgrade failed");
 
 			return;
@@ -236,8 +236,8 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 	std::uint16_t close_reason;
 	while (check_for_complete_frame(frame, close_reason))
 	{
-		DeckLogger::log_message(L, DeckLogger::Level::Debug, "== Websocket frame with opcode ", int(frame.first), " ==");
-		DeckLogger::log_message(L, DeckLogger::Level::Debug, frame.second);
+		DeckLogger::log_message(L, DeckLogger::Level::Trace, "== Websocket frame with opcode ", int(frame.first), " ==");
+		DeckLogger::log_message(L, DeckLogger::Level::Trace, frame.second);
 
 		// Connection close
 		if (frame.first == 8)
@@ -266,9 +266,9 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				std::string error_message  = "Websocket disconnected by remote host with code: ";
 				error_message             += std::to_string(close_code);
 
-				DeckLogger::log_message(L, DeckLogger::Level::Warning, error_message);
+				DeckLogger::log_message(L, DeckLogger::Level::Debug, error_message);
 				if (!close_message.empty())
-					DeckLogger::log_message(L, DeckLogger::Level::Warning, "Server message: ", close_message);
+					DeckLogger::log_message(L, DeckLogger::Level::Debug, "Server message: ", close_message);
 
 				LuaHelpers::emit_event(L, 1, "on_disconnect", error_message);
 			}
@@ -312,7 +312,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		std::string error_message  = "Websocket error, closing connection with code: ";
 		error_message             += std::to_string(close_reason);
 
-		DeckLogger::log_message(L, DeckLogger::Level::Error, error_message);
+		DeckLogger::log_message(L, DeckLogger::Level::Debug, error_message);
 		LuaHelpers::emit_event(L, 1, "on_disconnect", error_message);
 	}
 }
@@ -326,7 +326,7 @@ void ConnectorWebsocket::tick_outputs(lua_State* L)
 		m_close_sent = true;
 
 		std::string_view error_message = "Websocket disabled, closing connection";
-		DeckLogger::log_message(L, DeckLogger::Level::Info, error_message);
+		DeckLogger::log_message(L, DeckLogger::Level::Debug, error_message);
 		LuaHelpers::emit_event(L, 1, "on_disconnect", error_message);
 	}
 }

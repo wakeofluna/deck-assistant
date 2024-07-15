@@ -119,7 +119,7 @@ void ConnectorServerSocket::tick_server_input(lua_State* L, lua_Integer clock)
 		{
 			case util::Socket::State::Disconnected:
 				m_server_state = State::Disconnected;
-				DeckLogger::log_message(L, DeckLogger::Level::Warning, "ServerSocket binding to port ", m_active_port, " failed: ", m_socket.get_last_error());
+				DeckLogger::log_message(L, DeckLogger::Level::Debug, "ServerSocket binding to port ", m_active_port, " failed: ", m_socket.get_last_error());
 				m_active_port = 0;
 				LuaHelpers::emit_event(L, 1, "on_connect_failed", m_socket.get_last_error());
 				break;
@@ -129,7 +129,7 @@ void ConnectorServerSocket::tick_server_input(lua_State* L, lua_Integer clock)
 
 			case util::Socket::State::Connected:
 				m_server_state = State::Listening;
-				DeckLogger::log_message(L, DeckLogger::Level::Info, "ServerSocket bound to port ", m_active_port, ", now listening for connections");
+				DeckLogger::log_message(L, DeckLogger::Level::Debug, "ServerSocket bound to port ", m_active_port, ", now listening for connections");
 				LuaHelpers::emit_event(L, 1, "on_connect");
 				break;
 		}
@@ -150,7 +150,7 @@ void ConnectorServerSocket::tick_server_input(lua_State* L, lua_Integer clock)
 			lua_rawseti(L, -2, m_num_clients);
 			lua_pop(L, 2);
 
-			DeckLogger::log_message(L, DeckLogger::Level::Info, "ServerSocket on port ", m_active_port, " accepted client from ", client->get_remote_host(), ':', client->get_remote_port());
+			DeckLogger::log_message(L, DeckLogger::Level::Debug, "ServerSocket on port ", m_active_port, " accepted client from ", client->get_remote_host(), ':', client->get_remote_port());
 			LuaHelpers::emit_event(L, 1, "on_accept", LuaHelpers::StackValue(L, -1));
 			lua_pop(L, 1);
 		}
@@ -164,7 +164,7 @@ void ConnectorServerSocket::tick_server_input(lua_State* L, lua_Integer clock)
 
 			m_server_state = State::Disconnected;
 			m_active_port  = 0;
-			DeckLogger::log_message(L, DeckLogger::Level::Error, message);
+			DeckLogger::log_message(L, DeckLogger::Level::Debug, message);
 			LuaHelpers::emit_event(L, 1, "on_disconnect", message);
 			return;
 		}
@@ -234,7 +234,7 @@ void ConnectorServerSocket::tick_server_output(lua_State* L)
 		m_socket.close();
 		m_server_state = State::Disconnected;
 		m_active_port  = 0;
-		DeckLogger::log_message(L, DeckLogger::Level::Info, message);
+		DeckLogger::log_message(L, DeckLogger::Level::Debug, message);
 		LuaHelpers::emit_event(L, 1, "on_disconnect", message);
 	}
 }
