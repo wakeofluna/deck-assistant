@@ -274,7 +274,9 @@ int DeckModule::_lua_create_connector(lua_State* L)
 	// Check that the connector does not already exist
 	lua_pushvalue(L, 3);
 	lua_gettable(L, -2);
-	if (lua_type(L, -1) == LUA_TNIL)
+
+	bool const connector_exists = (lua_type(L, -1) != LUA_TNIL);
+	if (!connector_exists)
 	{
 		// Does not exist
 		lua_pop(L, 1);
@@ -324,8 +326,35 @@ int DeckModule::_lua_create_connector(lua_State* L)
 	// Now apply the table argument to the object (either old or new)
 	if (has_table)
 	{
-		lua_pushvalue(L, 4);
-		LuaHelpers::copy_table_fields(L);
+		lua_getfield(L, -1, "apply_settings");
+		if (lua_isfunction(L, -1))
+		{
+			lua_pushvalue(L, -2);
+			lua_pushvalue(L, 4);
+			LuaHelpers::pcall(L, 2, 0);
+		}
+		else
+		{
+			// No apply_settings function, just copy the table values using newindex
+			lua_pop(L, 1);
+			lua_pushvalue(L, 4);
+			LuaHelpers::copy_table_fields(L);
+		}
+	}
+
+	// If it was a new connector, allow some initial setup after the settings were set
+	if (!connector_exists)
+	{
+		lua_getfield(L, -1, "initial_setup");
+		if (lua_isfunction(L, -1))
+		{
+			lua_pushvalue(L, -2);
+			LuaHelpers::pcall(L, 1, 0);
+		}
+		else
+		{
+			lua_pop(L, 1);
+		}
 	}
 
 	// Finally done!
