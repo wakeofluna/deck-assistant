@@ -23,6 +23,7 @@
 #include "deck_connector_factory.h"
 #include "deck_font.h"
 #include "deck_logger.h"
+#include "deck_promise.h"
 #include "deck_promise_list.h"
 #include "deck_rectangle.h"
 #include "deck_rectangle_list.h"
@@ -131,6 +132,9 @@ void DeckModule::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &DeckModule::_lua_create_image);
 	lua_setfield(L, -2, "Image");
+
+	lua_pushcfunction(L, &DeckModule::_lua_create_promise);
+	lua_setfield(L, -2, "Promise");
 
 	lua_pushcfunction(L, &DeckModule::_lua_create_promise_list);
 	lua_setfield(L, -2, "PromiseList");
@@ -411,6 +415,18 @@ int DeckModule::_lua_create_image(lua_State* L)
 	lua_pushvalue(L, 2);
 	lua_setfield(L, -2, "src");
 
+	return 1;
+}
+
+int DeckModule::_lua_create_promise(lua_State* L)
+{
+	from_stack(L, 1);
+
+	int timeout = 5000;
+	if (!lua_isnone(L, 2))
+		timeout = LuaHelpers::check_arg_int(L, 2);
+
+	DeckPromise::push_new(L, timeout);
 	return 1;
 }
 

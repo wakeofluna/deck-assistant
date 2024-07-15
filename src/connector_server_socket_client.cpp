@@ -44,7 +44,7 @@ void ConnectorServerSocketClient::init_class_table(lua_State* L)
 
 void ConnectorServerSocketClient::finalize(lua_State* L)
 {
-	DeckLogger::log_message(L, DeckLogger::Level::Info, "ConnectorServerSocketClient for ", get_remote_host(), ':', get_remote_port(), " finalized");
+	DeckLogger::log_message(L, DeckLogger::Level::Trace, "ConnectorServerSocketClient for ", get_remote_host(), ':', get_remote_port(), " finalized");
 }
 
 int ConnectorServerSocketClient::index(lua_State* L, std::string_view const& key) const

@@ -29,7 +29,7 @@ public:
 	DeckPromise(int timeout) noexcept;
 
 	bool check_wakeup(lua_Integer clock);
-	void mark_as_fulfilled();
+	bool mark_as_fulfilled();
 
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
@@ -40,6 +40,7 @@ public:
 
 private:
 	static int _lua_fulfill(lua_State* L);
+	static int _lua_reset(lua_State* L);
 	static int _lua_wait(lua_State* L);
 
 private:

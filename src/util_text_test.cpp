@@ -386,6 +386,7 @@ TEST_CASE("Text", "[util]")
 	SECTION("for_each_split")
 	{
 		std::string_view result;
+		std::size_t remainder;
 
 		using Result = std::vector<std::pair<std::size_t, std::string_view>>;
 		Result collected;
@@ -396,8 +397,9 @@ TEST_CASE("Text", "[util]")
 		};
 
 		collected.clear();
-		result = util::for_each_split("line1\nline2\nline3\nline4\n", "\n", collect);
+		std::tie(result, remainder) = util::for_each_split("line1\nline2\nline3\nline4\n", "\n", collect);
 		REQUIRE(result.empty());
+		REQUIRE(remainder == 24);
 		REQUIRE(collected == Result {
 		            {0,  "line1"},
 		            { 1, "line2"},
@@ -407,8 +409,9 @@ TEST_CASE("Text", "[util]")
         });
 
 		collected.clear();
-		result = util::for_each_split("line1;line2;line3\nline3b;line4;line5;line6;line7;line8", ";", collect);
+		std::tie(result, remainder) = util::for_each_split("line1;line2;line3\nline3b;line4;line5;line6;line7;line8", ";", collect);
 		REQUIRE(result == "line6");
+		REQUIRE(remainder == 43);
 		REQUIRE(collected == Result {
 		            {0,  "line1"        },
 		            { 1, "line2"        },
@@ -417,5 +420,157 @@ TEST_CASE("Text", "[util]")
 		            { 4, "line5"        },
 		            { 5, "line6"        },
         });
+	}
+
+	SECTION("parse_http_message")
+	{
+		util::HttpMessage http_message;
+
+		std::string response_start_line = "HTTP/1.1 404 Not Found\r\n";
+		std::string request_start_line  = "GET /foo?bar=true HTTP/1.1\r\n";
+		std::string request_headers[]   = {
+            "Host: localhost\r\n",
+            "Accept: text/html\r\n",
+		};
+		std::string response_headers[] = {
+			"Server: catch2\r\n",
+			"Content-Type: text/html\r\n",
+		};
+		std::string headers_end = "\r\n";
+		std::string body        = "SOME BODY DATA\r\n";
+
+		SECTION("Good request with body")
+		{
+			std::string request = request_start_line + request_headers[0] + request_headers[1] + headers_end + body;
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE(http_message);
+			REQUIRE(http_message.error == "");
+			REQUIRE(http_message.request_method == "GET");
+			REQUIRE(http_message.request_path == "/foo?bar=true");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 0);
+			REQUIRE(http_message.response_status_message == "");
+			REQUIRE(http_message.headers.size() == 2);
+			REQUIRE(http_message.headers["Host"] == "localhost");
+			REQUIRE(http_message.headers["Accept"] == "text/html");
+
+			std::string_view body = std::string_view(request).substr(http_message.body_start);
+			REQUIRE(body == "SOME BODY DATA\r\n");
+		}
+
+		SECTION("Good request without body")
+		{
+			std::string request = request_start_line + request_headers[0] + request_headers[1] + headers_end;
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE(http_message);
+			REQUIRE(http_message.error == "");
+			REQUIRE(http_message.request_method == "GET");
+			REQUIRE(http_message.request_path == "/foo?bar=true");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 0);
+			REQUIRE(http_message.response_status_message == "");
+			REQUIRE(http_message.headers.size() == 2);
+			REQUIRE(http_message.headers["Host"] == "localhost");
+			REQUIRE(http_message.headers["Accept"] == "text/html");
+
+			std::string_view body = std::string_view(request).substr(http_message.body_start);
+			REQUIRE(body == "");
+		}
+
+		SECTION("Incomplete request")
+		{
+			std::string request = request_start_line + request_headers[0] + request_headers[1];
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE_FALSE(http_message);
+			REQUIRE(http_message.error == "");
+			REQUIRE(http_message.request_method == "GET");
+			REQUIRE(http_message.request_path == "/foo?bar=true");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 0);
+			REQUIRE(http_message.response_status_message == "");
+			REQUIRE(http_message.headers.size() == 2);
+			REQUIRE(http_message.headers["Host"] == "localhost");
+			REQUIRE(http_message.headers["Accept"] == "text/html");
+		}
+
+		SECTION("Good response with body")
+		{
+			std::string request = response_start_line + response_headers[0] + response_headers[1] + headers_end + body;
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE(http_message);
+			REQUIRE(http_message.error == "");
+			REQUIRE(http_message.request_method == "");
+			REQUIRE(http_message.request_path == "");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 404);
+			REQUIRE(http_message.response_status_message == "Not Found");
+			REQUIRE(http_message.headers.size() == 2);
+			REQUIRE(http_message.headers["Server"] == "catch2");
+			REQUIRE(http_message.headers["Content-Type"] == "text/html");
+
+			std::string_view body = std::string_view(request).substr(http_message.body_start);
+			REQUIRE(body == "SOME BODY DATA\r\n");
+		}
+
+		SECTION("Good response without body")
+		{
+			response_start_line = "HTTP/1.1 403 Forbidden\r\n";
+
+			std::string request = response_start_line + response_headers[0] + response_headers[1] + headers_end;
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE(http_message);
+			REQUIRE(http_message.error == "");
+			REQUIRE(http_message.request_method == "");
+			REQUIRE(http_message.request_path == "");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 403);
+			REQUIRE(http_message.response_status_message == "Forbidden");
+			REQUIRE(http_message.headers.size() == 2);
+			REQUIRE(http_message.headers["Server"] == "catch2");
+			REQUIRE(http_message.headers["Content-Type"] == "text/html");
+
+			std::string_view body = std::string_view(request).substr(http_message.body_start);
+			REQUIRE(body == "");
+		}
+
+		SECTION("Incomplete response")
+		{
+			std::string request = response_start_line + response_headers[0] + response_headers[1];
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE_FALSE(http_message);
+			REQUIRE(http_message.error == "");
+			REQUIRE(http_message.request_method == "");
+			REQUIRE(http_message.request_path == "");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 404);
+			REQUIRE(http_message.response_status_message == "Not Found");
+			REQUIRE(http_message.headers.size() == 2);
+			REQUIRE(http_message.headers["Server"] == "catch2");
+			REQUIRE(http_message.headers["Content-Type"] == "text/html");
+		}
+
+		SECTION("Invalid header in response")
+		{
+			response_headers[1] = "Content Type: text/html";
+
+			std::string request = response_start_line + response_headers[0] + response_headers[1];
+			http_message        = util::parse_http_message(request);
+
+			REQUIRE_FALSE(http_message);
+			REQUIRE_FALSE(http_message.error.empty());
+			REQUIRE(http_message.request_method == "");
+			REQUIRE(http_message.request_path == "");
+			REQUIRE(http_message.http_version == "HTTP/1.1");
+			REQUIRE(http_message.response_status_code == 404);
+			REQUIRE(http_message.response_status_message == "Not Found");
+			REQUIRE(http_message.headers.size() == 1);
+			REQUIRE(http_message.headers["Server"] == "catch2");
+		}
 	}
 }

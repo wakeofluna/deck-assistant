@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <functional>
 #include <lua.hpp>
+#include <map>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -50,7 +51,25 @@ std::pair<std::string_view, std::string_view> split1(std::string_view const& str
 std::string join(std::vector<std::string_view> const& items, std::string_view const& join_str);
 std::string replace(std::string_view const& str, std::string_view const& from_str, std::string_view const& to_str);
 
-std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback);
+// Returns [ found, remainder_position ]
+std::pair<std::string_view, std::size_t> for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback);
+
+struct HttpMessage
+{
+	std::string error;
+
+	std::string_view request_method;
+	std::string_view request_path;
+	std::string_view http_version;
+	int response_status_code = 0;
+	std::string_view response_status_message;
+	std::map<std::string_view, std::string_view> headers;
+	std::size_t body_start = 0;
+
+	inline operator bool() const { return body_start > 0; }
+};
+
+HttpMessage parse_http_message(std::string_view const& buffer);
 
 } // namespace util
 

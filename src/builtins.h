@@ -25,7 +25,9 @@ namespace builtins
 // List of generated builtins
 extern std::basic_string_view<unsigned char> builtins_lua;
 extern std::basic_string_view<unsigned char> connectors_lua;
+extern std::basic_string_view<unsigned char> deck_assistant_svg;
 extern std::basic_string_view<unsigned char> main_window_script_lua;
+extern std::basic_string_view<unsigned char> oauth2_callback_html;
 extern std::basic_string_view<unsigned char> vera_ttf;
 
 inline std::basic_string_view<unsigned char> font()
@@ -43,9 +45,19 @@ inline std::string_view connectors_script()
 	return std::string_view((char const*)connectors_lua.data(), connectors_lua.size());
 }
 
+inline std::string_view deck_assistant_icon()
+{
+	return std::string_view((char const*)deck_assistant_svg.data(), deck_assistant_svg.size());
+}
+
 inline std::string_view main_window_script()
 {
 	return std::string_view((char const*)main_window_script_lua.data(), main_window_script_lua.size());
+}
+
+inline std::string_view oauth2_callback_page()
+{
+	return std::string_view((char const*)oauth2_callback_html.data(), oauth2_callback_html.size());
 }
 
 template <typename T>

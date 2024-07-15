@@ -57,16 +57,26 @@ bool DeckPromise::check_wakeup(lua_Integer clock)
 	return true;
 }
 
-void DeckPromise::mark_as_fulfilled()
+bool DeckPromise::mark_as_fulfilled()
 {
 	if (m_time_fulfilled == NotFulfilled || m_time_fulfilled == IsTimedOut)
+	{
 		m_time_fulfilled = IsFulfilled;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 void DeckPromise::init_class_table(lua_State* L)
 {
 	lua_pushcfunction(L, &_lua_fulfill);
 	lua_setfield(L, -2, "fulfill");
+
+	lua_pushcfunction(L, &_lua_reset);
+	lua_setfield(L, -2, "reset");
 
 	lua_pushcfunction(L, &_lua_wait);
 	lua_setfield(L, -2, "wait");
@@ -132,13 +142,22 @@ int DeckPromise::_lua_fulfill(lua_State* L)
 	DeckPromise* self = from_stack(L, 1);
 	luaL_checkany(L, 2);
 
-	LuaHelpers::push_instance_table(L, 1);
-	lua_pushliteral(L, "value");
-	lua_pushvalue(L, 2);
-	lua_rawset(L, -3);
+	if (self->mark_as_fulfilled())
+	{
+		LuaHelpers::push_instance_table(L, 1);
+		lua_pushliteral(L, "value");
+		lua_pushvalue(L, 2);
+		lua_rawset(L, -3);
+	}
 
-	self->mark_as_fulfilled();
+	return 0;
+}
 
+int DeckPromise::_lua_reset(lua_State* L)
+{
+	DeckPromise* self      = from_stack(L, 1);
+	self->m_time_promised  = DeckModule::get_clock(L);
+	self->m_time_fulfilled = NotFulfilled;
 	return 0;
 }
 

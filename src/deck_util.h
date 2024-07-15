@@ -36,6 +36,7 @@ public:
 
 	static void init_class_table(lua_State* L);
 	void init_instance_table(lua_State* L);
+	int index(lua_State* L, std::string_view const& key) const;
 	int newindex(lua_State* L);
 
 private:
@@ -45,6 +46,8 @@ private:
 	static int _lua_to_hex(lua_State* L);
 	static int _lua_from_json(lua_State* L);
 	static int _lua_to_json(lua_State* L);
+	static int _lua_split_string(lua_State* L);
+	static int _lua_parse_http_message(lua_State* L);
 	static int _lua_sha1(lua_State* L);
 	static int _lua_sha256(lua_State* L);
 	static int _lua_random_bytes(lua_State* L);
@@ -55,6 +58,7 @@ private:
 	static int _lua_append_event_log(lua_State* L);
 	static int _lua_retrieve_event_log(lua_State* L);
 	static int _lua_ls(lua_State* L);
+	static int _lua_open_browser(lua_State* L);
 
 	util::Paths const& m_paths;
 	LuaHelpers::Trust m_trust;

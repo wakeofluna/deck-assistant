@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Deck Assistant - Authentication Callback</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <script type="text/javascript">
+        window.onload = function () {
+            let params = new URLSearchParams(window.location.search);
+            if (params.size === 0)
+                params = new URLSearchParams(document.location.hash.substr(1));
+
+            document.getElementById("awaiting-confirmation").style.display = "block";
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/");
+            xhr.setRequestHeader("Content-Type", "application/json; charset=UTF-8");
+            xhr.onload = () => {
+                document.getElementById("awaiting-confirmation").style.display = "none";
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    const result = JSON.parse(xhr.responseText);
+                    const granted = result["granted"] ?? false;
+                    const scopes = result["scopes"] ?? "";
+                    const msg = result["message"] ?? "no reason provided";
+                    if (granted) {
+                        const list = document.getElementById("confirm-result-yes-scope");
+                        for (const scope of scopes) {
+                            const li = document.createElement("li");
+                            li.innerText = scope;
+                            list.appendChild(li);
+                        }
+                        document.getElementById("confirm-result-yes").style.display = "block";
+                    } else {
+                        document.getElementById("confirm-result-no-msg").innerText = msg;
+                        document.getElementById("confirm-result-no").style.display = "block";
+                    }
+                } else if (xhr.readyState == 4 && xhr.status == 403) {
+                    document.getElementById("confirm-result-invalid-msg").innerText = "Security check failed, refusing authorization.";
+                    document.getElementById("confirm-result-invalid").style.display = "block";
+                } else if (xhr.readyState == 4 && xhr.status == 405) {
+                    document.getElementById("confirm-result-invalid-msg").innerText = "Invalid HTTP method used";
+                    document.getElementById("confirm-result-invalid").style.display = "block";
+                } else {
+                    document.getElementById("internal-error").style.display = "block";
+                }
+            };
+            xhr.send(JSON.stringify(Object.fromEntries(params)));
+        }
+    </script>
+</head>
+
+<body style="font-family: Verdana, sans-serif;">
+    <div style="margin: auto; width: 600px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+            <img src="/favicon.svg" alt="logo" width="128px" style="display: inline-block; vertical-align: middle;" />
+            <h1 style="display: inline-block;">Deck Assistant</h1>
+        </div>
+        <div id="awaiting-confirmation" style="display: none;">
+            <h2>Processing confirmation...</h2>
+        </div>
+        <div id="internal-error" style="display: none;">
+            <h2 style="background-color: red;">Internal server error</h2>
+            <p>Something went wrong! Please check the application logs for more information</p>
+        </div>
+        <div id="confirm-result-invalid" style="display: none;">
+            <h2 style="background-color: red;">Request failed</h2>
+            <p id="confirm-result-invalid-msg"></p>
+        </div>
+        <div id="confirm-result-yes" style="display: none;">
+            <h2 style="background-color: lightgreen;">Access granted</h2>
+            <p>OAuth access was given with the following scope:</p>
+            <ul id="confirm-result-yes-scope"></ul>
+            <p>You can now close this window</p>
+        </div>
+        <div id="confirm-result-no" style="display: none;">
+            <h2 style="background-color: lightcoral;">Access denied</h2>
+            <p>OAuth access was denied with the following message:</p>
+            <p id="confirm-result-no-msg" style="font-weight: bold;">...</p>
+            <p>You can now close this window</p>
+        </div>
+    </div>
+</body>
+
+</html>

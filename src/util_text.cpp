@@ -686,7 +686,7 @@ std::string replace(std::string_view const& str, std::string_view const& from_st
 	return join(split(str, from_str), to_str);
 }
 
-std::string_view for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback)
+std::pair<std::string_view, std::size_t> for_each_split(std::string_view const& str, std::string_view const& split_str, SplitCallback const& callback)
 {
 	assert(!split_str.empty());
 	char const split_size = split_str.size();
@@ -713,12 +713,77 @@ std::string_view for_each_split(std::string_view const& str, std::string_view co
 		offset                   = next + split_size;
 
 		if (callback(counter, segment))
-			return segment;
+			return std::make_pair(segment, offset);
 
 		++counter;
 	}
 
-	return std::string_view();
+	return std::make_pair(std::string_view(), str.size());
+}
+
+HttpMessage parse_http_message(std::string_view const& buffer)
+{
+	HttpMessage msg;
+
+	auto [start_line, data] = split1(buffer, "\r\n", false);
+	if (start_line.empty() || data.empty())
+	{
+		if (start_line.size() > 1024)
+			msg.error = "Invalid HTTP start line";
+
+		return msg;
+	}
+
+	{
+		auto start_line_parts = split(start_line, " ", 3);
+		if (start_line_parts.size() < 3)
+		{
+			msg.error = "Invalid HTTP start line";
+			return msg;
+		}
+
+		if (start_line_parts[0].starts_with("HTTP/"))
+		{
+			// Response
+			msg.http_version = start_line_parts[0];
+
+			auto [ptr, ec] = std::from_chars(start_line_parts[1].begin(), start_line_parts[1].end(), msg.response_status_code, 10);
+			if (ec != std::errc())
+			{
+				msg.error = "Invalid HTTP status code";
+				return msg;
+			}
+
+			msg.response_status_message = start_line_parts[2];
+		}
+		else
+		{
+			// Request
+			msg.request_method = start_line_parts[0];
+			msg.request_path   = start_line_parts[1];
+			msg.http_version   = start_line_parts[2];
+		}
+	}
+
+	auto [last_header, remainder] = for_each_split(data, "\r\n", [&](std::size_t index, std::string_view const& segment) -> bool {
+		if (segment.empty())
+			return true;
+
+		auto [key, value] = split1(segment, " ", true);
+		if (key.empty() || key.back() != ':' || value.empty())
+		{
+			msg.error = "Invalid HTTP header";
+			return true;
+		}
+
+		msg.headers[key.substr(0, key.size() - 1)] = value;
+		return false;
+	});
+
+	if (remainder <= data.size())
+		msg.body_start = remainder + start_line.size() + 2;
+
+	return msg;
 }
 
 } // namespace util

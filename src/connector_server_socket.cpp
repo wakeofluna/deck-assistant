@@ -206,6 +206,7 @@ void ConnectorServerSocket::tick_clients_input(lua_State* L, lua_Integer clock)
 			}
 			else
 			{
+				DeckLogger::log_message(L, DeckLogger::Level::Debug, "ServerSocket on port ", m_active_port, " closed client from ", client->get_remote_host(), ':', client->get_remote_port());
 				LuaHelpers::emit_event(L, 1, "on_close", LuaHelpers::StackValue(L, -1));
 			}
 		}

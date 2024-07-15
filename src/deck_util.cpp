@@ -17,6 +17,7 @@
  */
 
 #include "deck_util.h"
+#include "builtins.h"
 #include "lua_helpers.h"
 #include "util_blob.h"
 #include "util_paths.h"
@@ -25,6 +26,13 @@
 #include <cassert>
 #include <chrono>
 #include <fstream>
+#include <unistd.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <shellapi.h>
+#include <windows.h>
+#endif
 
 namespace
 {
@@ -125,6 +133,14 @@ void DeckUtil::init_class_table(lua_State* L)
 	lua_pushcfunction(L, &_lua_to_json);
 	lua_setfield(L, -2, "to_json");
 
+	lua_pushcfunction(L, &_lua_split_string);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "split");
+	lua_setfield(L, -2, "split_string");
+
+	lua_pushcfunction(L, &_lua_parse_http_message);
+	lua_setfield(L, -2, "parse_http_message");
+
 	lua_pushcfunction(L, &_lua_sha1);
 	lua_setfield(L, -2, "sha1");
 
@@ -133,6 +149,9 @@ void DeckUtil::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_random_bytes);
 	lua_setfield(L, -2, "random_bytes");
+
+	lua_pushcfunction(L, &_lua_open_browser);
+	lua_setfield(L, -2, "open_browser");
 }
 
 void DeckUtil::init_instance_table(lua_State* L)
@@ -180,6 +199,23 @@ void DeckUtil::init_instance_table(lua_State* L)
 	lua_pushlightuserdata(L, (void*)&m_paths);
 	lua_pushcclosure(L, &_lua_retrieve_event_log, 1);
 	lua_setfield(L, -2, "retrieve_event_log");
+}
+
+int DeckUtil::index(lua_State* L, std::string_view const& key) const
+{
+	if (key == "svg_icon")
+	{
+		std::string_view icon = builtins::deck_assistant_icon();
+		lua_pushlstring(L, icon.data(), icon.size());
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
+	else if (key == "oauth2_page")
+	{
+		std::string_view page = builtins::oauth2_callback_page();
+		lua_pushlstring(L, page.data(), page.size());
+		LuaHelpers::newindex_store_in_instance_table(L);
+	}
+	return lua_gettop(L) == 2 ? 0 : 1;
 }
 
 int DeckUtil::newindex(lua_State* L)
@@ -274,6 +310,80 @@ int DeckUtil::_lua_to_json(lua_State* L)
 	std::string result = util::convert_to_json(L, 1, pretty);
 	lua_pushlstring(L, result.data(), result.size());
 	return 1;
+}
+
+int DeckUtil::_lua_split_string(lua_State* L)
+{
+	std::string_view haystack = LuaHelpers::check_arg_string(L, 1);
+	std::string_view needle   = LuaHelpers::check_arg_string(L, 2);
+	bool filter_empty         = lua_toboolean(L, 3);
+
+	lua_createtable(L, 8, 0);
+	util::for_each_split(haystack, needle, [L, filter_empty](std::size_t index, std::string_view const& segment) -> bool {
+		if (!filter_empty || !segment.empty())
+		{
+			lua_pushlstring(L, segment.data(), segment.size());
+			lua_rawseti(L, -2, index + 1);
+		}
+		return false;
+	});
+
+	return 1;
+}
+
+int DeckUtil::_lua_parse_http_message(lua_State* L)
+{
+	std::string_view input = LuaHelpers::check_arg_string(L, 1);
+
+	util::HttpMessage http_message = util::parse_http_message(input);
+
+	lua_pushboolean(L, bool(http_message));
+	lua_createtable(L, 0, 6);
+
+	if (!http_message.http_version.empty())
+	{
+		lua_pushlstring(L, http_message.http_version.data(), http_message.http_version.size());
+		lua_setfield(L, -2, "http_version");
+	}
+
+	lua_pushboolean(L, true);
+	if (http_message.response_status_code > 0)
+	{
+		lua_setfield(L, -2, "response");
+		lua_pushinteger(L, http_message.response_status_code);
+		lua_setfield(L, -2, "code");
+		lua_pushlstring(L, http_message.response_status_message.data(), http_message.response_status_message.size());
+		lua_setfield(L, -2, "status");
+	}
+	else
+	{
+		lua_setfield(L, -2, "request");
+		lua_pushlstring(L, http_message.request_method.data(), http_message.request_method.size());
+		lua_setfield(L, -2, "method");
+		lua_pushlstring(L, http_message.request_path.data(), http_message.request_path.size());
+		lua_setfield(L, -2, "path");
+	}
+
+	lua_createtable(L, 0, http_message.headers.size());
+	for (auto iter : http_message.headers)
+	{
+		lua_pushlstring(L, iter.first.data(), iter.first.size());
+		lua_pushlstring(L, iter.second.data(), iter.second.size());
+		lua_settable(L, -3);
+	}
+	lua_setfield(L, -2, "headers");
+
+	if (http_message.body_start > 0)
+	{
+		lua_pushlstring(L, input.data() + http_message.body_start, input.size() - http_message.body_start);
+		lua_setfield(L, -2, "body");
+	}
+
+	if (http_message.error.empty())
+		return 2;
+
+	lua_pushlstring(L, http_message.error.data(), http_message.error.size());
+	return 3;
 }
 
 int DeckUtil::_lua_sha1(lua_State* L)
@@ -699,6 +809,29 @@ int DeckUtil::_lua_ls(lua_State* L)
 		lua_rawseti(L, -2, i + 1);
 	}
 	lua_setfield(L, -2, "files");
+
+	return 1;
+}
+
+int DeckUtil::_lua_open_browser(lua_State* L)
+{
+	std::string_view const url_string = LuaHelpers::check_arg_string(L, 1);
+	// bool const have_params            = lua_istable(L, 2);
+
+#ifdef _WIN32
+	HINSTANCE hresult = ShellExecuteA(0, 0, url_string.data(), 0, 0, SW_SHOW);
+	INT_PTR result    = reinterpret_cast<INT_PTR>(hresult);
+	lua_pushboolean(L, result >= 32);
+#else
+	bool success = true;
+	if (!vfork())
+	{
+		execlp("xdg-open", "xdg-open", url_string.data(), nullptr);
+		success = false;
+		_exit(1);
+	}
+	lua_pushboolean(L, success);
+#endif
 
 	return 1;
 }
