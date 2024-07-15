@@ -747,7 +747,9 @@ HttpMessage parse_http_message(std::string_view const& buffer)
 			// Response
 			msg.http_version = start_line_parts[0];
 
-			auto [ptr, ec] = std::from_chars(start_line_parts[1].begin(), start_line_parts[1].end(), msg.response_status_code, 10);
+			char const* first = start_line_parts[1].data();
+			char const* last = first + start_line_parts[1].size();
+			auto [ptr, ec] = std::from_chars(first, last, msg.response_status_code, 10);
 			if (ec != std::errc())
 			{
 				msg.error = "Invalid HTTP status code";

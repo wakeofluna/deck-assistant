@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <string>
 
 std::string load_file(char const* fname)
 {

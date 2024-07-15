@@ -342,6 +342,7 @@ void ConnectorWebsocket::shutdown(lua_State* L)
 	m_socket.close();
 	m_received.clear();
 	m_connect_state = State::Disconnected;
+	m_enabled       = false;
 }
 
 void ConnectorWebsocket::init_class_table(lua_State* L)

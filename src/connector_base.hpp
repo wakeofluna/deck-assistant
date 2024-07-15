@@ -40,6 +40,7 @@ template <typename T>
 void ConnectorBase<T>::finalize(lua_State* L)
 {
 	shutdown(L);
+	DeckLogger::log_message(L, DeckLogger::Level::Trace, T::LUA_TYPENAME, " finalized");
 }
 
 template <typename T>

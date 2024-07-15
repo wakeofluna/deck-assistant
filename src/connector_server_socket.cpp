@@ -40,10 +40,15 @@ ConnectorServerSocket::ConnectorServerSocket()
 
 ConnectorServerSocket::~ConnectorServerSocket()
 {
+	m_socketset.reset();
 }
 
 void ConnectorServerSocket::tick_inputs(lua_State* L, lua_Integer clock)
 {
+	// This can happen when the object is finalized but not removed from the DeckConnector table yet...
+	if (!m_socketset)
+		return;
+
 	bool const have_activity = m_socketset->poll();
 
 	tick_server_input(L, clock);

@@ -746,6 +746,7 @@ T* LuaClass<T>::push_from_ref_id(lua_State* L, int lua_ref_id)
 	else
 	{
 		assert(false && "attempted to push_from_ref_id of non-push-this-enabled class");
+		return nullptr;
 	}
 }
 

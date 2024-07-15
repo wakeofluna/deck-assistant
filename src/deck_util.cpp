@@ -26,12 +26,14 @@
 #include <cassert>
 #include <chrono>
 #include <fstream>
-#include <unistd.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
-#include <shellapi.h>
 #include <windows.h>
+// clang-format: do not reorder
+#include <shellapi.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace
