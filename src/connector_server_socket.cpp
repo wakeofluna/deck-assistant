@@ -246,6 +246,9 @@ void ConnectorServerSocket::tick_clients_output(lua_State* L)
 void ConnectorServerSocket::init_class_table(lua_State* L)
 {
 	Super::init_class_table(L);
+
+	lua_pushcfunction(L, &_lua_reset_timer);
+	lua_setfield(L, -2, "reset_timer");
 }
 
 void ConnectorServerSocket::init_instance_table(lua_State* L)
@@ -296,8 +299,7 @@ int ConnectorServerSocket::newindex(lua_State* L, std::string_view const& key)
 			if (m_server_state != State::Disconnected)
 				DeckLogger::log_message(L, DeckLogger::Level::Warning, "ServerSocket already active on port ", m_active_port, ", active port may not change immediately");
 
-			m_wanted_port          = value;
-			m_listen_last_attempt -= 5000;
+			m_wanted_port = value;
 		}
 	}
 	else if (key.starts_with("on_"))
@@ -311,5 +313,13 @@ int ConnectorServerSocket::newindex(lua_State* L, std::string_view const& key)
 	{
 		LuaHelpers::newindex_store_in_instance_table(L);
 	}
+	return 0;
+}
+
+int ConnectorServerSocket::_lua_reset_timer(lua_State* L)
+{
+	ConnectorServerSocket* self  = from_stack(L, 1);
+	self->m_listen_last_attempt -= 5000;
+	self->m_enabled              = true;
 	return 0;
 }

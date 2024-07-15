@@ -45,6 +45,9 @@ public:
 	int newindex(lua_State* L, std::string_view const& key);
 
 private:
+	static int _lua_reset_timer(lua_State* L);
+
+private:
 	enum class State : char
 	{
 		Disconnected,
