@@ -85,6 +85,20 @@ BlobView::BlobView(char const* initial)
 	}
 }
 
+BlobView::BlobView(unsigned char const* initial, std::size_t initial_size)
+{
+	if (!initial)
+	{
+		m_data = nullptr;
+		m_end  = nullptr;
+	}
+	else
+	{
+		m_data = (unsigned char*)initial;
+		m_end  = m_data + initial_size;
+	}
+}
+
 BlobView::BlobView(std::string_view const& initial)
 {
 	if (initial.empty())
@@ -293,6 +307,44 @@ void Blob::clear()
 	{
 		std::memset(m_data, 0, m_end - m_data);
 		m_end = m_data;
+	}
+}
+
+void Blob::release()
+{
+	if (m_data)
+		std::free(m_data);
+
+	m_data     = nullptr;
+	m_end      = nullptr;
+	m_capacity = nullptr;
+}
+
+void Blob::reserve(std::size_t reserve_size)
+{
+	std::size_t const my_size = size();
+	if (reserve_size < my_size)
+		reserve_size = my_size;
+
+	std::size_t const my_capacity = capacity();
+	assert(my_capacity >= my_size);
+	if (reserve_size == my_capacity)
+		return;
+
+	if (reserve_size == 0)
+	{
+		release();
+	}
+	else
+	{
+		unsigned char* buf = (unsigned char*)std::malloc(reserve_size);
+		assert(buf && "Blob out of memory");
+
+		std::memcpy(buf, m_data, my_size);
+		std::free(m_data);
+		m_data     = buf;
+		m_end      = m_data + my_size;
+		m_capacity = m_data + reserve_size;
 	}
 }
 

@@ -32,6 +32,7 @@ class BlobView
 public:
 	BlobView();
 	BlobView(char const* initial);
+	BlobView(unsigned char const* initial, std::size_t initial_size);
 	BlobView(std::string_view const& initial);
 	BlobView(std::string const& initial);
 	BlobView(BlobView&& other);
@@ -63,14 +64,16 @@ protected:
 class Blob : public BlobView
 {
 public:
-	Blob(std::size_t reserve = 0);
+	Blob(std::size_t reserve_size = 0);
 	Blob(Blob&& other);
 	Blob(Blob const&) = delete;
 	~Blob();
 
 	void clear();
+	void release();
 	inline unsigned char* data() { return m_data; }
 	inline std::size_t capacity() const { return m_capacity - m_data; }
+	void reserve(std::size_t reserve_size);
 
 	static Blob from_literal(std::string_view const& initial);
 	static Blob from_random(std::size_t len);

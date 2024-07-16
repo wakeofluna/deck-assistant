@@ -32,6 +32,22 @@ TEST_CASE("Blob", "[util]")
 		Blob blob2(16);
 		REQUIRE(blob2.size() == 0);
 		REQUIRE(blob2.capacity() == 16);
+
+		blob.reserve(28);
+		REQUIRE(blob.size() == 0);
+		REQUIRE(blob.capacity() == 28);
+
+		blob += "HELLO";
+		REQUIRE(blob.size() == 5);
+		REQUIRE(blob.capacity() == 28);
+
+		blob.reserve(0);
+		REQUIRE(blob.size() == 5);
+		REQUIRE(blob.capacity() == 5);
+
+		blob.release();
+		REQUIRE(blob.size() == 0);
+		REQUIRE(blob.capacity() == 0);
 	}
 
 	SECTION("Blob from random")
