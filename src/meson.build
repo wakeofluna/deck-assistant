@@ -26,6 +26,7 @@ sources = files(
     'util_paths.cpp',
     'util_socket.cpp',
     'util_text.cpp',
+    'util_tls_session.cpp',
     'util_url.cpp',
 )
 

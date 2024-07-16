@@ -125,7 +125,11 @@ URL::URL()
 {
 }
 
+URL::URL(URL&& other) = default;
+
 URL::~URL() = default;
+
+URL& URL::operator=(URL&& other) = default;
 
 bool URL::set_connection_string(std::string_view const& conn_string)
 {
@@ -190,10 +194,10 @@ void URL::set_connection_string_normalized(std::string&& conn_string)
 
 	if (is_normalized)
 	{
-		m_connection_string = std::move(conn_string);
-		m_schema            = schema;
-		m_host              = host;
-		m_port              = port;
-		m_path              = path;
+		m_connection_string.swap(conn_string);
+		m_schema = schema;
+		m_host   = host;
+		m_port   = port;
+		m_path   = path;
 	}
 }

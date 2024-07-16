@@ -38,6 +38,12 @@ unsigned char hex_to_char(char const* hex, bool& ok);
 void char_to_hex(unsigned char ch, char* hex);
 void char_to_hex_uc(unsigned char ch, char* hex);
 
+std::strong_ordering nocase_compare(std::string_view const& lhs, std::string_view const& rhs);
+inline bool nocase_equals(std::string_view const& lhs, std::string_view const& rhs)
+{
+	return nocase_compare(lhs, rhs) == std::strong_ordering::equal;
+}
+
 std::string convert_to_json(lua_State* L, int idx, bool pretty = false);
 std::string_view convert_from_json(lua_State* L, std::string_view const& input, std::size_t& offset);
 

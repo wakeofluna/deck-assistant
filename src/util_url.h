@@ -29,7 +29,12 @@ class URL
 {
 public:
 	URL();
+	URL(URL const& other) = delete;
+	URL(URL&& other);
 	~URL();
+
+	URL& operator=(URL const& other) = delete;
+	URL& operator=(URL&& other);
 
 	bool set_connection_string(std::string_view const& conn_string);
 	bool set_schema(std::string_view const& value);

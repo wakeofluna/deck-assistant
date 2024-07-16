@@ -36,7 +36,15 @@ public:
 	{
 		Disconnected,
 		Connecting,
+		TLSHandshaking,
 		Connected,
+	};
+
+	enum class TLS : char
+	{
+		NoTLS,
+		TLSNoVerify,
+		TLS,
 	};
 
 	struct SharedState;
@@ -50,9 +58,13 @@ public:
 	Socket& operator=(Socket const&) = delete;
 	Socket& operator=(Socket&&)      = delete;
 
+	bool set_tls(TLS use_tls);
+
 	bool start_connect(std::string_view const& host, int port);
+	void tls_handshake();
 	int read_nonblock(void* data, int maxlen);
 	bool write(void const* data, int len);
+	void shutdown();
 	void close();
 
 	std::optional<Socket> accept_nonblock();

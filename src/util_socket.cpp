@@ -17,6 +17,7 @@
  */
 
 #include "util_socket.h"
+#include "util_tls_session.h"
 #include <SDL_net.h>
 #include <cassert>
 #include <fcntl.h>
@@ -25,11 +26,12 @@
 
 using namespace util;
 
-struct Socket::SharedState
+struct Socket::SharedState : public TLSSession::IO
 {
 	SharedState()
 	    : state(State::Disconnected)
 	    , port(0)
+	    , use_tls(TLS::NoTLS)
 	    , socket(nullptr)
 	{
 	}
@@ -46,9 +48,11 @@ struct Socket::SharedState
 
 	std::string host;
 	int port;
+	TLS use_tls;
 
 	TCPsocket socket;
 	std::shared_ptr<SocketSet> socket_set;
+	TLSSession tls_session;
 
 	void fill_remote_address()
 	{
@@ -83,6 +87,67 @@ struct Socket::SharedState
 			port = SDL_SwapBE16(address->port);
 		}
 	}
+
+	int read(void* data, int maxlen) override
+	{
+		if (!socket)
+		{
+			last_error = "Socket is not connected";
+			return -1;
+		}
+
+		if (!SDLNet_SocketReady(socket))
+			return 0;
+
+		int result = SDLNet_TCP_Recv(socket, data, maxlen);
+		return set_result(result);
+	}
+
+	int write(void const* data, int len) override
+	{
+		if (len <= 0)
+			return 0;
+
+		if (!socket)
+		{
+			last_error = "Socket is not connected";
+			return -1;
+		}
+
+		int result = SDLNet_TCP_Send(socket, data, len);
+		return set_result(result);
+	}
+
+	void close()
+	{
+		if (socket)
+		{
+			SDLNet_TCP_DelSocket(reinterpret_cast<SDLNet_SocketSet>(socket_set->m_data), socket);
+			SDLNet_TCP_Close(socket);
+			socket = nullptr;
+		}
+		state = State::Disconnected;
+		tls_session.deinit();
+	}
+
+private:
+	int set_result(int result)
+	{
+		if (result == 0)
+		{
+			last_error = "Socket EOF";
+			close();
+			return -1;
+		}
+		else if (result < 0)
+		{
+			last_error_buffer = SDLNet_GetError();
+			last_error        = last_error_buffer;
+			close();
+			return -1;
+		}
+		return result;
+	}
 };
 
 Socket::Socket(std::shared_ptr<SocketSet> const& socket_set)
@@ -101,6 +166,18 @@ Socket::Socket(Socket&& other)
 Socket::~Socket()
 {
 	close();
+}
+
+bool Socket::set_tls(TLS use_tls)
+{
+	std::lock_guard guard(m_shared_state->mutex);
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
+	m_shared_state->use_tls = use_tls;
+	return true;
+#else
+	m_shared_state->last_error = "TLS connection not supported, no gnutls or openssl support";
+	return false;
+#endif
 }
 
 bool Socket::start_connect(std::string_view const& host, int port)
@@ -125,59 +202,95 @@ bool Socket::start_connect(std::string_view const& host, int port)
 	return true;
 }
 
+void Socket::tls_handshake()
+{
+	std::lock_guard guard(m_shared_state->mutex);
+
+	m_shared_state->tls_session.pump_read();
+	m_shared_state->tls_session.pump_write();
+
+	if (!m_shared_state->tls_session)
+	{
+		m_shared_state->last_error_buffer = m_shared_state->tls_session.get_last_error();
+		m_shared_state->last_error        = m_shared_state->last_error_buffer;
+		close_impl();
+	}
+	else if (m_shared_state->tls_session.is_connected())
+	{
+		m_shared_state->state = State::Connected;
+	}
+}
+
 int Socket::read_nonblock(void* data, int maxlen)
 {
 	std::lock_guard guard(m_shared_state->mutex);
 
-	if (!m_shared_state->socket)
+	if (m_shared_state->use_tls != TLS::NoTLS)
 	{
-		m_shared_state->last_error = "Socket is not connected";
-		close_impl();
-		return -1;
+		bool pumped = m_shared_state->tls_session.pump_read();
+		m_shared_state->tls_session.pump_write();
+
+		if (pumped)
+		{
+			int received = m_shared_state->tls_session.read(data, maxlen);
+			if (received > 0)
+				return received;
+		}
+
+		if (!m_shared_state->tls_session)
+		{
+			m_shared_state->last_error_buffer = m_shared_state->tls_session.get_last_error();
+			m_shared_state->last_error        = m_shared_state->last_error_buffer;
+			close_impl();
+			return -1;
+		}
+
+		return 0;
 	}
-
-	if (!SDLNet_SocketReady(m_shared_state->socket))
-		return -1;
-
-	int result = SDLNet_TCP_Recv(m_shared_state->socket, data, maxlen);
-	if (result == 0)
+	else
 	{
-		m_shared_state->last_error = "Socket EOF";
-		close_impl();
-		return -1;
+		return m_shared_state->read(data, maxlen);
 	}
-	else if (result < 0)
-	{
-		m_shared_state->last_error_buffer = SDLNet_GetError();
-		m_shared_state->last_error        = m_shared_state->last_error_buffer;
-		close_impl();
-		return -1;
-	}
-
-	return result;
 }
 
 bool Socket::write(void const* data, int len)
 {
+	if (len <= 0)
+		return true;
+
 	std::lock_guard guard(m_shared_state->mutex);
 
-	if (!m_shared_state->socket)
+	int written;
+	if (m_shared_state->use_tls != TLS::NoTLS)
 	{
-		m_shared_state->last_error = "Socket is not connected";
-		close_impl();
-		return false;
+		written = m_shared_state->tls_session.write(data, len);
+		if (written > 0)
+			m_shared_state->tls_session.pump_write();
+
+		if (!m_shared_state->tls_session)
+		{
+			m_shared_state->last_error_buffer = m_shared_state->tls_session.get_last_error();
+			m_shared_state->last_error        = m_shared_state->last_error_buffer;
+			close_impl();
+		}
+	}
+	else
+	{
+		written = m_shared_state->write(data, len);
 	}
 
-	int result = SDLNet_TCP_Send(m_shared_state->socket, data, len);
-	if (result < len)
-	{
-		m_shared_state->last_error_buffer = SDLNet_GetError();
-		m_shared_state->last_error        = m_shared_state->last_error_buffer;
-		close_impl();
-		return false;
-	}
+	assert(written < 0 || written == len);
+	return (written == len);
+}
 
-	return true;
+void Socket::shutdown()
+{
+	if (m_shared_state)
+	{
+		std::lock_guard guard(m_shared_state->mutex);
+		m_shared_state->tls_session.shutdown();
+		m_shared_state->tls_session.pump_write();
+	}
 }
 
 void Socket::close()
@@ -224,8 +337,8 @@ std::optional<Socket> Socket::accept_nonblock()
 
 	SharedState* client_state = client->m_shared_state.get();
 	client_state->socket      = new_socket;
-	client_state->state       = State::Connected;
 	client_state->fill_remote_address();
+	client_state->state = State::Connected;
 
 	return client;
 }
@@ -257,15 +370,7 @@ void Socket::close_impl()
 		m_worker_thread.request_stop();
 		m_worker_thread.detach();
 	}
-
-	if (m_shared_state->socket)
-	{
-		SDLNet_TCP_DelSocket(reinterpret_cast<SDLNet_SocketSet>(m_shared_state->socket_set->m_data), m_shared_state->socket);
-		SDLNet_TCP_Close(m_shared_state->socket);
-		m_shared_state->socket = nullptr;
-	}
-
-	m_shared_state->state = State::Disconnected;
+	m_shared_state->close();
 }
 
 void Socket::worker(std::stop_token stop_token, std::shared_ptr<SharedState> shared_state)
@@ -282,7 +387,8 @@ void Socket::worker(std::stop_token stop_token, std::shared_ptr<SharedState> sha
 	IPaddress address;
 	int result;
 
-	if (!host.empty())
+	bool const is_server = host.empty();
+	if (!is_server)
 	{
 		guard.unlock();
 		result = SDLNet_ResolveHost(&address, host.c_str(), port);
@@ -304,6 +410,18 @@ void Socket::worker(std::stop_token stop_token, std::shared_ptr<SharedState> sha
 		shared_state->last_error        = shared_state->last_error_buffer;
 		shared_state->state             = State::Disconnected;
 		return;
+	}
+
+	if (shared_state->use_tls != TLS::NoTLS && !is_server)
+	{
+		bool tls_ok = shared_state->tls_session.init_as_client(*shared_state, host, shared_state->use_tls == TLS::TLS);
+		if (!tls_ok)
+		{
+			shared_state->last_error_buffer = shared_state->tls_session.get_last_error();
+			shared_state->last_error        = shared_state->last_error_buffer;
+			shared_state->state             = State::Disconnected;
+			return;
+		}
 	}
 
 	guard.unlock();
@@ -335,7 +453,7 @@ void Socket::worker(std::stop_token stop_token, std::shared_ptr<SharedState> sha
 
 	shared_state->socket     = socket;
 	shared_state->last_error = std::string_view();
-	shared_state->state      = State::Connected;
+	shared_state->state      = shared_state->use_tls != TLS::NoTLS ? State::TLSHandshaking : State::Connected;
 }
 
 SocketSet::SocketSet(int max_sockets)

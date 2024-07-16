@@ -49,7 +49,7 @@ private:
 	bool verify_http_upgrade_headers(std::string_view const& headers);
 	bool check_for_complete_frame(Frame& frame, std::uint16_t& close_reason);
 	bool send_frame(Frame const& frame);
-	bool send_close_frame(std::uint16_t close_code);
+	void send_close_frame(std::uint16_t close_code);
 
 	static int _lua_send_message(lua_State* L);
 
@@ -68,6 +68,7 @@ private:
 	lua_Integer m_connect_last_attempt;
 	State m_connect_state;
 	bool m_enabled;
+	bool m_insecure;
 	bool m_close_sent;
 	std::string m_accepted_protocols;
 	std::string m_active_protocol;

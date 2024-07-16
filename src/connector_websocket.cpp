@@ -87,6 +87,7 @@ ConnectorWebsocket::ConnectorWebsocket()
     , m_connect_last_attempt(-5000)
     , m_connect_state(State::Disconnected)
     , m_enabled(true)
+    , m_insecure(false)
     , m_close_sent(false)
     , m_pending_opcode(0)
     , m_random(std::chrono::system_clock::now().time_since_epoch().count())
@@ -110,11 +111,33 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		m_connect_last_attempt = clock;
 		m_close_sent           = false;
 
-		std::string_view host = m_connect_url.get_host();
-		int port              = m_connect_url.get_port();
+		std::string_view schema = m_connect_url.get_schema();
+		std::string_view host   = m_connect_url.get_host();
+		int port                = m_connect_url.get_port();
 
 		if (host.empty())
 			host = "localhost";
+
+		bool const use_tls = schema == "wss";
+		if (!port)
+			port = use_tls ? 443 : 80;
+
+		util::Socket::TLS tls_mode;
+		if (!use_tls)
+			tls_mode = util::Socket::TLS::NoTLS;
+		else if (m_insecure)
+			tls_mode = util::Socket::TLS::TLSNoVerify;
+		else
+			tls_mode = util::Socket::TLS::TLS;
+
+		if (!m_socket.set_tls(tls_mode))
+		{
+			m_enabled                      = false;
+			std::string_view error_message = m_socket.get_last_error();
+			DeckLogger::log_message(L, DeckLogger::Level::Error, error_message);
+			LuaHelpers::emit_event(L, 1, "on_connect_failed", error_message);
+			return;
+		}
 
 		m_connect_state = State::Connecting;
 		m_socket.start_connect(host, port);
@@ -132,6 +155,11 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				return;
 
 			case util::Socket::State::Connecting:
+				return;
+
+			case util::Socket::State::TLSHandshaking:
+				m_socketset->poll();
+				m_socket.tls_handshake();
 				return;
 
 			case util::Socket::State::Connected:
@@ -170,8 +198,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		}
 	}
 
-	if (!m_socketset->poll())
-		return;
+	m_socketset->poll();
 
 	int received = m_socket.read_nonblock(m_receive_buffer.data(), m_receive_buffer.size());
 	if (received < 0)
@@ -257,6 +284,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 			if (close_code == CLOSE_None)
 				close_code = CLOSE_Normal;
 
+			m_socket.shutdown();
 			m_socket.close();
 			m_received.clear();
 			m_connect_state = State::Disconnected;
@@ -319,7 +347,6 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 
 void ConnectorWebsocket::tick_outputs(lua_State* L)
 {
-	// Noop since writes are blocking anyway
 	if (m_connect_state == State::Connected && !m_enabled && !m_close_sent)
 	{
 		send_close_frame(CLOSE_Normal);
@@ -398,10 +425,15 @@ int ConnectorWebsocket::index(lua_State* L, std::string_view const& key) const
 		std::string_view const value = m_connect_url.get_path();
 		lua_pushlstring(L, value.data(), value.size());
 	}
-	else if (key == "secure")
+	else if (key == "insecure")
 	{
-		bool const is_secure = (m_connect_url.get_schema() == "wss");
-		lua_pushboolean(L, is_secure);
+		bool const use_tls = (m_connect_url.get_schema() == "wss");
+		lua_pushboolean(L, !use_tls || m_insecure);
+	}
+	else if (key == "tls")
+	{
+		bool const use_tls = (m_connect_url.get_schema() == "wss");
+		lua_pushboolean(L, use_tls);
 	}
 	else if (key == "connection_string")
 	{
@@ -452,10 +484,14 @@ int ConnectorWebsocket::newindex(lua_State* L, std::string_view const& key)
 		if (!m_connect_url.set_path(value))
 			luaL_argerror(L, 3, "invalid value for path");
 	}
-	else if (key == "secure")
+	else if (key == "insecure")
 	{
 		bool value = LuaHelpers::check_arg_bool(L, 3);
-		luaL_argcheck(L, value == false, 3, "TLS connections are not (yet) supported");
+		m_insecure = value;
+	}
+	else if (key == "tls")
+	{
+		bool value = LuaHelpers::check_arg_bool(L, 3);
 		m_connect_url.set_schema(value ? "wss" : "ws");
 	}
 	else if (key == "connection_string")
@@ -467,12 +503,10 @@ int ConnectorWebsocket::newindex(lua_State* L, std::string_view const& key)
 			luaL_argerror(L, 3, "connection string parsing failed");
 
 		std::string_view const& schema = new_url.get_schema();
-		if (schema == "wss")
-			luaL_error(L, "TLS connections are not (yet) supported");
-		else if (schema != "ws")
+		if (schema != "wss" && schema != "ws")
 			luaL_error(L, "invalid schema for websocket connections");
 
-		m_connect_url = new_url;
+		m_connect_url = std::move(new_url);
 	}
 	else if (key == "accepted_protocols" || key == "protocols" || key == "protocol")
 	{
@@ -524,7 +558,7 @@ bool ConnectorWebsocket::verify_http_upgrade_headers(std::string_view const& hea
 
 		if (key == "Connection")
 		{
-			if (value != "Upgrade")
+			if (!util::nocase_equals(value, "upgrade"))
 				return false;
 
 			has_connection = true;
@@ -532,7 +566,7 @@ bool ConnectorWebsocket::verify_http_upgrade_headers(std::string_view const& hea
 
 		if (key == "Upgrade")
 		{
-			if (value != "websocket")
+			if (!util::nocase_equals(value, "websocket"))
 				return false;
 
 			has_upgrade = true;
@@ -562,7 +596,7 @@ bool ConnectorWebsocket::check_for_complete_frame(Frame& frame_data, std::uint16
 {
 	close_reason = CLOSE_None;
 
-	if (m_received.size() < 4)
+	if (m_received.size() < 2)
 		return false;
 
 	unsigned char* cursor = (unsigned char*)m_received.data();
@@ -686,7 +720,7 @@ bool ConnectorWebsocket::send_frame(Frame const& frame)
 	return m_socket.write(block.data(), block.size());
 }
 
-bool ConnectorWebsocket::send_close_frame(std::uint16_t close_code)
+void ConnectorWebsocket::send_close_frame(std::uint16_t close_code)
 {
 	char buf[2];
 	buf[0] = close_code << 8;
@@ -696,7 +730,8 @@ bool ConnectorWebsocket::send_close_frame(std::uint16_t close_code)
 	frame.first  = 0x08;
 	frame.second = buf;
 
-	return send_frame(frame);
+	send_frame(frame);
+	// m_socket.shutdown();
 }
 
 int ConnectorWebsocket::_lua_send_message(lua_State* L)

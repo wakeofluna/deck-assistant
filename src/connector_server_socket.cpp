@@ -20,6 +20,7 @@
 #include "connector_server_socket_client.h"
 #include "deck_logger.h"
 #include "lua_helpers.h"
+#include <cassert>
 
 char const* ConnectorServerSocket::LUA_TYPENAME = "deck:ConnectorServerSocket";
 
@@ -130,6 +131,10 @@ void ConnectorServerSocket::tick_server_input(lua_State* L, lua_Integer clock)
 				break;
 
 			case util::Socket::State::Connecting:
+				break;
+
+			case util::Socket::State::TLSHandshaking:
+				assert(false && "ServerSocket does not do TLSHandshaking");
 				break;
 
 			case util::Socket::State::Connected:

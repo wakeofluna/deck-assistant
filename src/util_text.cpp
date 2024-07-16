@@ -491,6 +491,25 @@ void char_to_hex_uc(unsigned char ch, char* hex)
 	hex[1] = nibble_to_hex_uc(ch & 0x0f);
 }
 
+std::strong_ordering nocase_compare(std::string_view const& lhs, std::string_view const& rhs)
+{
+	std::size_t const slhs = lhs.size();
+	std::size_t const srhs = rhs.size();
+
+	if (lhs.data() != rhs.data())
+	{
+		std::size_t const smin = std::min(slhs, srhs);
+		for (std::size_t i = 0; i < smin; ++i)
+		{
+			auto ordering = std::tolower(lhs[i]) <=> std::tolower(rhs[i]);
+			if (ordering != std::strong_ordering::equal)
+				return ordering;
+		}
+	}
+
+	return slhs <=> srhs;
+}
+
 std::string convert_to_json(lua_State* L, int idx, bool pretty)
 {
 	std::set<void const*> seen;
@@ -748,8 +767,8 @@ HttpMessage parse_http_message(std::string_view const& buffer)
 			msg.http_version = start_line_parts[0];
 
 			char const* first = start_line_parts[1].data();
-			char const* last = first + start_line_parts[1].size();
-			auto [ptr, ec] = std::from_chars(first, last, msg.response_status_code, 10);
+			char const* last  = first + start_line_parts[1].size();
+			auto [ptr, ec]    = std::from_chars(first, last, msg.response_status_code, 10);
 			if (ec != std::errc())
 			{
 				msg.error = "Invalid HTTP status code";
