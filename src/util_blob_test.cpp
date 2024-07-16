@@ -44,6 +44,12 @@ TEST_CASE("Blob", "[util]")
 		blob.reserve(0);
 		REQUIRE(blob.size() == 5);
 		REQUIRE(blob.capacity() == 5);
+		REQUIRE(std::memcmp(blob.data(), "HELLO", 5) == 0);
+
+		blob.pop_front(2);
+		REQUIRE(std::memcmp(blob.data(), "LLO", 3) == 0);
+		REQUIRE(blob.size() == 3);
+		REQUIRE(blob.capacity() == 5);
 
 		blob.release();
 		REQUIRE(blob.size() == 0);
@@ -167,4 +173,77 @@ TEST_CASE("Blob", "[util]")
 		REQUIRE(auth.to_base64() == obs_auth);
 	}
 #endif
+}
+
+TEST_CASE("BlobBuffer", "[util]")
+{
+	SECTION("Basic reading and appending")
+	{
+		BlobBuffer blob;
+		REQUIRE(blob.size() == 0);
+		REQUIRE(blob.capacity() == 0);
+
+		blob.reserve(16);
+		REQUIRE(blob.size() == 0);
+		REQUIRE(blob.capacity() == 16);
+
+		blob += "Hello World!";
+		REQUIRE(blob.size() == 12);
+		REQUIRE(blob.capacity() == 16);
+
+		char buf[16];
+		std::size_t len;
+
+		len = blob.read(buf, 5);
+		REQUIRE(len == 5);
+		REQUIRE(std::memcmp(buf, "Hello", len) == 0);
+		REQUIRE(blob.size() == 7);
+		REQUIRE(blob.capacity() == 16);
+
+		len = blob.read(buf, 3);
+		REQUIRE(len == 3);
+		REQUIRE(std::memcmp(buf, " Wo", len) == 0);
+		REQUIRE(blob.size() == 4);
+		REQUIRE(blob.capacity() == 16);
+
+		len = blob.read(buf, 16);
+		REQUIRE(len == 4);
+		REQUIRE(std::memcmp(buf, "rld!", len) == 0);
+		REQUIRE(blob.size() == 0);
+		REQUIRE(blob.capacity() == 16);
+
+		len = blob.read(buf, 16);
+		REQUIRE(len == 0);
+	}
+
+	SECTION("Growing the buffer on demand")
+	{
+		BlobView block("0123456789");
+
+		BlobBuffer blob(16);
+		REQUIRE(blob.size() == 0);
+		REQUIRE(blob.capacity() == 16);
+
+		blob += block;
+		REQUIRE(blob.size() == 10);
+		REQUIRE(blob.capacity() == 16);
+
+		blob += block;
+		REQUIRE(blob.size() == 20);
+		REQUIRE(blob.capacity() == 20);
+
+		blob.advance(14);
+		REQUIRE(blob.size() == 6);
+		REQUIRE(blob.capacity() == 20);
+		REQUIRE(std::memcmp(blob.data(), "456789", 6) == 0);
+
+		blob += block;
+		REQUIRE(blob.size() == 16);
+		REQUIRE(blob.capacity() == 20);
+
+		blob += block;
+		REQUIRE(blob.size() == 26);
+		REQUIRE(blob.capacity() == 26);
+		REQUIRE(std::memcmp(blob.data(), "45678901234567890123456789", 26) == 0);
+	}
 }

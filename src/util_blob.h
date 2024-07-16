@@ -40,6 +40,7 @@ public:
 
 	inline unsigned char const* data() const { return m_data; }
 	inline std::size_t size() const { return m_end - m_data; }
+	inline bool empty() const { return m_end == m_data; }
 
 	std::string_view to_bin() const;
 	std::string to_hex() const;
@@ -72,8 +73,13 @@ public:
 	void clear();
 	void release();
 	inline unsigned char* data() { return m_data; }
+	inline unsigned char const* data() const { return m_data; }
+	inline unsigned char* tail() { return m_end; }
 	inline std::size_t capacity() const { return m_capacity - m_data; }
+	inline std::size_t space() const { return m_capacity - m_end; }
 	void reserve(std::size_t reserve_size);
+	void pop_front(std::size_t consume_size);
+	void added_to_tail(std::size_t added_size);
 
 	static Blob from_literal(std::string_view const& initial);
 	static Blob from_random(std::size_t len);
@@ -95,6 +101,46 @@ public:
 
 protected:
 	unsigned char* m_capacity;
+};
+
+class BlobBuffer
+{
+public:
+	BlobBuffer(std::size_t reserve_size = 0);
+	BlobBuffer(BlobBuffer&& other);
+	BlobBuffer(BlobBuffer const&) = delete;
+	~BlobBuffer();
+
+	void clear();
+	void release();
+	void reserve(std::size_t reserve_size);
+
+	void advance(std::size_t count);
+	void flush();
+	std::size_t read(void* dest, std::size_t maxlen);
+	void write(void const* src, std::size_t len);
+	void added_to_tail(std::size_t added_size);
+
+	inline unsigned char* data() { return m_blob.data() + m_read_offset; }
+	inline unsigned char const* data() const { return m_blob.data() + m_read_offset; }
+	inline unsigned char* tail() { return m_blob.tail(); }
+	inline std::size_t size() const { return m_blob.size() - m_read_offset; }
+	inline std::size_t capacity() const { return m_blob.capacity(); }
+	inline std::size_t space() const { return m_blob.space(); }
+	inline bool empty() const { return m_blob.size() == m_read_offset; }
+
+	BlobBuffer& operator=(BlobBuffer&&);
+	BlobBuffer& operator=(BlobBuffer const&) = delete;
+
+	inline BlobBuffer& operator+=(BlobView const& blob)
+	{
+		write(blob.data(), blob.size());
+		return *this;
+	}
+
+protected:
+	Blob m_blob;
+	std::size_t m_read_offset;
 };
 
 } // namespace util
