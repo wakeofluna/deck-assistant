@@ -24,6 +24,7 @@
 #include <gnutls/gnutls.h>
 #include <gnutls/x509.h>
 #elif (defined HAVE_OPENSSL)
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 #endif
 
@@ -34,12 +35,12 @@ struct util::TLSSession::State
 	IO* io = nullptr;
 	std::string remote_name;
 	bool handshaking;
+	BlobBuffer inbuffer;
+	BlobBuffer outbuffer;
 
 #if (defined HAVE_GNUTLS)
 	gnutls_session_t session               = nullptr;
 	gnutls_certificate_credentials_t creds = nullptr;
-	BlobBuffer outbuffer;
-	BlobBuffer inbuffer;
 #elif (defined HAVE_OPENSSL)
 	SSL* connection = nullptr;
 	BIO* rbio       = nullptr;
@@ -134,15 +135,81 @@ int state_init_as_client(TLSSession::State& state, bool verify_certificate)
 
 	gnutls_handshake_set_timeout(state.session, GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
 
-	// Max TLS frame is 16k
-	state.inbuffer.reserve(17 * 1024);
-	state.outbuffer.reserve(17 * 1024);
-
 	last_error = gnutls_handshake(state.session);
 	if (last_error == GNUTLS_E_INTERRUPTED || last_error == GNUTLS_E_AGAIN)
 		last_error = GNUTLS_E_SUCCESS;
 
 	return last_error;
+}
+
+#elif (defined HAVE_OPENSSL)
+
+bool prepare_ssl_context(SSL_CTX* ctx)
+{
+	int result = SSL_CTX_set_default_verify_paths(ctx);
+	if (result == 0)
+		return false;
+
+	return true;
+}
+
+SSL_CTX* get_ssl_context()
+{
+	static SSL_CTX* ctx = nullptr;
+	if (!ctx)
+	{
+		//SSL_load_error_strings();
+
+		SSL_CTX* new_ctx = SSL_CTX_new(TLS_method());
+		if (!new_ctx)
+			return nullptr;
+
+		if (!prepare_ssl_context(new_ctx))
+		{
+			SSL_CTX_free(new_ctx);
+			return nullptr;
+		}
+
+		ctx = new_ctx;
+	}
+	return ctx;
+}
+
+int no_verify_func(int preverify_ok, X509_STORE_CTX* x509_ctx)
+{
+	return 1;
+}
+
+int state_init_as_client(TLSSession::State& state, bool verify_certificate)
+{
+	SSL_CTX* ctx = get_ssl_context();
+	if (!ctx)
+		return ERR_get_error();
+
+	state.connection = SSL_new(ctx);
+	state.rbio       = BIO_new(BIO_s_mem());
+	state.wbio       = BIO_new(BIO_s_mem());
+
+	if (!state.connection || !state.rbio || !state.wbio)
+	{
+		BIO_free(state.rbio);
+		BIO_free(state.wbio);
+		return ERR_get_error();
+	}
+
+	SSL_set_bio(state.connection, state.rbio, state.wbio);
+	SSL_set_verify(state.connection, SSL_VERIFY_PEER, verify_certificate ? nullptr : &no_verify_func);
+	SSL_set_connect_state(state.connection);
+
+	int result = SSL_do_handshake(state.connection);
+	if (result < 0)
+	{
+		result = SSL_get_error(state.connection, result);
+		if (result == SSL_ERROR_SSL)
+			return ERR_get_error();
+	}
+
+	return 0;
 }
 
 #endif
@@ -168,18 +235,25 @@ bool TLSSession::operator!() const
 
 bool TLSSession::init_as_client(IO& io, std::string_view const& remote_name, bool verify_certificate)
 {
+	m_last_error = 0;
+
+#if (defined HAVE_GNUTLS || defined HAVE_OPENSSL)
 	m_state.reset(new State);
 	m_state->io          = &io;
 	m_state->remote_name = remote_name;
 	m_state->handshaking = true;
 
-#if (defined HAVE_GNUTLS)
+	// Max TLS frame is 16k
+	m_state->inbuffer.reserve(17 * 1024);
+	m_state->outbuffer.reserve(17 * 1024);
+
 	m_last_error = state_init_as_client(*m_state, verify_certificate);
-	if (m_last_error == GNUTLS_E_SUCCESS)
+	if (m_last_error == 0)
 		return true;
-#endif
 
 	m_state.reset();
+#endif
+
 	return false;
 }
 
@@ -193,7 +267,6 @@ bool TLSSession::pump_read()
 	if (!m_state)
 		return false;
 
-#if (defined HAVE_GNUTLS)
 	BlobBuffer& inbuf = m_state->inbuffer;
 
 	if (inbuf.space() < 4096)
@@ -205,16 +278,36 @@ bool TLSSession::pump_read()
 	int received = m_state->io->read(inbuf.tail(), inbuf.space());
 	if (received < 0)
 	{
+#if (defined HAVE_GNUTLS)
+		m_last_error = GNUTLS_E_PULL_ERROR;
+#elif (defined HAVE_OPENSSL)
+		m_last_error = ERR_R_OPERATION_FAIL;
+#endif
 		deinit();
 		return false;
 	}
 
 	if (received > 0)
-	{
 		inbuf.added_to_tail(received);
+
+	if (!inbuf.empty())
+	{
+#if (defined HAVE_OPENSSL)
+		int result = BIO_write(m_state->rbio, inbuf.data(), inbuf.size());
+		if (result <= 0 && !BIO_should_retry(m_state->rbio))
+		{
+			m_last_error = ERR_get_error();
+			deinit();
+			return false;
+		}
+
+		if (result > 0)
+			inbuf.advance(result);
+#endif
 
 		if (m_state->handshaking)
 		{
+#if (defined HAVE_GNUTLS)
 			m_last_error = gnutls_handshake(m_state->session);
 			if (gnutls_error_is_fatal(m_last_error))
 			{
@@ -226,12 +319,34 @@ bool TLSSession::pump_read()
 				return false;
 
 			m_state->handshaking = false;
+#elif (defined HAVE_OPENSSL)
+			result = SSL_do_handshake(m_state->connection);
+			if (result < 0)
+			{
+				result = SSL_get_error(m_state->connection, result);
+				if (result == SSL_ERROR_SSL)
+				{
+					m_last_error = ERR_get_error();
+					deinit();
+				}
+				return false;
+			}
+
+			if (result == 0)
+				return false;
+
+			m_state->handshaking = false;
+#else
+			m_last_error = -1;
+			return false;
+#endif
 		}
 	}
 
+#if (defined HAVE_GNUTLS)
 	return !inbuf.empty() || gnutls_record_check_pending(m_state->session) > 0;
 #else
-	return false;
+	return true;
 #endif
 }
 
@@ -240,13 +355,37 @@ bool TLSSession::pump_write()
 	if (!m_state)
 		return false;
 
-#if (defined HAVE_GNUTLS)
 	BlobBuffer& outbuf = m_state->outbuffer;
+
+#if (defined HAVE_OPENSSL)
+	if (outbuf.space() < 4096)
+		outbuf.flush();
+
+	if (outbuf.space() < 4096)
+		outbuf.reserve(outbuf.capacity() + 4096);
+
+	int read_result = BIO_read(m_state->wbio, outbuf.tail(), outbuf.space());
+	if (read_result <= 0 && !BIO_should_retry(m_state->wbio))
+	{
+		m_last_error = ERR_get_error();
+		deinit();
+		return false;
+	}
+
+	if (read_result > 0)
+		outbuf.added_to_tail(read_result);
+#endif
+
 	if (!outbuf.empty())
 	{
 		int result = m_state->io->write(outbuf.data(), outbuf.size());
 		if (result < 0)
 		{
+#if (defined HAVE_GNUTLS)
+			m_last_error = GNUTLS_E_PUSH_ERROR;
+#elif (defined HAVE_OPENSSL)
+			m_last_error = ERR_R_OPERATION_FAIL;
+#endif
 			deinit();
 			return false;
 		}
@@ -255,9 +394,6 @@ bool TLSSession::pump_write()
 			outbuf.advance(result);
 	}
 	return true;
-#else
-	return false;
-#endif
 }
 
 bool TLSSession::is_handshaking() const
@@ -297,6 +433,20 @@ int TLSSession::read(void* data, int maxlen)
 	}
 
 	return received;
+#elif (defined HAVE_OPENSSL)
+	int result = SSL_read(m_state->connection, data, maxlen);
+	if (result <= 0)
+	{
+		result = SSL_get_error(m_state->connection, result);
+		if (result == SSL_ERROR_SSL)
+		{
+			m_last_error = ERR_get_error();
+			deinit();
+			return -1;
+		}
+		return 0;
+	}
+	return result;
 #else
 	return -1;
 #endif
@@ -326,6 +476,20 @@ int TLSSession::write(void const* data, int len)
 	}
 
 	return sent;
+#elif (defined HAVE_OPENSSL)
+	int result = SSL_write(m_state->connection, data, len);
+	if (result <= 0)
+	{
+		result = SSL_get_error(m_state->connection, result);
+		if (result == SSL_ERROR_SSL)
+		{
+			m_last_error = ERR_get_error();
+			deinit();
+			return -1;
+		}
+		return 0;
+	}
+	return result;
 #else
 	return -1;
 #endif
@@ -336,9 +500,12 @@ void TLSSession::shutdown()
 	if (!m_state)
 		return;
 
+	m_state->handshaking = false;
+
 #if (defined HAVE_GNUTLS)
 	gnutls_bye(m_state->session, GNUTLS_SHUT_WR);
-	m_state->handshaking = false;
+#elif (defined HAVE_OPENSSL)
+	SSL_shutdown(m_state->connection);
 #endif
 }
 
@@ -346,6 +513,9 @@ std::string_view TLSSession::get_last_error() const
 {
 #if (defined HAVE_GNUTLS)
 	return gnutls_strerror(m_last_error);
+#elif (defined HAVE_OPENSSL)
+	char const* errstr = ERR_reason_error_string(m_last_error);
+	return errstr ? errstr : "(unknown SSL error)";
 #else
 	return "No TLS implementation available";
 #endif

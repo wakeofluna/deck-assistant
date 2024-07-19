@@ -103,7 +103,7 @@ else
         default_options: ['default_library=shared'],
     )
     if ssl.found()
-        buildflags += '-DHAVE_OPENSSL'
+        buildflags += ['-DHAVE_OPENSSL','-DOPENSSL_NO_DEPRECATED']
     endif
 endif
 
