@@ -351,57 +351,66 @@ end
 local BUTTON_NORMAL = 68134
 local BUTTON_PRESSED = 912087
 local BUTTON_HOVERED = 10955
+local BUTTON_DISABLED = 33123
 
-local function create_button(label, callback)
+local function create_button(text, callback, initial_enabled)
     local btn = {}
 
     if not callback then
-        logger(logger.WARNING, 'Button \'', label, '\' does not have a callback function')
+        logger(logger.WARNING, 'Button \'', text, '\' does not have a callback function')
     end
 
-    btn.background = deck:Colour 'Blue'
-    btn.label = label
+    btn.bgcolor = deck:Colour 'Blue'
+    btn.text = text
     btn.font = default_font
     btn.callback = callback
-    btn.dirty = true
     btn.width = 400
     btn.height = 200
 
-    -- Internal states
-    btn._internal_state = BUTTON_NORMAL
+    if initial_enabled == false then
+        btn._internal_state = BUTTON_DISABLED
+    else
+        btn._internal_state = BUTTON_NORMAL
+    end
 
-    btn.update_state = function(self, newstate)
-        assert(newstate == BUTTON_NORMAL or newstate == BUTTON_PRESSED or newstate == BUTTON_HOVERED)
+    btn._update_state = function(self, newstate)
+        --assert(newstate == BUTTON_NORMAL or newstate == BUTTON_PRESSED or newstate == BUTTON_HOVERED or newstate == BUTTON_DISABLED)
         if self._internal_state ~= newstate then
             self._internal_state = newstate
-            self:redraw()
+            if self.card then
+                self:redraw()
+            end
         end
     end
 
     btn.mouse_button = function(self, x, y, button, pressed)
-        if button == 1 then
-            self.is_pressed = pressed
+        if button == 1 and btn._internal_state ~= BUTTON_DISABLED then
+            self._is_pressed = pressed
             if pressed then
-                self:update_state(BUTTON_PRESSED)
+                self:_update_state(BUTTON_PRESSED)
             elseif self._internal_state == BUTTON_PRESSED then
-                self:update_state(BUTTON_HOVERED)
+                self:_update_state(BUTTON_HOVERED)
                 self:callback()
             else
-                self:update_state(BUTTON_NORMAL)
+                self:_update_state(BUTTON_NORMAL)
             end
         end
     end
 
     btn.mouse_entered = function(self)
-        if self.is_pressed then
-            self:update_state(BUTTON_PRESSED)
-        else
-            self:update_state(BUTTON_HOVERED)
+        if btn._internal_state ~= BUTTON_DISABLED then
+            if self._is_pressed then
+                self:_update_state(BUTTON_PRESSED)
+            else
+                self:_update_state(BUTTON_HOVERED)
+            end
         end
     end
 
     btn.mouse_left = function(self)
-        self:update_state(BUTTON_NORMAL)
+        if btn._internal_state ~= BUTTON_DISABLED then
+            self:_update_state(BUTTON_NORMAL)
+        end
     end
 
     btn.resize = function(self, width, height)
@@ -413,19 +422,41 @@ local function create_button(label, callback)
     end
 
     btn.redraw = function(self, force)
+        if self.disabled or self.enabled == false then
+            self._internal_state = BUTTON_DISABLED
+            self._is_pressed = false
+            self.enabled = nil
+            self.disabled = nil
+        end
+
         if not self.normal or force then
-            local txt = self.font:render(self.label)
+            local txt = self.font:render(self.text, self.width - 10)
             self.normal = deck:Card(self.width, self.height)
-            self.normal:clear(self.background)
+            self.normal:clear(self.bgcolor)
             self.normal:blit(txt, txt:centered(self.normal))
-            self.hover = self.normal.dup:lighten(40)
-            self.pressed = self.normal.dup:darken(40)
+            self.hover = nil
+            self.pressed = nil
+            self.grayed = nil
         end
 
         if self._internal_state == BUTTON_PRESSED then
+            if not self.pressed then
+                self.pressed = self.normal.dup:darken(40)
+            end
             self.card = self.pressed
         elseif self._internal_state == BUTTON_HOVERED then
+            if not self.hover then
+                self.hover = self.normal.dup:lighten(40)
+            end
             self.card = self.hover
+        elseif self._internal_state == BUTTON_DISABLED then
+            if not self.grayed then
+                if not self.pressed then
+                    self.pressed = self.normal.dup:darken(40)
+                end
+                self.grayed = self.pressed.dup:desaturate()
+            end
+            self.card = self.grayed
         else
             self.card = self.normal
         end
@@ -433,6 +464,23 @@ local function create_button(label, callback)
         if self.on_update then
             self:on_update()
         end
+    end
+
+    btn.set_enabled = function(self, enabled)
+        if enabled then
+            self:enable()
+        else
+            self:disable()
+        end
+    end
+
+    btn.disable = function(self)
+        self._is_pressed = false
+        self:_update_state(BUTTON_DISABLED)
+    end
+
+    btn.enable = function(self)
+        self:_update_state(BUTTON_NORMAL)
     end
 
     return btn

@@ -41,6 +41,7 @@ public:
 
 	static SDL_Surface* resize_surface(SDL_Surface* surface, int new_width, int new_height);
 	static void fade_to_colour(SDL_Surface* surface, SDL_Color target_colour, double factor);
+	static void desaturate(SDL_Surface* surface, double factor);
 	static std::vector<unsigned char> save_surface_as_bmp(SDL_Surface* surface);
 	static std::vector<unsigned char> save_surface_as_jpeg(SDL_Surface* surface);
 	static std::vector<unsigned char> save_surface_as_png(SDL_Surface* surface);
@@ -53,6 +54,7 @@ private:
 	static int _lua_centered(lua_State* L);
 	static int _lua_clear(lua_State* L);
 	static int _lua_darken(lua_State* L);
+	static int _lua_desaturate(lua_State* L);
 	static int _lua_fade_to(lua_State* L);
 	static int _lua_lighten(lua_State* L);
 	static int _lua_resize(lua_State* L);
