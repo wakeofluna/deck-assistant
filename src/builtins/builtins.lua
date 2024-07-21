@@ -486,11 +486,84 @@ local function create_button(text, callback, initial_enabled)
     return btn
 end
 
+
+local function create_label(text, fgcolor, bgcolor)
+    local lbl = {}
+
+    lbl.bgcolor = bgcolor and bgcolor or deck:Colour '#00000000'
+    lbl.fgcolor = fgcolor and fgcolor or deck:Colour '#ffffffff'
+    lbl.alignment = ALIGN_LEFT
+    lbl.text = text
+    lbl.font = default_font
+    lbl.width = 400
+    lbl.height = 200
+
+    lbl.resize = function(self, width, height)
+        if not self.card or self.card.width ~= width or self.card.height ~= height then
+            self.width = width
+            self.height = height
+            self:redraw(true)
+        end
+    end
+
+    lbl.redraw = function(self, force)
+        if not self.card or force then
+            local txt = self.font:render(self.text, self.width - 10, self.alignment, self.fgcolor)
+            self.card = deck:Card(self.width, self.height)
+            self.card:clear(self.bgcolor)
+
+            local pos = txt:centered(self.card)
+            if self.alignment == ALIGN_LEFT and pos.x > 5 then
+                pos.x = 5
+            end
+
+            self.card:blit(txt, txt:centered(pos))
+        end
+
+        if self.on_update then
+            self:on_update()
+        end
+    end
+
+    lbl.set_text = function(self, text)
+        if self.text ~= text then
+            self.text = text
+            self:redraw(true)
+        end
+    end
+
+    lbl.set_fgcolor = function(self, fgcolor)
+        if self.fgcolor ~= fgcolor then
+            self.fgcolor = fgcolor
+            self:redraw(true)
+        end
+    end
+
+    lbl.set_bgcolor = function(self, bgcolor)
+        if self.bgcolor ~= bgcolor then
+            self.bgcolor = bgcolor
+            self:redraw(true)
+        end
+    end
+
+    lbl.set_alignment = function(self, alignment)
+        assert(alignment == ALIGN_LEFT or alignment == ALIGN_CENTER or alignment == ALIGN_RIGHT)
+        if self.alignment ~= alignment then
+            self.alignment = alignment
+            self:redraw(true)
+        end
+    end
+
+    return lbl
+end
+
+
 local exports = {}
 exports.default_container = default_container
 exports.default_font = default_font
 exports.create_window_manager = create_window_manager
 exports.create_widget_grid = create_widget_grid
 exports.create_button = create_button
+exports.create_label = create_label
 exports.connect = connect
 return exports
