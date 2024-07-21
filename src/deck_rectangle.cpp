@@ -60,6 +60,11 @@ void DeckRectangle::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_clip);
 	lua_setfield(L, -2, "clip");
+
+	lua_pushcfunction(L, &_lua_reset);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "clear");
+	lua_setfield(L, -2, "reset");
 }
 
 int DeckRectangle::index(lua_State* L, std::string_view const& key) const
@@ -286,6 +291,19 @@ int DeckRectangle::_lua_clip(lua_State* L)
 
 	SDL_Rect rect     = clip(self->m_rectangle, other->m_rectangle);
 	self->m_rectangle = rect;
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+int DeckRectangle::_lua_reset(lua_State* L)
+{
+	DeckRectangle* self = from_stack(L, 1);
+
+	self->m_rectangle.x = 0;
+	self->m_rectangle.y = 0;
+	self->m_rectangle.w = 0;
+	self->m_rectangle.h = 0;
 
 	lua_settop(L, 1);
 	return 1;

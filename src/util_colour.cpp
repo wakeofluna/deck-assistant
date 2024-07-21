@@ -263,6 +263,14 @@ bool Colour::parse_colour(std::string_view const& value, Colour& target)
 		target.color.a = 255;
 		return true;
 	}
+	else if (lc_value == "transparent")
+	{
+		target.color.r = 0;
+		target.color.g = 0;
+		target.color.b = 0;
+		target.color.a = 0;
+		return true;
+	}
 	else
 	{
 		return false;

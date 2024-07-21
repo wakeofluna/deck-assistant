@@ -54,6 +54,7 @@ private:
 	static int _lua_set_position(lua_State* L);
 	static int _lua_move(lua_State* L);
 	static int _lua_clip(lua_State* L);
+	static int _lua_reset(lua_State* L);
 
 private:
 	SDL_Rect m_rectangle;

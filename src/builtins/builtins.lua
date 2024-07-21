@@ -11,7 +11,7 @@ local default_font = deck:Font { 24, deck:Colour 'White' }
 local function default_container()
     local self = {}
 
-    self.background = deck:Colour '#00000000'
+    self.bgcolor = deck:Colour 'Transparent'
     self.children = deck:RectangleList()
 
     self._find_child = function(self, widget)
@@ -129,7 +129,10 @@ local function default_container()
 
     self.redraw = function(self, rect)
         if self.card then
-            self.card:clear(self.background)
+            self.card:clear(self.bgcolor)
+            if self.redraw_self then
+                self:redraw_self()
+            end
             self.children:foreach(function(child)
                 if child.widget.card then
                     self.card:sub_card(child):blit(child.widget.card)
@@ -220,7 +223,7 @@ end
 local function create_window_manager()
     local self = default_container()
 
-    self.background = deck:Colour 'Black'
+    self.bgcolor = deck:Colour 'Black'
 
     self._update_child_rect = function(self, child)
         if child.widget.card then
@@ -277,6 +280,43 @@ local function create_widget_grid(count_x, count_y, padding, margin)
         span_x = (span_x ~= nil and span_x > 1) and span_x or 1
         span_y = (span_y ~= nil and span_y > 1) and span_y or 1
         self:_add_child(widget, { pos_x = pos_x, pos_y = pos_y, span_x = span_x, span_y = span_y })
+    end
+
+    return self
+end
+
+local function create_border(size, color)
+    local self = default_container()
+
+    self.size = size or 2
+    self.margin = 3
+    self.color = color or deck:Colour 'Red'
+
+    self._assign_child_rect = function(self, child)
+        local total_margin = self.size + self.margin
+        child.top = total_margin
+        child.left = total_margin
+        child.right = self.card.width - total_margin
+        child.bottom = self.card.height - total_margin
+    end
+
+    self.add_child = function(self, widget)
+        self.children:clear()
+        if widget then
+            self:_add_child(widget)
+        end
+    end
+
+    self.redraw_self = function(self, force)
+        local w, h, sz = self.card.width, self.card.height, self.size
+        -- top
+        self.card:sub_card(0, 0, w - sz, sz):clear(self.color)
+        -- right
+        self.card:sub_card(w - sz, 0, sz, h - sz):clear(self.color)
+        -- bottom
+        self.card:sub_card(sz, h - sz, w - sz, sz):clear(self.color)
+        -- left
+        self.card:sub_card(0, sz, sz, h - sz):clear(self.color)
     end
 
     return self
@@ -347,6 +387,22 @@ local function connect(widget, ...)
     end
 end
 
+
+local function widget_base()
+    local wdg = {}
+
+    wdg.resize = function(self, width, height)
+        if not self.card or self.card.width ~= width or self.card.height ~= height then
+            self.width = width
+            self.height = height
+            self:redraw(true)
+        end
+    end
+
+    return wdg
+end
+
+
 -- Banged my keyboard for some unique integers
 local BUTTON_NORMAL = 68134
 local BUTTON_PRESSED = 912087
@@ -354,7 +410,7 @@ local BUTTON_HOVERED = 10955
 local BUTTON_DISABLED = 33123
 
 local function create_button(text, callback, initial_enabled)
-    local btn = {}
+    local btn = widget_base()
 
     if not callback then
         logger(logger.WARNING, 'Button \'', text, '\' does not have a callback function')
@@ -410,14 +466,6 @@ local function create_button(text, callback, initial_enabled)
     btn.mouse_left = function(self)
         if btn._internal_state ~= BUTTON_DISABLED then
             self:_update_state(BUTTON_NORMAL)
-        end
-    end
-
-    btn.resize = function(self, width, height)
-        if not self.card or self.card.width ~= width or self.card.height ~= height then
-            self.width = width
-            self.height = height
-            self:redraw(true)
         end
     end
 
@@ -488,23 +536,15 @@ end
 
 
 local function create_label(text, fgcolor, bgcolor)
-    local lbl = {}
+    local lbl = widget_base()
 
-    lbl.bgcolor = bgcolor and bgcolor or deck:Colour '#00000000'
-    lbl.fgcolor = fgcolor and fgcolor or deck:Colour '#ffffffff'
+    lbl.bgcolor = bgcolor and bgcolor or deck:Colour 'Transparent'
+    lbl.fgcolor = fgcolor and fgcolor or deck:Colour 'White'
     lbl.alignment = ALIGN_LEFT
     lbl.text = text
     lbl.font = default_font
     lbl.width = 400
     lbl.height = 200
-
-    lbl.resize = function(self, width, height)
-        if not self.card or self.card.width ~= width or self.card.height ~= height then
-            self.width = width
-            self.height = height
-            self:redraw(true)
-        end
-    end
 
     lbl.redraw = function(self, force)
         if not self.card or force then
@@ -559,11 +599,17 @@ end
 
 
 local exports = {}
-exports.default_container = default_container
+
 exports.default_font = default_font
+
+exports.default_container = default_container
 exports.create_window_manager = create_window_manager
 exports.create_widget_grid = create_widget_grid
+exports.connect = connect
+
+exports.widget_base = widget_base
+exports.create_border = create_border
 exports.create_button = create_button
 exports.create_label = create_label
-exports.connect = connect
+
 return exports
