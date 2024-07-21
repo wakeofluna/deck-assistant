@@ -161,7 +161,7 @@ void DeckFont::insert_enum_values(lua_State* L)
 		std::string_view name = to_string(*k);
 		lua_pushlstring(L, name.data(), name.size());
 		lua_pushlightuserdata(L, (void*)k);
-		lua_settable(L, LUA_GLOBALSINDEX);
+		lua_settable(L, -3);
 	}
 
 	for (auto& k : { &k_style_regular, &k_style_bold, &k_style_italic, &k_style_underline, &k_style_strikethrough })
@@ -169,7 +169,7 @@ void DeckFont::insert_enum_values(lua_State* L)
 		std::string_view name = to_string(*k);
 		lua_pushlstring(L, name.data(), name.size());
 		lua_pushlightuserdata(L, (void*)k);
-		lua_settable(L, LUA_GLOBALSINDEX);
+		lua_settable(L, -3);
 	}
 }
 
@@ -465,7 +465,7 @@ int DeckFont::_lua_render_text(lua_State* L)
 
 		if (vtype == LUA_TLIGHTUSERDATA)
 		{
-			void* ptr = lua_touserdata(L, -1);
+			void* ptr = lua_touserdata(L, idx);
 			if (auto override_alignment = to_alignment(ptr); override_alignment)
 			{
 				alignment = override_alignment.value();
@@ -479,7 +479,8 @@ int DeckFont::_lua_render_text(lua_State* L)
 			continue;
 		}
 
-		luaL_argerror(L, idx, "invalid override for DeckFont:render");
+		if (vtype != LUA_TNIL)
+			luaL_argerror(L, idx, "invalid override for DeckFont:render");
 	}
 
 	self->load_font();
