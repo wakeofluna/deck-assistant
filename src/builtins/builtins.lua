@@ -107,7 +107,7 @@ local function default_container()
         if child then
             widget.on_update = nil
             self.children:remove(child)
-            self:redraw()
+            self:redraw(child)
         end
     end
 
@@ -568,21 +568,27 @@ local function create_label(text, fgcolor, bgcolor)
     lbl.set_text = function(self, text)
         if self.text ~= text then
             self.text = text
-            self:redraw(true)
+            if self.card then
+                self:redraw(true)
+            end
         end
     end
 
     lbl.set_fgcolor = function(self, fgcolor)
         if self.fgcolor ~= fgcolor then
             self.fgcolor = fgcolor
-            self:redraw(true)
+            if self.card then
+                self:redraw(true)
+            end
         end
     end
 
     lbl.set_bgcolor = function(self, bgcolor)
         if self.bgcolor ~= bgcolor then
             self.bgcolor = bgcolor
-            self:redraw(true)
+            if self.card then
+                self:redraw(true)
+            end
         end
     end
 
@@ -590,7 +596,9 @@ local function create_label(text, fgcolor, bgcolor)
         assert(alignment == ALIGN_LEFT or alignment == ALIGN_CENTER or alignment == ALIGN_RIGHT)
         if self.alignment ~= alignment then
             self.alignment = alignment
-            self:redraw(true)
+            if self.card then
+                self:redraw(true)
+            end
         end
     end
 

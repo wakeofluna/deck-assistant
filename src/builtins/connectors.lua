@@ -7,6 +7,7 @@ local function obs_connector_lowlevel()
 
     instance.promises = deck:PromiseList()
 
+    instance.enabled = true
     instance.handshaking = false
 
     instance.socket = deck.connector_factory.Websocket()
@@ -99,16 +100,17 @@ local function obs_connector_lowlevel()
     end
 
     instance.tick_inputs = function(self, clock)
+        self.socket.enabled = self.enabled
         self.socket:tick_inputs(clock)
 
-        if instance.handshaking and clock > instance.handshaking + 2000 then
+        if self.handshaking and clock > self.handshaking + 2000 then
             local err = 'Did not receive handshake from OBS within time limit'
             logger(logger.ERROR, err)
 
-            instance.handshaking = false
-            instance.socket.enabled = false
-            if instance.on_connect_failed then
-                instance:on_connect_failed(err)
+            self.handshaking = false
+            self.socket.enabled = false
+            if self.on_connect_failed then
+                self:on_connect_failed(err)
             end
         end
     end
@@ -132,7 +134,7 @@ local function obs_connector_lowlevel()
             request.d.requestData = data
         end
         local promise = self.promises:new(request_id)
-        instance.socket:write(util.to_json(request))
+        self.socket:write(util.to_json(request))
         return promise
     end
 
@@ -341,6 +343,7 @@ deck.connector_factory.OBS = obs_connector
 local function oauth2_connector()
     local instance = {}
 
+    instance.enabled = true
     instance.ports = { 3000, 3001, 3002, 3003 }
     instance.server = deck.connector_factory.ServerSocket()
     instance.promise = deck:Promise(60000)
@@ -483,6 +486,7 @@ local function oauth2_connector()
     end
 
     instance.tick_inputs = function(self, clock)
+        self.server.enabled = self.enabled
         self.server:tick_inputs(clock)
     end
 
