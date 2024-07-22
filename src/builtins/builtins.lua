@@ -252,34 +252,34 @@ local function create_window_manager()
     return self
 end
 
-local function create_widget_grid(count_x, count_y, padding, margin)
+local function create_widget_grid(rows, cols, padding, margin)
     local self = default_container()
 
-    assert(count_x > 0)
-    assert(count_y > 0)
-    self.count_x = count_x
-    self.count_y = count_y
+    assert(rows > 0)
+    assert(cols > 0)
+    self.rows = rows
+    self.cols = cols
     self.padding = padding or 5
     self.margin = margin or self.padding
 
     self._assign_child_rect = function(self, child)
-        local total_padding_x = (self.count_x - 1) * self.padding + 2 * self.margin
-        local total_padding_y = (self.count_y - 1) * self.padding + 2 * self.margin
-        local cell_x = math.floor((self.card.width - total_padding_x) / self.count_x)
-        local cell_y = math.floor((self.card.height - total_padding_y) / self.count_y)
+        local total_padding_x = (self.cols - 1) * self.padding + 2 * self.margin
+        local total_padding_y = (self.rows - 1) * self.padding + 2 * self.margin
+        local cell_w = math.floor((self.card.width - total_padding_x) / self.cols)
+        local cell_h = math.floor((self.card.height - total_padding_y) / self.rows)
 
-        child.left = (self.padding + cell_x) * child.pos_x + self.margin
-        child.top = (self.padding + cell_y) * child.pos_y + self.margin
-        child.right = (self.padding + cell_x) * (child.pos_x + child.span_x) + self.margin - self.padding
-        child.bottom = (self.padding + cell_y) * (child.pos_y + child.span_y) + self.margin - self.padding
+        child.left = (self.padding + cell_w) * child.col + self.margin
+        child.top = (self.padding + cell_h) * child.row + self.margin
+        child.right = (self.padding + cell_w) * (child.col + child.col_span) + self.margin - self.padding
+        child.bottom = (self.padding + cell_h) * (child.row + child.row_span) + self.margin - self.padding
     end
 
-    self.add_child = function(self, widget, pos_x, pos_y, span_x, span_y)
-        assert(pos_x >= 0 and pos_x < self.count_x)
-        assert(pos_y >= 0 and pos_y < self.count_y)
-        span_x = (span_x ~= nil and span_x > 1) and span_x or 1
-        span_y = (span_y ~= nil and span_y > 1) and span_y or 1
-        self:_add_child(widget, { pos_x = pos_x, pos_y = pos_y, span_x = span_x, span_y = span_y })
+    self.add_child = function(self, widget, row, col, row_span, col_span)
+        assert(col >= 0 and col < self.cols)
+        assert(row >= 0 and row < self.rows)
+        col_span = (col_span ~= nil and col_span > 1) and col_span or 1
+        row_span = (row_span ~= nil and row_span > 1) and row_span or 1
+        self:_add_child(widget, { row = row, col = col, row_span = row_span, col_span = col_span })
     end
 
     return self
