@@ -22,6 +22,7 @@
 #include "util_blob.h"
 #include "util_paths.h"
 #include "util_text.h"
+#include <SDL_clipboard.h>
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -154,6 +155,9 @@ void DeckUtil::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_open_browser);
 	lua_setfield(L, -2, "open_browser");
+
+	lua_pushcfunction(L, &_lua_clipboard_text);
+	lua_setfield(L, -2, "clipboard_text");
 }
 
 void DeckUtil::init_instance_table(lua_State* L)
@@ -648,6 +652,14 @@ int DeckUtil::_lua_retrieve_event_log(lua_State* L)
 		lua_rawseti(L, -2, idx + 1);
 	}
 
+	return 1;
+}
+
+int DeckUtil::_lua_clipboard_text(lua_State* L)
+{
+	char* text = SDL_GetClipboardText();
+	lua_pushstring(L, text);
+	SDL_free(text);
 	return 1;
 }
 

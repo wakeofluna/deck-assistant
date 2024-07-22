@@ -57,6 +57,7 @@ private:
 	static int _lua_retrieve_table(lua_State* L);
 	static int _lua_append_event_log(lua_State* L);
 	static int _lua_retrieve_event_log(lua_State* L);
+	static int _lua_clipboard_text(lua_State* L);
 	static int _lua_ls(lua_State* L);
 	static int _lua_open_browser(lua_State* L);
 
