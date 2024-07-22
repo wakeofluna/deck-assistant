@@ -63,6 +63,7 @@ private:
 	std::optional<int> m_wanted_width;
 	std::optional<int> m_wanted_height;
 	std::optional<bool> m_wanted_visible;
+	bool m_exit_on_close;
 
 	std::recursive_mutex m_mutex;
 	bool m_event_size_changed;

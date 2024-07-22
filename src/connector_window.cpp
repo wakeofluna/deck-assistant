@@ -19,6 +19,7 @@
 #include "connector_window.h"
 #include "deck_card.h"
 #include "deck_logger.h"
+#include "deck_module.h"
 #include "deck_rectangle.h"
 #include "lua_helpers.h"
 
@@ -49,6 +50,7 @@ ConnectorWindow::ConnectorWindow()
     , m_wanted_width(1600)
     , m_wanted_height(900)
     , m_wanted_visible(true)
+    , m_exit_on_close(true)
     , m_event_size_changed(false)
     , m_event_surface_dirty(false)
     , m_card(nullptr)
@@ -255,6 +257,10 @@ int ConnectorWindow::index(lua_State* L, std::string_view const& key) const
 			lua_pushboolean(L, SDL_GetWindowFlags(m_window) & SDL_WINDOW_SHOWN);
 		}
 	}
+	else if (key == "exit_on_close" || key == "quit_on_close")
+	{
+		lua_pushboolean(L, m_exit_on_close);
+	}
 
 	return lua_gettop(L) == 2 ? 0 : 1;
 }
@@ -286,6 +292,11 @@ int ConnectorWindow::newindex(lua_State* L, std::string_view const& key)
 	{
 		luaL_argcheck(L, (lua_type(L, 3) == LUA_TBOOLEAN), 3, "visible must be a boolean");
 		m_wanted_visible = lua_toboolean(L, 3);
+	}
+	else if (key == "exit_on_close" || key == "quit_on_close")
+	{
+		luaL_argcheck(L, (lua_type(L, 3) == LUA_TBOOLEAN), 3, "exit_on_close must be a boolean");
+		m_exit_on_close = lua_toboolean(L, 3);
 	}
 	else if (key == "card")
 	{
@@ -453,6 +464,16 @@ void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
 			break;
 		case SDL_WINDOWEVENT_CLOSE:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window got request to close");
+			if (m_exit_on_close)
+			{
+				DeckModule* deck = DeckModule::push_global_instance(L);
+				deck->set_exit_requested(0);
+				lua_pop(L, 1);
+			}
+			else
+			{
+				m_wanted_visible = false;
+			}
 			break;
 		case SDL_WINDOWEVENT_TAKE_FOCUS:
 		case SDL_WINDOWEVENT_HIT_TEST:
