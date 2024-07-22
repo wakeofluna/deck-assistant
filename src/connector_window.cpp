@@ -372,7 +372,7 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 
 	if (event->type == SDL_MOUSEMOTION && event->motion.windowID == window_id)
 	{
-		DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window mouse motion at ", event->motion.x, ',', event->motion.y);
+		// DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window mouse motion at ", event->motion.x, ',', event->motion.y);
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
