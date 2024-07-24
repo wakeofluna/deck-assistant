@@ -20,6 +20,7 @@
 #define DECK_ASSISTANT_DECK_MODULE_H
 
 #include "lua_class.h"
+#include "util_socket.h"
 #include <optional>
 #include <string_view>
 
@@ -43,6 +44,8 @@ public:
 	bool is_exit_requested() const;
 	int get_exit_code() const;
 
+	inline std::shared_ptr<util::SocketSet> const& get_socketset() const { return m_socketset; }
+
 	static void init_class_table(lua_State* L);
 	void init_instance_table(lua_State* L);
 	int index(lua_State* L, std::string_view const& key) const;
@@ -64,6 +67,7 @@ private:
 	lua_Integer m_last_clock;
 	lua_Integer m_last_delta;
 	std::optional<int> m_exit_requested;
+	std::shared_ptr<util::SocketSet> m_socketset;
 };
 
 #endif // DECK_ASSISTANT_DECK_MODULE_H

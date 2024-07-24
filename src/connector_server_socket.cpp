@@ -24,11 +24,8 @@
 
 char const* ConnectorServerSocket::LUA_TYPENAME = "deck:ConnectorServerSocket";
 
-static constexpr int const MAX_CLIENTS = 10;
-
-ConnectorServerSocket::ConnectorServerSocket()
-    : m_socketset(util::SocketSet::create(MAX_CLIENTS + 1))
-    , m_socket(m_socketset)
+ConnectorServerSocket::ConnectorServerSocket(std::shared_ptr<util::SocketSet> const& socketset)
+    : m_socket(socketset)
     , m_server_state(State::Disconnected)
     , m_wanted_port(0)
     , m_active_port(0)
@@ -41,21 +38,13 @@ ConnectorServerSocket::ConnectorServerSocket()
 
 ConnectorServerSocket::~ConnectorServerSocket()
 {
-	m_socketset.reset();
+	m_enabled = false;
 }
 
 void ConnectorServerSocket::tick_inputs(lua_State* L, lua_Integer clock)
 {
-	// This can happen when the object is finalized but not removed from the DeckConnector table yet...
-	if (!m_socketset)
-		return;
-
-	bool const have_activity = m_socketset->poll();
-
 	tick_server_input(L, clock);
-
-	if (have_activity)
-		tick_clients_input(L, clock);
+	tick_clients_input(L, clock);
 }
 
 void ConnectorServerSocket::tick_outputs(lua_State* L)
@@ -265,7 +254,7 @@ void ConnectorServerSocket::init_class_table(lua_State* L)
 void ConnectorServerSocket::init_instance_table(lua_State* L)
 {
 	lua_pushlightuserdata(L, this);
-	lua_createtable(L, MAX_CLIENTS, 0);
+	lua_createtable(L, 8, 0);
 	lua_settable(L, -3);
 
 	LuaHelpers::create_callback_warning(L, "on_connect");

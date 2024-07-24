@@ -45,6 +45,7 @@ char const* DeckModule::LUA_TYPENAME = "deck:DeckModule";
 DeckModule::DeckModule()
     : m_last_clock(0)
     , m_last_delta(0)
+    , m_socketset(util::SocketSet::create(32))
 {
 }
 
@@ -61,6 +62,8 @@ void DeckModule::tick_inputs(lua_State* L, lua_Integer clock)
 
 	m_last_delta = clock - m_last_clock;
 	m_last_clock = clock;
+
+	m_socketset->poll();
 
 	LuaHelpers::push_instance_table(L, -1);
 	lua_rawgeti(L, -1, g_connector_container_idx);

@@ -30,7 +30,7 @@
 class ConnectorWebsocket : public ConnectorBase<ConnectorWebsocket>
 {
 public:
-	ConnectorWebsocket();
+	ConnectorWebsocket(std::shared_ptr<util::SocketSet> const& socketset);
 	~ConnectorWebsocket();
 
 	void tick_inputs(lua_State* L, lua_Integer clock) override;
@@ -62,7 +62,6 @@ private:
 		Connected,
 	};
 
-	std::shared_ptr<util::SocketSet> m_socketset;
 	util::Socket m_socket;
 	util::URL m_connect_url;
 	lua_Integer m_connect_last_attempt;

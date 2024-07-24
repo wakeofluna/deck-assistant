@@ -22,7 +22,9 @@
 #include "connector_vnc.h"
 #include "connector_websocket.h"
 #include "connector_window.h"
+#include "deck_module.h"
 #include "lua_helpers.h"
+#include <cassert>
 
 namespace
 {
@@ -31,6 +33,18 @@ template <typename T>
 int new_connector(lua_State* L)
 {
 	T::push_new(L);
+	return 1;
+}
+
+template <typename T>
+int new_socket_connector(lua_State* L)
+{
+	DeckModule* deck = DeckModule::push_global_instance(L);
+	assert(deck && "No DeckModule available when creating Connector");
+	std::shared_ptr<util::SocketSet> sset = deck->get_socketset();
+	lua_pop(L, 1);
+
+	T::push_new(L, sset);
 	return 1;
 }
 
@@ -54,7 +68,7 @@ void DeckConnectorFactory::init_class_table(lua_State* L)
 	lua_setfield(L, -3, "ElgatoStreamDeck");
 	lua_setfield(L, -2, "StreamDeck");
 
-	lua_pushcfunction(L, &new_connector<ConnectorServerSocket>);
+	lua_pushcfunction(L, &new_socket_connector<ConnectorServerSocket>);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "ServerSocket");
 	lua_setfield(L, -2, "Server");
@@ -67,7 +81,7 @@ void DeckConnectorFactory::init_class_table(lua_State* L)
 #endif
 	lua_setfield(L, -2, "Vnc");
 
-	lua_pushcfunction(L, &new_connector<ConnectorWebsocket>);
+	lua_pushcfunction(L, &new_socket_connector<ConnectorWebsocket>);
 	lua_setfield(L, -2, "Websocket");
 
 	lua_pushcfunction(L, &new_connector<ConnectorWindow>);

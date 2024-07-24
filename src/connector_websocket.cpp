@@ -81,9 +81,8 @@ util::Blob make_websocket_accept_nonce(util::Blob const&)
 
 char const* ConnectorWebsocket::LUA_TYPENAME = "deck:ConnectorWebsocket";
 
-ConnectorWebsocket::ConnectorWebsocket()
-    : m_socketset(util::SocketSet::create(1))
-    , m_socket(m_socketset)
+ConnectorWebsocket::ConnectorWebsocket(std::shared_ptr<util::SocketSet> const& socketset)
+    : m_socket(socketset)
     , m_connect_last_attempt(-5000)
     , m_connect_state(State::Disconnected)
     , m_enabled(true)
@@ -158,7 +157,6 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				return;
 
 			case util::Socket::State::TLSHandshaking:
-				m_socketset->poll();
 				m_socket.tls_handshake();
 				return;
 
@@ -197,8 +195,6 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 				break;
 		}
 	}
-
-	m_socketset->poll();
 
 	int received = m_socket.read_nonblock(m_receive_buffer.data(), m_receive_buffer.size());
 	if (received < 0)

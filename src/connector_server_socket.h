@@ -26,7 +26,7 @@
 class ConnectorServerSocket : public ConnectorBase<ConnectorServerSocket>
 {
 public:
-	ConnectorServerSocket();
+	ConnectorServerSocket(std::shared_ptr<util::SocketSet> const& socketset);
 	~ConnectorServerSocket();
 
 	void tick_inputs(lua_State* L, lua_Integer clock) override;
@@ -55,7 +55,6 @@ private:
 		Listening,
 	};
 
-	std::shared_ptr<util::SocketSet> m_socketset;
 	util::Socket m_socket;
 	State m_server_state;
 	unsigned short m_wanted_port;
