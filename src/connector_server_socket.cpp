@@ -70,10 +70,8 @@ void ConnectorServerSocket::shutdown(lua_State* L)
 			lua_rawgeti(L, -1, ref);
 			ConnectorServerSocketClient* client = ConnectorServerSocketClient::from_stack(L, -1, false);
 			if (client)
-			{
 				client->close();
-				lua_pop(L, 1);
-			}
+			lua_pop(L, 1);
 			lua_pushnil(L);
 			lua_rawseti(L, -2, ref);
 		}
