@@ -369,6 +369,7 @@ local function oauth2_connector()
 
     instance.server.on_connect = function(server)
         local message = 'OAuth2 bound to port ' .. server.port .. ' successfully'
+        instance.promise:reset()
         if instance.on_connect then
             logger(logger.DEBUG, message)
             instance:on_connect(server.port)
@@ -392,17 +393,11 @@ local function oauth2_connector()
     instance.server.on_accept = function(server, client)
         local message = 'OAuth2 on port ' .. server.port .. ' accepted client from ' .. client.host .. ':' .. client.port
         logger(logger.TRACE, message)
-        if instance.on_accept then
-            instance:on_accept(client)
-        end
     end
 
     instance.server.on_close = function(server, client)
         local message = 'OAuth2 on port ' .. server.port .. ' closed connection to client ' .. client.host .. ':' .. client.port
         logger(logger.TRACE, message)
-        if instance.on_close then
-            instance:on_close(client)
-        end
     end
 
     instance.server.on_receive = function(sock, client, data)
@@ -507,7 +502,7 @@ local function oauth2_connector()
     end
 
     instance.wait = function(self)
-        return instance.promise:wait()
+        return self.promise:wait()
     end
 
     return instance
@@ -515,15 +510,16 @@ end
 
 deck.connector_factory.OAuth2 = oauth2_connector
 
+local twitch_client_id = 'dgmscqylvzur6u2ww0qykq4f3j9zmx'
+
 local oauth2_twitch_connector = function()
     local instance = oauth2_connector()
 
-    instance.client_id = 'dgmscqylvzur6u2ww0qykq4f3j9zmx'
+    instance.client_id = twitch_client_id
     instance.scopes = {
         'moderator:read:followers',
         'channel:read:subscriptions',
         'channel:read:redemptions',
-        'channel:read:hype_train',
         'bits:read',
     }
 
@@ -551,11 +547,15 @@ local oauth2_twitch_connector = function()
         util.open_browser(target)
     end
 
+    instance.on_disconnect = function(self, msg)
+        self.promise:fulfill(false)
+    end
+
     instance.on_auth_callback = function(self, params)
         local reply = {
             granted = false,
         }
-        if params.state ~= instance.nonce then
+        if params.state ~= self.nonce then
             reply.message = 'Invalid STATE nonce, reply ignored'
         elseif params.error_description then
             reply.message = 'OAuth error: ' .. params.error_description
@@ -569,13 +569,13 @@ local oauth2_twitch_connector = function()
             reply.granted = true
             reply.scopes = util.split(params.scope, ' ', true)
 
-            instance.access_token = params.access_token
-            instance.access_scopes = reply.scopes
-            instance.promise:fulfill({ token = instance.access_token, scopes = instance.access_scopes })
-            logger(logger.DEBUG, 'Got Twitch access token: ' .. instance.access_token)
+            self.access_token = params.access_token
+            self.access_scopes = reply.scopes
+            self.promise:fulfill({ token = self.access_token, scopes = self.access_scopes })
+            logger(logger.DEBUG, 'Got Twitch access token: ' .. self.access_token)
 
-            if instance.on_access_token then
-                pcall(instance.on_access_token, instance, instance.access_token, instance.access_scopes)
+            if self.on_access_token then
+                pcall(self.on_access_token, self, self.access_token, self.access_scopes)
             end
         end
         return reply
@@ -585,3 +585,279 @@ local oauth2_twitch_connector = function()
 end
 
 deck.connector_factory.TwitchOAuth2 = oauth2_twitch_connector
+
+
+local twitch_connector = function()
+    local instance = {}
+
+    instance.debugging = false
+
+    if instance.debugging then
+        instance._api = deck:Connector('Http', 'TwitchApi', { base_url = 'http://127.0.0.1:8080/' })
+        instance._ws = deck:Connector('Websocket', 'TwitchWS', { connection_string = 'ws://127.0.0.1:8080/ws', enabled = false })
+    else
+        instance._api = deck:Connector('Http', 'TwitchApi', { base_url = 'https://api.twitch.tv/helix/' })
+        instance._ws = deck:Connector('Websocket', 'TwitchWS', { connection_string = 'wss://eventsub.wss.twitch.tv/ws', enabled = false })
+    end
+    instance._promise = deck:Promise(2000)
+
+    instance.enabled = true
+    instance.secret_name = 'twitch_access_token'
+    instance.client_id = twitch_client_id
+
+    instance.INACTIVE = 89172634
+    instance.AWAITING_WELCOME = 109702145
+    instance.GETTING_TOKEN = 987123
+    instance.VALIDATING_TOKEN = 1248709
+    instance.CONNECTING = 3155611
+    instance.SUBSCRIBING = 44112356
+    instance.ACTIVE = 55190901
+    instance._internal_state = instance.INACTIVE
+
+    instance._state_msg = {}
+    instance._state_msg[instance.INACTIVE] = 'Inactive'
+    instance._state_msg[instance.AWAITING_WELCOME] = 'Awaiting welcome from server'
+    instance._state_msg[instance.GETTING_TOKEN] = 'Requesting user access token'
+    instance._state_msg[instance.VALIDATING_TOKEN] = 'Validating user access token'
+    instance._state_msg[instance.CONNECTING] = 'Connecting to api endpoint'
+    instance._state_msg[instance.SUBSCRIBING] = 'Subscribing to required events'
+    instance._state_msg[instance.ACTIVE] = 'Active'
+
+    instance._update_state = function(self, newstate)
+        if self._internal_state ~= newstate then
+            local msg = assert(self._state_msg[newstate], 'Twitch: INTERNAL STATE INVALID')
+            local logmsg = 'Twitch: ' .. msg
+
+            self._internal_state = newstate
+
+            if self.on_state_changed then
+                logger(logger.DEBUG, logmsg)
+                util.ycall(self.on_state_changed, self, newstate, msg)
+            else
+                logger(logger.INFO, logmsg)
+            end
+        end
+    end
+
+    instance._validate_token = function(self, token)
+        if token then
+            self:_update_state(self.VALIDATING_TOKEN)
+
+            if self.debugging then
+                coroutine.yield()
+                local result = {}
+                result.client_id = self.twitch_client_id
+                result.login = 'testBroadcaster'
+                result.user_id = '99532582'
+                result.expires_in = 5279237
+                result.scopes = { 'bits.read' }
+                result.token = token
+                return result
+            end
+
+            local idserver = deck:Connector('Http', 'TwitchIdServer', { base_url = 'https://id.twitch.tv/oauth2/' })
+            local promise = idserver:get('/validate', { Authorization = 'OAuth ' .. token })
+            local result = promise:wait()
+
+            if result.ok then
+                local body = util.from_json(result.body)
+                if result.code == 200 then
+                    body.token = token
+                    return body
+                else
+                    logger(logger.DEBUG, 'Twitch: token validation failed: ' .. result.code .. ' ' .. body.message)
+                end
+            else
+                logger(logger.WARNING, 'Twitch: token validation failed: ' .. result.error)
+            end
+        end
+    end
+
+    instance._request_token = function(self)
+        self:_update_state(self.GETTING_TOKEN)
+        logger(logger.DEBUG, 'Twitch: asking user for access token')
+
+        local oauth = deck:Connector('TwitchOAuth2', { enabled = false })
+        oauth.client_id = self.client_id
+        oauth.enabled = true
+        local result = oauth:wait()
+        oauth.enabled = false
+
+        if result then
+            return self:_validate_token(result.token)
+        else
+            return
+        end
+    end
+
+    instance._do_connect = function(self)
+        local access_token = util.retrieve_secret(self.secret_name)
+
+        if access_token then
+            access_token = self:_validate_token(access_token)
+            if not access_token then
+                util.store_secret(self.secret_name, '')
+            end
+        end
+
+        if not access_token then
+            access_token = self:_request_token()
+            if access_token then
+                util.store_secret(self.secret_name, access_token.token)
+            else
+                self:_update_state(self.INACTIVE)
+                self.enabled = false
+                logger(logger.WARNING, 'Twitch: unable to validate access token')
+                return
+            end
+        end
+
+        self._api:set_header('Authorization', 'Bearer ' .. access_token.token)
+        self._api:set_header('Client-Id', self.client_id)
+        self.user_login = access_token.login
+        self.user_id = access_token.user_id
+
+        self:_update_state(self.CONNECTING)
+        self._ws.enabled = true
+    end
+
+    instance._do_subscribe = function(self, event, version, condition)
+        assert(event, "no event type in Twitch subscribe")
+        assert(version, "no event version in Twitch subscribe")
+
+        local data = {}
+        data.type = event
+        data.version = tostring(version)
+        data.condition = condition
+        data.transport = self.api_transport
+
+        local promise = self._api:post('/eventsub/subscriptions', data)
+        local result = promise:wait()
+
+        if result.ok then
+            local body = util.from_json(result.body)
+            if result.code >= 200 and result.code < 300 then
+                return true
+            else
+                return false, body.message
+            end
+        else
+            return false, result.error
+        end
+    end
+
+    instance.tick_inputs = function(self, clock)
+        if not self.enabled then
+            self._ws.enabled = false
+            self:_update_state(self.INACTIVE)
+        elseif self._internal_state == self.INACTIVE then
+            util.ycall(self._do_connect, self)
+        end
+    end
+
+    instance.tick_outputs = function(self, clock)
+    end
+
+    instance.shutdown = function(self)
+    end
+
+    instance._on_message = function(self, metadata, payload)
+        self.last_message = deck.clock
+
+        local metatype = metadata.message_type
+
+        if metatype == 'session_welcome' then
+            self:_update_state(instance.SUBSCRIBING)
+
+            self.api_id = payload.session.id
+            self.api_transport = { method = 'websocket', session_id = payload.session.id }
+            self.api_keepalive = payload.session.keepalive_timeout_seconds
+
+            local function do_subscribe(event, version, condition)
+                version = version or '1'
+                condition = condition or { broadcaster_user_id = self.user_id }
+
+                local ok, err = self:_do_subscribe(event, version, condition)
+                if ok then
+                    logger(logger.DEBUG, 'Twitch: subscribed to event ' .. event)
+                else
+                    logger(logger.WARNING, 'Twitch: unable to subscribe to event ' .. event .. ': ' .. err)
+                end
+            end
+
+            do_subscribe('channel.follow', 2, { broadcaster_user_id = self.user_id, moderator_user_id = self.user_id })
+            do_subscribe('channel.subscribe')
+            do_subscribe('channel.subscription.end')
+            do_subscribe('channel.subscription.gift')
+            do_subscribe('channel.subscription.message')
+            do_subscribe('channel.cheer')
+            do_subscribe('channel.channel_points_custom_reward_redemption.add')
+
+            self:_update_state(self.ACTIVE)
+        elseif metatype == 'session_keepalive' then
+            -- ignored
+        elseif metatype == 'notification' then
+            local subtype = metadata.subscription_type
+            local event = payload.event or {}
+
+            local function notify(event, ...)
+                local msg = 'Twitch: ' .. event .. ':'
+                local func = self[event]
+                if func then
+                    logger(logger.DEBUG, msg, ...)
+                    func(self, ...)
+                else
+                    logger(logger.INFO, msg, ...)
+                end
+            end
+
+            if subtype == 'channel.follow' then
+                notify('on_follow', event.broadcaster_user_name, event.user_name, event.user_id)
+            elseif subtype == 'channel.subscribe' then
+                notify('on_subscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.is_gift)
+            elseif subtype == 'channel.subscription.end' then
+                notify('on_unsubscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.is_gift)
+            elseif subtype == 'channel.subscription.gift' then
+                notify('on_subscription_gift', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.total, event.cumulative_total)
+            elseif subtype == 'channel.subscription.message' then
+                notify('on_resubscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.duration_months, event.cumulative_months, event.message.text)
+            elseif subtype == 'channel.cheer' then
+                notify('on_cheer', event.broadcaster_user_name, event.user_name, event.user_id, event.bits, event.message)
+            elseif subtype == 'channel.channel_points_custom_reward_redemption.add' then
+                notify('on_channel_points', event.broadcaster_user_name, event.user_name, event.user_id, event.reward.cost, event.reward.title, event.user_input)
+            else
+                logger(logger.WARNING, 'Twitch: unhandled notification of type ' .. subtype .. ': ' .. util.to_json(payload, true))
+            end
+        elseif metatype == 'session_reconnect' then
+            local session = payload.session or {}
+            logger(logger.WARNING, 'Twitch: ' .. metatype .. ' handler not implemented, reconnect_url = ' .. session.reconnect_url)
+        elseif metatype == 'revocation' then
+            local subscription = payload.subscription or {}
+            logger(logger.ERROR, 'Twitch: subscription revoked: ' .. subscription.type .. ' with reason: ' .. subscription.status)
+        else
+            logger(logger.WARNING, 'Twitch: ' .. metatype .. ' handler not implemented, payload = ' .. util.to_json(payload, true))
+        end
+    end
+
+    instance._ws.on_connect = function(ws)
+        instance:_update_state(instance.AWAITING_WELCOME)
+    end
+
+    instance._ws.on_disconnect = function(ws, msg)
+        if instance.enabled then
+            instance:_update_state(instance.CONNECTING)
+        else
+            instance:_update_state(instance.INACTIVE)
+        end
+    end
+
+    instance._ws.on_message = function(ws, msg)
+        local data = util.from_json(msg)
+        --print('TWITCH WS: ' .. util.to_json(data, true))
+        instance:_on_message(data.metadata or {}, data.payload or {})
+    end
+
+    return instance
+end
+
+deck.connector_factory.Twitch = twitch_connector
