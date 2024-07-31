@@ -87,10 +87,10 @@ bool store_settings(std::filesystem::path const& path, SettingPairs const& setti
 	return true;
 }
 
-bool is_alphanumeric(std::string_view const& str)
+bool is_alphanumeric(std::string_view const& str, bool allow_empty = false)
 {
 	if (str.empty())
-		return false;
+		return allow_empty;
 
 	for (char ch : str)
 	{
@@ -99,6 +99,23 @@ bool is_alphanumeric(std::string_view const& str)
 		if (ch >= 'A' && ch <= 'Z')
 			continue;
 		if (ch >= '0' && ch <= '9')
+			continue;
+		if (ch == '_')
+			continue;
+		return false;
+	}
+
+	return true;
+}
+
+bool is_ascii(std::string_view const& str, bool allow_empty = false)
+{
+	if (str.empty())
+		return allow_empty;
+
+	for (unsigned char ch : str)
+	{
+		if (ch >= 32 && ch < 128)
 			continue;
 		return false;
 	}
@@ -443,10 +460,10 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
 
 	std::string_view key   = LuaHelpers::check_arg_string(L, 1);
-	std::string_view value = LuaHelpers::check_arg_string(L, 2);
+	std::string_view value = LuaHelpers::check_arg_string(L, 2, true);
 
 	luaL_argcheck(L, is_alphanumeric(key), 1, "secret key must be alphanumeric");
-	// TODO check value for invalid/dangerous characters
+	luaL_argcheck(L, is_ascii(value, true), 2, "secret value must be ascii");
 
 	std::string err;
 	std::filesystem::path path = paths->get_sandbox_dir() / "secrets.conf";
@@ -528,7 +545,7 @@ int DeckUtil::_lua_store_table(lua_State* L)
 	if (json.empty())
 		luaL_error(L, "error converting table to json");
 
-	std::string store_filename  = "table-";
+	std::string store_filename  = "table_";
 	store_filename             += store_name;
 	store_filename             += ".json";
 
@@ -550,7 +567,7 @@ int DeckUtil::_lua_retrieve_table(lua_State* L)
 
 	lua_settop(L, 1);
 
-	std::string store_filename  = "table-";
+	std::string store_filename  = "table_";
 	store_filename             += store_name;
 	store_filename             += ".json";
 
@@ -592,7 +609,7 @@ int DeckUtil::_lua_append_event_log(lua_State* L)
 
 	json += '\n';
 
-	std::string store_filename  = "event-";
+	std::string store_filename  = "event_";
 	store_filename             += store_name;
 	store_filename             += ".log";
 
@@ -617,7 +634,7 @@ int DeckUtil::_lua_retrieve_event_log(lua_State* L)
 	luaL_argcheck(L, is_alphanumeric(store_name), 1, "store name must be alphanumeric");
 	luaL_argcheck(L, limit >= 0, 2, "limit must be a positive integer");
 
-	std::string store_filename  = "event-";
+	std::string store_filename  = "event_";
 	store_filename             += store_name;
 	store_filename             += ".log";
 
