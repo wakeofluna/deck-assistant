@@ -474,10 +474,9 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 	std::filesystem::path path = paths->get_sandbox_dir() / "secrets.conf";
 	std::string file_data      = util::load_file(path, err);
 
-	if (!err.empty())
-		luaL_error(L, "store secret failed: %s", err.c_str());
-
-	SettingPairs settings = parse_settings(file_data);
+	SettingPairs settings;
+	if (err.empty())
+		settings = parse_settings(file_data);
 
 	bool found = false;
 	for (SettingPair& pair : settings)
@@ -496,6 +495,7 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 	if (!found)
 		settings.emplace_back(key, value);
 
+	err = std::string_view();
 	store_settings(path, settings, err);
 
 	if (!err.empty())
