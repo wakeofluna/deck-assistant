@@ -175,6 +175,11 @@ void DeckUtil::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_clipboard_text);
 	lua_setfield(L, -2, "clipboard_text");
+
+	lua_pushcfunction(L, &_lua_yieldable_call);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "yieldable_call");
+	lua_setfield(L, -2, "ycall");
 }
 
 void DeckUtil::init_instance_table(lua_State* L)
@@ -678,6 +683,13 @@ int DeckUtil::_lua_clipboard_text(lua_State* L)
 	lua_pushstring(L, text);
 	SDL_free(text);
 	return 1;
+}
+
+int DeckUtil::_lua_yieldable_call(lua_State* L)
+{
+	luaL_checkany(L, 1);
+	LuaHelpers::yieldable_call(L, lua_gettop(L) - 1);
+	return 0;
 }
 
 int DeckUtil::_lua_ls(lua_State* L)

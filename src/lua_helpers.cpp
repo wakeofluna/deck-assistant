@@ -587,7 +587,7 @@ bool LuaHelpers::pcall(lua_State* L, int nargs, int nresults, bool log_error)
 bool LuaHelpers::yieldable_call(lua_State* L, int nargs, bool log_error)
 {
 	lua_State* thread = lua_newthread(L);
-	lua_checkstack(thread, 21 + nargs);
+	lua_checkstack(thread, 40 + nargs);
 	lua_insert(L, -(nargs + 2));
 	lua_xmove(L, thread, nargs + 1);
 
