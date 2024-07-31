@@ -513,8 +513,9 @@ int ConnectorHttp::_lua_get(lua_State* L)
 {
 	ConnectorHttp* self           = from_stack(L, 1);
 	std::string_view request_path = LuaHelpers::check_arg_string(L, 2);
-	bool const have_headers       = lua_istable(L, 3);
-	luaL_argcheck(L, have_headers || lua_isnone(L, 3), 3, "GET headers must be a table");
+	int const htype               = lua_type(L, 3);
+	luaL_argcheck(L, (htype == LUA_TTABLE || htype == LUA_TNONE), 3, "GET extra headers must be a table");
+
 	luaL_checktype(L, 4, LUA_TNONE);
 
 	util::BlobBuffer payload = self->compose_payload(L, request_path, "GET", 3, std::string_view(), std::string_view());
@@ -530,9 +531,11 @@ int ConnectorHttp::_lua_post(lua_State* L)
 {
 	ConnectorHttp* self           = from_stack(L, 1);
 	std::string_view request_path = LuaHelpers::check_arg_string(L, 2);
-	luaL_checktype(L, 3, LUA_TTABLE);
-	int const vtype = lua_type(L, 4);
-	luaL_argcheck(L, (vtype == LUA_TTABLE || vtype == LUA_TSTRING), 4, "POST payload must be a string or table");
+	int const vtype               = lua_type(L, 3);
+	int const htype               = lua_type(L, 4);
+	luaL_argcheck(L, (vtype == LUA_TTABLE || vtype == LUA_TSTRING), 3, "POST payload must be a string or table");
+	luaL_argcheck(L, (htype == LUA_TTABLE || htype == LUA_TNONE), 4, "POST extra headers must be a table");
+
 	luaL_checktype(L, 5, LUA_TNONE);
 
 	std::string_view mimetype;
@@ -542,16 +545,16 @@ int ConnectorHttp::_lua_post(lua_State* L)
 	if (vtype == LUA_TSTRING)
 	{
 		mimetype = "text/plain; charset=UTF-8";
-		body     = LuaHelpers::to_string_view(L, 4);
+		body     = LuaHelpers::to_string_view(L, 3);
 	}
 	else
 	{
 		mimetype    = "application/json; charset=UTF-8";
-		body_buffer = util::convert_to_json(L, 4, false);
+		body_buffer = util::convert_to_json(L, 3, false);
 		body        = body_buffer;
 	}
 
-	util::BlobBuffer payload = self->compose_payload(L, request_path, "POST", 3, mimetype, body);
+	util::BlobBuffer payload = self->compose_payload(L, request_path, "POST", 4, mimetype, body);
 	assert(self->queue_request(L, std::move(payload)));
 
 	if (!self->m_enabled)
