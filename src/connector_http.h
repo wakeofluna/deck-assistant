@@ -24,6 +24,8 @@
 #include "util_socket.h"
 #include "util_url.h"
 #include <queue>
+#include <utility>
+#include <vector>
 
 class ConnectorHttp : public ConnectorBase<ConnectorHttp>
 {
@@ -44,6 +46,8 @@ public:
 private:
 	static int _lua_get(lua_State* L);
 	static int _lua_post(lua_State* L);
+	static int _lua_set_header(lua_State* L);
+	static int _lua_clear_header(lua_State* L);
 
 private:
 	struct Request
@@ -52,10 +56,14 @@ private:
 		int promise;
 	};
 
+	using HeadersVector = std::vector<std::pair<std::string, std::string>>;
+
+	util::BlobBuffer compose_payload(lua_State* L, std::string_view const& path, std::string_view const& method, int headers_idx, std::string_view const& mimetype, std::string_view const& body);
 	int queue_request(lua_State* L, util::BlobBuffer&& payload);
 
 	util::Socket m_socket;
 	util::URL m_base_url;
+	HeadersVector m_default_headers;
 	std::queue<Request> m_queue;
 	util::Blob m_response;
 	lua_Integer m_request_started_at;

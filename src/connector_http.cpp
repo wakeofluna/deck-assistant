@@ -44,59 +44,6 @@ DeckPromiseList* push_promise_list(lua_State* L)
 	return DeckPromiseList::from_stack(L, -1);
 }
 
-util::BlobBuffer compose_payload(lua_State* L, util::URL const& base_url, std::string_view const& path, std::string_view const& method, int headers_idx, std::string_view const& mimetype, std::string_view const& body)
-{
-	util::BlobBuffer buffer;
-	buffer.reserve(1024 + body.size());
-
-	std::string_view const& base_path = base_url.get_path();
-	std::string_view request_path;
-	if (base_path.ends_with('/') && path.starts_with('/'))
-		request_path = path.substr(1);
-	else
-		request_path = path;
-
-	buffer << method << ' ' << base_path << request_path << " HTTP/1.1" << g_header_newline;
-	buffer << "Host: " << base_url.get_host() << g_header_newline
-	       << "User-Agent: Deck-Assistant\r\n"
-	          "Cache-Control: no-cache\r\n"
-	          "Connection: keep-alive\r\n"sv;
-
-	bool has_content_type = false;
-	if (lua_istable(L, headers_idx))
-	{
-		int const table_idx = LuaHelpers::absidx(L, headers_idx);
-		lua_pushnil(L);
-		while (lua_next(L, table_idx))
-		{
-			std::string_view key   = LuaHelpers::to_string_view(L, -2);
-			std::string_view value = LuaHelpers::to_string_view(L, -1);
-			if (!key.empty() && !value.empty())
-			{
-				buffer << key << g_header_separator << value << g_header_newline;
-				if (!has_content_type && key == g_content_type)
-					has_content_type = true;
-			}
-			lua_pop(L, 1);
-		}
-	}
-
-	if (!has_content_type && !mimetype.empty() && !body.empty())
-		buffer << g_content_type << g_header_separator << mimetype << g_header_newline;
-
-	buffer << "Content-Length: " << body.size() << "\r\n\r\n";
-
-	if (!body.empty())
-		buffer << body;
-
-	return buffer;
-}
-
-inline util::BlobBuffer compose_payload(lua_State* L, util::URL const& base_url, std::string_view const& path, std::string_view const& method, int headers_idx)
-{
-	return compose_payload(L, base_url, path, method, headers_idx, std::string_view(), std::string_view());
-}
-
 void push_error_response(lua_State* L, std::string_view const& err)
 {
 	lua_createtable(L, 0, 3);
@@ -207,6 +154,7 @@ ConnectorHttp::ConnectorHttp(std::shared_ptr<util::SocketSet> const& socketset)
     , m_enabled(true)
     , m_insecure(false)
 {
+	m_default_headers.reserve(4);
 }
 
 ConnectorHttp::~ConnectorHttp()
@@ -422,6 +370,16 @@ void ConnectorHttp::init_class_table(lua_State* L)
 
 	lua_pushcfunction(L, &_lua_post);
 	lua_setfield(L, -2, "post");
+
+	lua_pushcfunction(L, &_lua_set_header);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "add_header");
+	lua_setfield(L, -2, "set_header");
+
+	lua_pushcfunction(L, &_lua_clear_header);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -3, "remove_header");
+	lua_setfield(L, -2, "clear_header");
 }
 
 void ConnectorHttp::init_instance_table(lua_State* L)
@@ -474,6 +432,16 @@ int ConnectorHttp::index(lua_State* L, std::string_view const& key) const
 	{
 		std::string_view const value = m_base_url.get_connection_string();
 		lua_pushlstring(L, value.data(), value.size());
+	}
+	else if (key == "headers")
+	{
+		lua_createtable(L, 0, m_default_headers.size());
+		for (auto const& pair : m_default_headers)
+		{
+			lua_pushlstring(L, pair.first.data(), pair.first.size());
+			lua_pushlstring(L, pair.second.data(), pair.second.size());
+			lua_rawset(L, -3);
+		}
 	}
 	return lua_gettop(L) == 2 ? 0 : 1;
 }
@@ -549,7 +517,7 @@ int ConnectorHttp::_lua_get(lua_State* L)
 	luaL_argcheck(L, have_headers || lua_isnone(L, 3), 3, "GET headers must be a table");
 	luaL_checktype(L, 4, LUA_TNONE);
 
-	util::BlobBuffer payload = compose_payload(L, self->m_base_url, request_path, "GET", 3);
+	util::BlobBuffer payload = self->compose_payload(L, request_path, "GET", 3, std::string_view(), std::string_view());
 	assert(self->queue_request(L, std::move(payload)));
 
 	if (!self->m_enabled)
@@ -583,13 +551,113 @@ int ConnectorHttp::_lua_post(lua_State* L)
 		body        = body_buffer;
 	}
 
-	util::BlobBuffer payload = compose_payload(L, self->m_base_url, request_path, "POST", 3, mimetype, body);
+	util::BlobBuffer payload = self->compose_payload(L, request_path, "POST", 3, mimetype, body);
 	assert(self->queue_request(L, std::move(payload)));
 
 	if (!self->m_enabled)
 		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "HttpConnector request queued but connector is disabled");
 
 	return 1;
+}
+
+int ConnectorHttp::_lua_set_header(lua_State* L)
+{
+	ConnectorHttp* self    = from_stack(L, 1);
+	std::string_view key   = LuaHelpers::check_arg_string(L, 2);
+	std::string_view value = LuaHelpers::check_arg_string(L, 3);
+
+	bool found = false;
+
+	for (auto& pair : self->m_default_headers)
+	{
+		if (pair.first == key)
+		{
+			pair.second = value;
+			found       = true;
+			break;
+		}
+	}
+
+	if (!found)
+		self->m_default_headers.push_back(std::make_pair(std::string(key), std::string(value)));
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+int ConnectorHttp::_lua_clear_header(lua_State* L)
+{
+	ConnectorHttp* self  = from_stack(L, 1);
+	std::string_view key = LuaHelpers::check_arg_string(L, 2);
+
+	auto iter = self->m_default_headers.begin();
+	auto end  = self->m_default_headers.end();
+
+	for (; iter != end; ++iter)
+	{
+		if (iter->first == key)
+		{
+			self->m_default_headers.erase(iter);
+			break;
+		}
+	}
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+util::BlobBuffer ConnectorHttp::compose_payload(lua_State* L, std::string_view const& path, std::string_view const& method, int headers_idx, std::string_view const& mimetype, std::string_view const& body)
+{
+	util::BlobBuffer buffer;
+	buffer.reserve(1024 + body.size());
+
+	std::string_view const& base_path = m_base_url.get_path();
+	std::string_view request_path;
+	if (base_path.ends_with('/') && path.starts_with('/'))
+		request_path = path.substr(1);
+	else
+		request_path = path;
+
+	buffer << method << ' ' << base_path << request_path << " HTTP/1.1" << g_header_newline;
+	buffer << "Host: " << m_base_url.get_host() << g_header_newline
+	       << "User-Agent: Deck-Assistant\r\n"
+	          "Cache-Control: no-cache\r\n"
+	          "Connection: keep-alive\r\n"sv;
+
+	for (auto const& pair : m_default_headers)
+		buffer << pair.first << g_header_separator << pair.second << g_header_newline;
+
+	bool has_content_type = false;
+	if (lua_istable(L, headers_idx))
+	{
+		int const table_idx = LuaHelpers::absidx(L, headers_idx);
+		lua_pushnil(L);
+		while (lua_next(L, table_idx))
+		{
+			std::string_view key   = LuaHelpers::to_string_view(L, -2);
+			std::string_view value = LuaHelpers::to_string_view(L, -1);
+			if (!key.empty() && !value.empty())
+			{
+				buffer << key << g_header_separator << value << g_header_newline;
+				if (!has_content_type && key == g_content_type)
+					has_content_type = true;
+			}
+			lua_pop(L, 1);
+		}
+	}
+
+	if (!has_content_type && !mimetype.empty() && !body.empty())
+		buffer << g_content_type << g_header_separator << mimetype << g_header_newline;
+
+	if (method != "GET"sv)
+		buffer << "Content-Length: " << body.size() << g_header_newline;
+
+	buffer << g_header_newline;
+
+	if (!body.empty())
+		buffer << body;
+
+	return buffer;
 }
 
 int ConnectorHttp::queue_request(lua_State* L, util::BlobBuffer&& payload)
