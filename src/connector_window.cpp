@@ -105,7 +105,7 @@ void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 	}
 }
 
-void ConnectorWindow::tick_outputs(lua_State* L)
+void ConnectorWindow::tick_outputs(lua_State* L, lua_Integer clock)
 {
 	if (!m_window)
 		return;

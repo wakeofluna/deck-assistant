@@ -37,7 +37,7 @@ TEST_CASE("Blob", "[util]")
 		REQUIRE(blob.size() == 0);
 		REQUIRE(blob.capacity() == 28);
 
-		blob += "HELLO";
+		blob << "HELLO";
 		REQUIRE(blob.size() == 5);
 		REQUIRE(blob.capacity() == 28);
 
@@ -143,8 +143,8 @@ TEST_CASE("Blob", "[util]")
 		Blob blob          = Blob::from_literal(websocket_key.to_base64());
 		REQUIRE(blob.to_bin() == "dGhlIHNhbXBsZSBub25jZQ==");
 
-		blob             += websocket_uuid;
-		Blob blob_result  = blob.sha1();
+		blob << websocket_uuid;
+		Blob blob_result = blob.sha1();
 		REQUIRE(blob_result.size() == 20);
 		REQUIRE(blob_result.to_base64() == websocket_accept);
 	}
@@ -159,13 +159,13 @@ TEST_CASE("Blob", "[util]")
 		std::string_view obs_auth      = "1Ct943GAT+6YQUUX47Ia/ncufilbe6+oD6lY+5kaCu4=";
 
 		Blob blob1(80);
-		blob1            += obs_password;
-		blob1            += obs_salt;
-		Blob blob_secret  = blob1.sha256();
+		blob1 << obs_password;
+		blob1 << obs_salt;
+		Blob blob_secret = blob1.sha256();
 
 		Blob blob2(80);
-		blob2 += blob_secret.to_base64();
-		blob2 += obs_challenge;
+		blob2 << blob_secret.to_base64();
+		blob2 << obs_challenge;
 
 		Blob auth = blob2.sha256();
 

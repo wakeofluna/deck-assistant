@@ -144,7 +144,7 @@ void ConnectorElgatoStreamDeck::tick_inputs(lua_State* L, lua_Integer clock)
 		LuaHelpers::emit_event(L, -1, "on_disconnect");
 }
 
-void ConnectorElgatoStreamDeck::tick_outputs(lua_State* L)
+void ConnectorElgatoStreamDeck::tick_outputs(lua_State* L, lua_Integer clock)
 {
 	if (!m_hid_device)
 		return;

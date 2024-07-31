@@ -27,6 +27,11 @@ DeckPromiseList::DeckPromiseList() noexcept
 {
 }
 
+DeckPromiseList::DeckPromiseList(int default_timeout) noexcept
+    : m_default_timeout(default_timeout)
+{
+}
+
 void DeckPromiseList::init_class_table(lua_State* L)
 {
 	lua_pushcfunction(L, &_lua_new_promise);
@@ -105,6 +110,144 @@ int DeckPromiseList::tostring(lua_State* L) const
 	return 1;
 }
 
+int DeckPromiseList::new_promise(lua_State* L, int timeout) const
+{
+	// Required stack:
+	// -2 = PromiseList
+	// -1 = Key
+
+	// Stack out on success:
+	// -2 = PromiseList
+	// -1 = Promise
+
+	// Stack out on failure
+	// -1 = PromiseList
+
+	if (timeout < 0)
+		timeout = m_default_timeout;
+
+	DeckPromise::push_new(L, timeout);
+
+	// Store key in Promise
+	LuaHelpers::push_instance_table(L, -1);
+	lua_pushliteral(L, "key");
+	lua_pushvalue(L, -4);
+	lua_rawset(L, -3);
+	lua_pop(L, 1);
+
+	LuaHelpers::push_instance_table(L, -3);
+	// Check that key is not already in PromiseList instance table
+	lua_pushvalue(L, -3);
+	lua_rawget(L, -2);
+	if (!lua_isnil(L, -1))
+	{
+		// Promise with that key already exists
+		lua_pop(L, 4);
+		return 0;
+	}
+	lua_pop(L, 1);
+
+	// Store key->promise in PromiseList instance table
+	lua_pushvalue(L, -3);
+	lua_pushvalue(L, -3);
+	lua_rawset(L, -3);
+	// Get rid of the PromiseList instance table
+	lua_pop(L, 1);
+	// Get rid of the key
+	lua_replace(L, -2);
+
+	return 1;
+}
+
+int DeckPromiseList::fulfill_promise(lua_State* L) const
+{
+	// Required stack:
+	// -3 = PromiseList
+	// -2 = Key
+	// -1 = Value
+
+	// Stack out on success:
+	// -2 = PromiseList
+	// -1 = Promise
+
+	// Stack out on failure
+	// -1 = PromiseList
+
+	// Get promise from instance table
+	LuaHelpers::push_instance_table(L, -3);
+	lua_pushvalue(L, -3);
+	lua_rawget(L, -2);
+
+	if (DeckPromise* promise = DeckPromise::from_stack(L, -1, false); promise)
+	{
+		// Remove promise from instance table
+		lua_pushvalue(L, -2);
+		lua_pushvalue(L, -5);
+		lua_pushnil(L);
+		lua_rawset(L, -3);
+		lua_pop(L, 1);
+
+		// Store value into promise
+		LuaHelpers::push_instance_table(L, -1);
+		lua_pushliteral(L, "value");
+		lua_pushvalue(L, -5);
+		lua_rawset(L, -3);
+		lua_pop(L, 1);
+
+		promise->mark_as_fulfilled();
+
+		lua_replace(L, -4);
+		lua_pop(L, 2);
+		return 1;
+	}
+	else
+	{
+		lua_pop(L, 4);
+		return 0;
+	}
+}
+
+int DeckPromiseList::fulfill_all_promises(lua_State* L) const
+{
+	// Required stack:
+	// -2 = PromiseList
+	// -1 = Value
+
+	// Stack out:
+	// -1 = PromiseList
+
+	int promises_done = 0;
+
+	LuaHelpers::push_instance_table(L, -2);
+	lua_pushnil(L);
+	while (lua_next(L, -2))
+	{
+		if (DeckPromise* promise = DeckPromise::from_stack(L, -1, false); promise)
+		{
+			// Store value into promise
+			LuaHelpers::push_instance_table(L, -1);
+			lua_pushliteral(L, "value");
+			lua_pushvalue(L, -6);
+			lua_rawset(L, -3);
+			lua_pop(L, 1);
+
+			promise->mark_as_fulfilled();
+
+			// Delete promise from table
+			lua_pushvalue(L, -2);
+			lua_pushnil(L);
+			lua_rawset(L, -5);
+
+			++promises_done;
+		}
+
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 2);
+
+	return promises_done;
+}
+
 int DeckPromiseList::_lua_new_promise(lua_State* L)
 {
 	DeckPromiseList* self = DeckPromiseList::from_stack(L, 1);
@@ -121,64 +264,21 @@ int DeckPromiseList::_lua_new_promise(lua_State* L)
 		timeout = -1;
 	luaL_argcheck(L, (timeout > 0), 3, "timeout must be an integer larger than zero");
 
-	DeckPromise::push_new(L, timeout);
+	lua_settop(L, 2);
 
-	// Store key in Promise
-	LuaHelpers::push_instance_table(L, -1);
-	lua_pushliteral(L, "key");
-	lua_pushvalue(L, 2);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
+	int result = self->new_promise(L);
+	if (result == 0)
+		luaL_argerror(L, 2, "promise with that key already exists");
 
-	LuaHelpers::push_instance_table(L, 1);
-	// Check that key is not already in PromiseList instance table
-	lua_pushvalue(L, 2);
-	lua_rawget(L, -2);
-	luaL_argcheck(L, (lua_type(L, -1) == LUA_TNIL), 2, "a promise already exists with that key");
-	lua_pop(L, 1);
-	// Store key->promise in PromiseList instance table
-	lua_pushvalue(L, 2);
-	lua_pushvalue(L, -3);
-	lua_rawset(L, -3);
-	// Get rid of the PromiseList instance table
-	lua_pop(L, 1);
-
-	return 1;
+	return result;
 }
 
 int DeckPromiseList::_lua_fulfill_promise(lua_State* L)
 {
-	DeckPromiseList::from_stack(L, 1);
+	DeckPromiseList* self = DeckPromiseList::from_stack(L, 1);
 	luaL_checkany(L, 2);
 	luaL_checkany(L, 3);
 
-	// Get promise from instance table
-	LuaHelpers::push_instance_table(L, 1);
-	lua_pushvalue(L, 2);
-	lua_rawget(L, -2);
-
-	if (DeckPromise* promise = DeckPromise::from_stack(L, -1, false); promise)
-	{
-		// Remove promise from instance table
-		lua_pushvalue(L, -2);
-		lua_pushvalue(L, 2);
-		lua_pushnil(L);
-		lua_rawset(L, -3);
-		lua_pop(L, 1);
-
-		// Store value into promise
-		LuaHelpers::push_instance_table(L, -1);
-		lua_pushliteral(L, "value");
-		lua_pushvalue(L, 3);
-		lua_rawset(L, -3);
-		lua_pop(L, 1);
-
-		promise->mark_as_fulfilled();
-	}
-	else
-	{
-		lua_pushnil(L);
-	}
-
-	return 1;
+	lua_settop(L, 3);
+	return self->fulfill_promise(L);
 }

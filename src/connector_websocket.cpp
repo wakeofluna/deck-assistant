@@ -341,7 +341,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 	}
 }
 
-void ConnectorWebsocket::tick_outputs(lua_State* L)
+void ConnectorWebsocket::tick_outputs(lua_State* L, lua_Integer clock)
 {
 	if (m_connect_state == State::Connected && !m_enabled && !m_close_sent)
 	{
@@ -495,7 +495,7 @@ int ConnectorWebsocket::newindex(lua_State* L, std::string_view const& key)
 		std::string_view value = LuaHelpers::check_arg_string(L, 3);
 
 		util::URL new_url;
-		if (!new_url.set_connection_string(std::string(value)))
+		if (!new_url.set_connection_string(value, "wss"))
 			luaL_argerror(L, 3, "connection string parsing failed");
 
 		std::string_view const& schema = new_url.get_schema();

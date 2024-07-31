@@ -165,7 +165,7 @@ void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 	}
 }
 
-void ConnectorVnc::tick_outputs(lua_State* L)
+void ConnectorVnc::tick_outputs(lua_State* L, lua_Integer clock)
 {
 	if (!m_screen_info)
 	{

@@ -72,14 +72,17 @@ public:
 
 	void clear();
 	void release();
+	void reserve(std::size_t reserve_size);
+
+	void write(void const* src, std::size_t len);
+	void added_to_tail(std::size_t added_size);
+	void pop_front(std::size_t consume_size);
+
 	inline unsigned char* data() { return m_data; }
 	inline unsigned char const* data() const { return m_data; }
 	inline unsigned char* tail() { return m_end; }
 	inline std::size_t capacity() const { return m_capacity - m_data; }
 	inline std::size_t space() const { return m_capacity - m_end; }
-	void reserve(std::size_t reserve_size);
-	void pop_front(std::size_t consume_size);
-	void added_to_tail(std::size_t added_size);
 
 	static Blob from_literal(std::string_view const& initial);
 	static Blob from_random(std::size_t len);
@@ -90,6 +93,27 @@ public:
 	Blob& operator=(Blob const&) = delete;
 
 	Blob& operator+=(BlobView const& blob);
+
+	Blob& operator<<(char const* value);
+	Blob& operator<<(char value);
+	Blob& operator<<(int value);
+	Blob& operator<<(std::size_t value);
+
+	inline Blob& operator<<(std::string_view const& value)
+	{
+		write(value.data(), value.size());
+		return *this;
+	}
+	inline Blob& operator<<(std::string const& value)
+	{
+		write(value.data(), value.size());
+		return *this;
+	}
+	inline Blob& operator<<(BlobView const& value)
+	{
+		write(value.data(), value.size());
+		return *this;
+	}
 
 	using BlobView::operator<=>;
 	using BlobView::operator!=;
@@ -116,6 +140,8 @@ public:
 	void reserve(std::size_t reserve_size);
 
 	void advance(std::size_t count);
+	void rewind();
+	void rewind(std::size_t count);
 	void flush();
 	std::size_t read(void* dest, std::size_t maxlen);
 	void write(void const* src, std::size_t len);
@@ -132,9 +158,12 @@ public:
 	BlobBuffer& operator=(BlobBuffer&&);
 	BlobBuffer& operator=(BlobBuffer const&) = delete;
 
-	inline BlobBuffer& operator+=(BlobView const& blob)
+	BlobBuffer& operator+=(BlobView const& blob);
+
+	template <typename T>
+	inline BlobBuffer& operator<<(T const& value)
 	{
-		write(blob.data(), blob.size());
+		m_blob << value;
 		return *this;
 	}
 

@@ -58,6 +58,7 @@ public:
 	Socket& operator=(Socket const&) = delete;
 	Socket& operator=(Socket&&)      = delete;
 
+	TLS get_tls() const;
 	bool set_tls(TLS use_tls);
 
 	bool start_connect(std::string_view const& host, int port);

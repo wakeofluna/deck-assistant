@@ -19,6 +19,7 @@
 #include "util_blob.h"
 #include "util_text.h"
 #include <cassert>
+#include <charconv>
 #include <cstring>
 #include <random>
 
@@ -71,6 +72,19 @@ inline void blob_memclear(unsigned char* from, unsigned char* to)
 	if (to > from)
 		std::memset(from, 0, to - from);
 #endif
+}
+
+template <typename T>
+    requires std::is_integral_v<T>
+void append_integral(Blob& blob, T value)
+{
+	char buf[32];
+
+	std::to_chars_result result = std::to_chars(buf, buf + sizeof(buf), value, 10);
+	assert(result.ec == std::errc());
+
+	if (result.ec == std::errc())
+		blob.write(buf, result.ptr - buf);
 }
 
 } // namespace
@@ -366,6 +380,39 @@ void Blob::reserve(std::size_t reserve_size)
 	}
 }
 
+void Blob::write(void const* src, std::size_t len)
+{
+	std::size_t const my_capacity = capacity();
+	std::size_t const my_size     = size();
+
+	if (my_capacity < my_size + len)
+	{
+		std::size_t new_capacity = my_size + len + 1024;
+
+		unsigned char* buf = (unsigned char*)std::malloc(new_capacity);
+		assert(buf && "Blob out of memory");
+
+		if (my_size > 0)
+			std::memcpy(buf, m_data, my_size);
+
+		blob_memclear(m_data, m_end);
+		std::free(m_data);
+
+		m_data     = buf;
+		m_end      = m_data + my_size;
+		m_capacity = m_data + new_capacity;
+	}
+
+	std::memcpy(m_end, src, len);
+	m_end += len;
+}
+
+void Blob::added_to_tail(std::size_t added_size)
+{
+	assert(m_end + added_size <= m_capacity);
+	m_end += added_size;
+}
+
 void Blob::pop_front(std::size_t consume_size)
 {
 	std::size_t const my_size = size();
@@ -380,12 +427,6 @@ void Blob::pop_front(std::size_t consume_size)
 		blob_memclear(m_data + new_len, m_end);
 		m_end = m_data + new_len;
 	}
-}
-
-void Blob::added_to_tail(std::size_t added_size)
-{
-	assert(m_end + added_size <= m_capacity);
-	m_end += added_size;
 }
 
 Blob Blob::from_literal(std::string_view const& initial)
@@ -492,27 +533,45 @@ Blob& Blob::operator+=(BlobView const& blob)
 {
 	std::size_t const my_capacity = capacity();
 	std::size_t const my_size     = size();
-	std::size_t const their_size  = blob.size();
+	std::size_t const needed      = my_size + blob.size();
 
-	if (my_capacity < my_size + their_size)
-	{
-		unsigned char* buf = (unsigned char*)std::malloc(my_size + their_size);
-		assert(buf && "Blob out of memory");
+	if (needed > my_capacity)
+		reserve(needed);
 
-		if (my_size > 0)
-			std::memcpy(buf, m_data, my_size);
+	write(blob.data(), blob.size());
+	return *this;
+}
 
-		blob_memclear(m_data, m_end);
-		std::free(m_data);
+Blob& Blob::operator<<(char const* value)
+{
+	while (*value && m_end < m_capacity)
+		*m_end++ = *value++;
 
-		m_data     = buf;
-		m_end      = m_data + my_size;
-		m_capacity = m_end + their_size;
-	}
+	if (*value)
+		write(value, std::strlen(value));
 
-	std::memcpy(m_end, blob.data(), their_size);
-	m_end += their_size;
+	return *this;
+}
 
+Blob& Blob::operator<<(char value)
+{
+	if (m_end < m_capacity)
+		*m_end++ = value;
+	else
+		write(&value, 1);
+
+	return *this;
+}
+
+Blob& Blob::operator<<(int value)
+{
+	append_integral(*this, value);
+	return *this;
+}
+
+Blob& Blob::operator<<(std::size_t value)
+{
+	append_integral(*this, value);
 	return *this;
 }
 
@@ -560,6 +619,19 @@ void BlobBuffer::advance(std::size_t count)
 	m_read_offset += count;
 }
 
+void BlobBuffer::rewind()
+{
+	m_read_offset = 0;
+}
+
+void BlobBuffer::rewind(std::size_t count)
+{
+	if (count > m_read_offset)
+		m_read_offset = 0;
+	else
+		m_read_offset -= count;
+}
+
 void BlobBuffer::flush()
 {
 	if (m_read_offset > 0)
@@ -597,8 +669,7 @@ void BlobBuffer::write(void const* src, std::size_t len)
 			m_read_offset = 0;
 		}
 	}
-
-	m_blob += BlobView(reinterpret_cast<unsigned char const*>(src), len);
+	m_blob.write(src, len);
 }
 
 void BlobBuffer::added_to_tail(std::size_t added_size)
@@ -611,5 +682,12 @@ BlobBuffer& BlobBuffer::operator=(BlobBuffer&& other)
 	m_blob              = std::move(other.m_blob);
 	m_read_offset       = other.m_read_offset;
 	other.m_read_offset = 0;
+	return *this;
+}
+
+BlobBuffer& BlobBuffer::operator+=(BlobView const& blob)
+{
+	flush();
+	m_blob += blob;
 	return *this;
 }

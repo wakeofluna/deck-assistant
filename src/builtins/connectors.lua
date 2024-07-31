@@ -115,8 +115,8 @@ local function obs_connector_lowlevel()
         end
     end
 
-    instance.tick_outputs = function(self)
-        self.socket:tick_outputs()
+    instance.tick_outputs = function(self, clock)
+        self.socket:tick_outputs(clock)
     end
 
     instance.shutdown = function(self)
@@ -442,7 +442,7 @@ local function oauth2_connector()
                         }
                     end
                     body = util.to_json(reply, false)
-                    ctype = 'application/json'
+                    ctype = 'application/json; charset=UTF-8'
                     instance.server.enabled = false
                     instance.promise:fulfill(false)
                 else
@@ -490,8 +490,8 @@ local function oauth2_connector()
         self.server:tick_inputs(clock)
     end
 
-    instance.tick_outputs = function(self)
-        self.server:tick_outputs()
+    instance.tick_outputs = function(self, clock)
+        self.server:tick_outputs(clock)
     end
 
     instance.shutdown = function(self)

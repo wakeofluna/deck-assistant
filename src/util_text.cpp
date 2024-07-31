@@ -747,7 +747,7 @@ HttpMessage parse_http_message(std::string_view const& buffer)
 	auto [start_line, data] = split1(buffer, "\r\n", false);
 	if (start_line.empty() || data.empty())
 	{
-		if (start_line.size() > 1024)
+		if (buffer.size() > 256)
 			msg.error = "Invalid HTTP start line";
 
 		return msg;

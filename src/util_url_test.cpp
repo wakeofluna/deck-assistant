@@ -45,11 +45,11 @@ TEST_CASE("URL", "[util]")
 		REQUIRE(url.get_schema() == "wss");
 	}
 
-	SECTION("Setting no schema defaults to ws://")
+	SECTION("Setting no schema defaults to https://")
 	{
 		REQUIRE(url.set_host("local.lan"));
-		REQUIRE(url.get_connection_string() == "ws://local.lan/");
-		REQUIRE(url.get_schema() == "ws");
+		REQUIRE(url.get_connection_string() == "https://local.lan/");
+		REQUIRE(url.get_schema() == "https");
 		REQUIRE(url.get_host() == "local.lan");
 	}
 
@@ -71,7 +71,7 @@ TEST_CASE("URL", "[util]")
 	{
 		SECTION("All components")
 		{
-			REQUIRE(url.set_connection_string("http://fake.host:80/self_destruct.php"));
+			REQUIRE(url.set_connection_string("http://fake.host:80/self_destruct.php", "foo"));
 
 			REQUIRE(url.get_connection_string() == "http://fake.host:80/self_destruct.php");
 			REQUIRE(url.get_schema() == "http");
@@ -82,10 +82,10 @@ TEST_CASE("URL", "[util]")
 
 		SECTION("Missing schema")
 		{
-			REQUIRE(url.set_connection_string("fake.host:80/self_destruct.php"));
+			REQUIRE(url.set_connection_string("fake.host:80/self_destruct.php", "foo"));
 
-			REQUIRE(url.get_connection_string() == "ws://fake.host:80/self_destruct.php");
-			REQUIRE(url.get_schema() == "ws");
+			REQUIRE(url.get_connection_string() == "foo://fake.host:80/self_destruct.php");
+			REQUIRE(url.get_schema() == "foo");
 			REQUIRE(url.get_host() == "fake.host");
 			REQUIRE(url.get_port() == 80);
 			REQUIRE(url.get_path() == "/self_destruct.php");
@@ -93,7 +93,7 @@ TEST_CASE("URL", "[util]")
 
 		SECTION("Missing host")
 		{
-			REQUIRE(url.set_connection_string("wss:///self_destruct.php"));
+			REQUIRE(url.set_connection_string("wss:///self_destruct.php", "foo"));
 
 			REQUIRE(url.get_connection_string() == "wss:///self_destruct.php");
 			REQUIRE(url.get_schema() == "wss");
@@ -104,7 +104,7 @@ TEST_CASE("URL", "[util]")
 
 		SECTION("Missing port")
 		{
-			REQUIRE(url.set_connection_string("http://fake.host/self_destruct.php"));
+			REQUIRE(url.set_connection_string("http://fake.host/self_destruct.php", "foo"));
 
 			REQUIRE(url.get_connection_string() == "http://fake.host/self_destruct.php");
 			REQUIRE(url.get_schema() == "http");
@@ -115,7 +115,7 @@ TEST_CASE("URL", "[util]")
 
 		SECTION("Missing path")
 		{
-			REQUIRE(url.set_connection_string("http://fake.host:80"));
+			REQUIRE(url.set_connection_string("http://fake.host:80", "foo"));
 
 			REQUIRE(url.get_connection_string() == "http://fake.host:80/");
 			REQUIRE(url.get_schema() == "http");

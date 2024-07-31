@@ -37,7 +37,7 @@ public:
 	static lua_Integer get_clock(lua_State* L);
 
 	void tick_inputs(lua_State* L, lua_Integer clock);
-	void tick_outputs(lua_State* L);
+	void tick_outputs(lua_State* L, lua_Integer clock);
 	void shutdown(lua_State* L);
 
 	void set_exit_requested(int exit_code);

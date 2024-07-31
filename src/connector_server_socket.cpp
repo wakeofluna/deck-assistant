@@ -47,10 +47,10 @@ void ConnectorServerSocket::tick_inputs(lua_State* L, lua_Integer clock)
 	tick_clients_input(L, clock);
 }
 
-void ConnectorServerSocket::tick_outputs(lua_State* L)
+void ConnectorServerSocket::tick_outputs(lua_State* L, lua_Integer clock)
 {
-	tick_server_output(L);
-	tick_clients_output(L);
+	tick_server_output(L, clock);
+	tick_clients_output(L, clock);
 }
 
 void ConnectorServerSocket::shutdown(lua_State* L)
@@ -221,7 +221,7 @@ void ConnectorServerSocket::tick_clients_input(lua_State* L, lua_Integer clock)
 	m_num_clients = last_ok_ref;
 }
 
-void ConnectorServerSocket::tick_server_output(lua_State* L)
+void ConnectorServerSocket::tick_server_output(lua_State* L, lua_Integer clock)
 {
 	if (m_server_state == State::Listening && !m_enabled)
 	{
@@ -237,7 +237,7 @@ void ConnectorServerSocket::tick_server_output(lua_State* L)
 	}
 }
 
-void ConnectorServerSocket::tick_clients_output(lua_State* L)
+void ConnectorServerSocket::tick_clients_output(lua_State* L, lua_Integer clock)
 {
 }
 

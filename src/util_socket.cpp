@@ -168,6 +168,11 @@ Socket::~Socket()
 	close();
 }
 
+Socket::TLS Socket::get_tls() const
+{
+	return m_shared_state->use_tls;
+}
+
 bool Socket::set_tls(TLS use_tls)
 {
 	std::lock_guard guard(m_shared_state->mutex);

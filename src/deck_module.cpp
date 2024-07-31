@@ -75,7 +75,7 @@ void DeckModule::tick_inputs(lua_State* L, lua_Integer clock)
 	lua_pop(L, 2);
 }
 
-void DeckModule::tick_outputs(lua_State* L)
+void DeckModule::tick_outputs(lua_State* L, lua_Integer clock)
 {
 	assert(from_stack(L, -1, false) != nullptr);
 
@@ -83,9 +83,10 @@ void DeckModule::tick_outputs(lua_State* L)
 	lua_rawgeti(L, -1, g_connector_container_idx);
 	lua_replace(L, -2);
 
-	DeckConnectorContainer::for_each(L, "tick_outputs", 0);
+	lua_pushinteger(L, clock);
+	DeckConnectorContainer::for_each(L, "tick_outputs", 1);
 
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 }
 
 void DeckModule::shutdown(lua_State* L)

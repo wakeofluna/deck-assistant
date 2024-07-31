@@ -34,7 +34,7 @@ public:
 	~ConnectorWebsocket();
 
 	void tick_inputs(lua_State* L, lua_Integer clock) override;
-	void tick_outputs(lua_State* L) override;
+	void tick_outputs(lua_State* L, lua_Integer clock) override;
 	void shutdown(lua_State* L) override;
 
 	static char const* LUA_TYPENAME;

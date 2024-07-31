@@ -26,6 +26,7 @@ class DeckPromiseList : public LuaClass<DeckPromiseList>
 {
 public:
 	DeckPromiseList() noexcept;
+	DeckPromiseList(int default_timeout) noexcept;
 
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
@@ -33,6 +34,10 @@ public:
 	int index(lua_State* L, std::string_view const& key) const;
 	int newindex(lua_State* L);
 	int tostring(lua_State* L) const;
+
+	int new_promise(lua_State* L, int timeout = -1) const;
+	int fulfill_promise(lua_State* L) const;
+	int fulfill_all_promises(lua_State* L) const;
 
 private:
 	static int _lua_new_promise(lua_State* L);

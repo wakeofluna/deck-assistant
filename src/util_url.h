@@ -36,7 +36,7 @@ public:
 	URL& operator=(URL const& other) = delete;
 	URL& operator=(URL&& other);
 
-	bool set_connection_string(std::string_view const& conn_string);
+	bool set_connection_string(std::string_view const& conn_string, std::string_view const& default_schema);
 	bool set_schema(std::string_view const& value);
 	bool set_host(std::string_view const& value);
 	bool set_path(std::string_view const& value);

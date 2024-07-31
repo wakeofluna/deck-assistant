@@ -31,7 +31,9 @@ std::string build_connection_string(std::string_view const& schema, std::string_
 	result.reserve(128);
 
 	if (schema.empty())
-		result = "ws://";
+	{
+		result = "https://";
+	}
 	else
 	{
 		result = schema;
@@ -74,7 +76,7 @@ bool parse_connection_string(std::string_view const& conn_string, std::string_vi
 	found = conn_string.find(':', cursor);
 	if (found == std::string_view::npos || conn_string.substr(found, 3) != "://")
 	{
-		schema        = "ws";
+		schema        = std::string_view();
 		is_normalized = false;
 	}
 	else
@@ -131,7 +133,7 @@ URL::~URL() = default;
 
 URL& URL::operator=(URL&& other) = default;
 
-bool URL::set_connection_string(std::string_view const& conn_string)
+bool URL::set_connection_string(std::string_view const& conn_string, std::string_view const& default_schema)
 {
 	std::string_view schema;
 	std::string_view host;
@@ -139,6 +141,9 @@ bool URL::set_connection_string(std::string_view const& conn_string)
 	std::string_view path;
 
 	parse_connection_string(conn_string, schema, host, port, path);
+
+	if (schema.empty())
+		schema = default_schema;
 
 	std::string new_conn_string = build_connection_string(schema, host, port, path);
 	set_connection_string_normalized(std::move(new_conn_string));

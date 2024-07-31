@@ -16,27 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_H
-#define DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_H
+#ifndef DECK_ASSISTANT_CONNECTOR_HTTP_H
+#define DECK_ASSISTANT_CONNECTOR_HTTP_H
 
 #include "connector_base.h"
+#include "util_blob.h"
 #include "util_socket.h"
-#include <vector>
+#include "util_url.h"
+#include <queue>
 
-class ConnectorServerSocket : public ConnectorBase<ConnectorServerSocket>
+class ConnectorHttp : public ConnectorBase<ConnectorHttp>
 {
 public:
-	ConnectorServerSocket(std::shared_ptr<util::SocketSet> const& socketset);
-	~ConnectorServerSocket();
+	ConnectorHttp(std::shared_ptr<util::SocketSet> const& socketset);
+	~ConnectorHttp();
 
 	void tick_inputs(lua_State* L, lua_Integer clock) override;
 	void tick_outputs(lua_State* L, lua_Integer clock) override;
 	void shutdown(lua_State* L) override;
-
-	void tick_server_input(lua_State* L, lua_Integer clock);
-	void tick_clients_input(lua_State* L, lua_Integer clock);
-	void tick_server_output(lua_State* L, lua_Integer clock);
-	void tick_clients_output(lua_State* L, lua_Integer clock);
 
 	static char const* LUA_TYPENAME;
 	static void init_class_table(lua_State* L);
@@ -45,24 +42,28 @@ public:
 	int newindex(lua_State* L, std::string_view const& key);
 
 private:
-	static int _lua_reset_timer(lua_State* L);
+	static int _lua_get(lua_State* L);
+	static int _lua_post(lua_State* L);
 
 private:
-	enum class State : char
+	struct Request
 	{
-		Disconnected,
-		Binding,
-		Listening,
+		util::BlobBuffer payload;
+		int promise;
 	};
 
+	int queue_request(lua_State* L, util::BlobBuffer&& payload);
+
 	util::Socket m_socket;
-	State m_server_state;
-	unsigned short m_wanted_port;
-	unsigned short m_active_port;
+	util::URL m_base_url;
+	std::queue<Request> m_queue;
+	util::Blob m_response;
+	lua_Integer m_request_started_at;
+	lua_Integer m_next_connect_attempt;
+	int m_request_counter;
+	int m_connect_attempts;
 	bool m_enabled;
-	lua_Integer m_listen_last_attempt;
-	unsigned int m_num_clients;
-	std::vector<char> m_read_buffer;
+	bool m_insecure;
 };
 
-#endif // DECK_ASSISTANT_CONNECTOR_SERVER_SOCKET_H
+#endif // DECK_ASSISTANT_CONNECTOR_HTTP_H

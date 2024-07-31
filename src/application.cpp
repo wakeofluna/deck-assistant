@@ -361,7 +361,7 @@ int Application::run()
 		lua_pop(L, 1);
 
 		// Run all connector output tick functions
-		deck_module->tick_outputs(L);
+		deck_module->tick_outputs(L, clock_msec);
 		assert(lua_gettop(L) == resettop && "DeckModule tick_outputs function is not stack balanced");
 
 		// Make sure we regularly clean up

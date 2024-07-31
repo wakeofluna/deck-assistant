@@ -56,8 +56,10 @@ int ConnectorBase<T>::_lua_tick_inputs(lua_State* L)
 template <typename T>
 int ConnectorBase<T>::_lua_tick_outputs(lua_State* L)
 {
-	T* self = LuaClass<T>::from_stack(L, 1);
-	self->tick_outputs(L);
+	T* self           = LuaClass<T>::from_stack(L, 1);
+	lua_Integer clock = LuaHelpers::check_arg_int(L, 2);
+
+	self->tick_outputs(L, clock);
 	return 0;
 }
 
