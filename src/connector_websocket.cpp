@@ -307,7 +307,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		// Ping
 		if (frame.first == 9)
 		{
-			DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket ping received");
+			DeckLogger::log_message(L, DeckLogger::Level::Trace, "Websocket ping received");
 			frame.first = 10;
 			send_frame(frame);
 			continue;
@@ -316,7 +316,7 @@ void ConnectorWebsocket::tick_inputs(lua_State* L, lua_Integer clock)
 		// Pong
 		if (frame.first == 10)
 		{
-			DeckLogger::log_message(L, DeckLogger::Level::Debug, "Websocket pong received");
+			DeckLogger::log_message(L, DeckLogger::Level::Trace, "Websocket pong received");
 			continue;
 		}
 
