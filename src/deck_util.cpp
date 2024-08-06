@@ -612,15 +612,13 @@ int DeckUtil::_lua_append_event_log(lua_State* L)
 	if (json.empty())
 		luaL_error(L, "error converting value to json");
 
-	json += '\n';
-
 	std::string store_filename  = "event_";
 	store_filename             += store_name;
 	store_filename             += ".log";
 
 	std::string err;
 	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
-	if (!util::append_to_file(path, json, err))
+	if (!util::append_to_file(path, json, true, err))
 		luaL_error(L, "%s: error appending event log: %s", store_filename.c_str(), err.c_str());
 
 	return 0;

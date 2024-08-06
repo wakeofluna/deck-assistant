@@ -585,7 +585,7 @@ bool save_file(std::filesystem::path const& path, std::string_view const& input,
 	return true;
 }
 
-bool append_to_file(std::filesystem::path const& path, std::string_view const& input, std::string& err)
+bool append_to_file(std::filesystem::path const& path, std::string_view const& input, bool add_newline, std::string& err)
 {
 	assert(path.is_absolute() && "save_file requires an absolute path");
 
@@ -601,6 +601,13 @@ bool append_to_file(std::filesystem::path const& path, std::string_view const& i
 	}
 
 	fp.write(input.data(), input.size());
+
+	if (add_newline)
+	{
+		constexpr char const nl = '\n';
+		fp.write(&nl, 1);
+	}
+
 	fp.close();
 
 	return true;

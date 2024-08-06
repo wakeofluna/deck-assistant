@@ -49,7 +49,7 @@ std::string_view convert_from_json(lua_State* L, std::string_view const& input, 
 
 std::string load_file(std::filesystem::path const& path, std::string& err);
 bool save_file(std::filesystem::path const& path, std::string_view const& input, std::string& err);
-bool append_to_file(std::filesystem::path const& path, std::string_view const& input, std::string& err);
+bool append_to_file(std::filesystem::path const& path, std::string_view const& input, bool add_newline, std::string& err);
 
 std::string_view trim(std::string_view const& str);
 std::vector<std::string_view> split(std::string_view const& str, std::string_view const& split_str = "\n", std::size_t max_parts = 0);
