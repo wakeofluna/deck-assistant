@@ -26,6 +26,15 @@
 #elif (defined HAVE_OPENSSL)
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+// clang-format: do not reorder
+#include <openssl/x509.h>
+#include <wincrypt.h>
+#endif
+
 #endif
 
 using namespace util;
@@ -150,6 +159,34 @@ bool prepare_ssl_context(SSL_CTX* ctx)
 	if (result == 0)
 		return false;
 
+#ifdef _WIN32
+	X509_STORE* store = SSL_CTX_get_cert_store(ctx);
+	if (!store)
+	{
+		store = X509_STORE_new();
+		SSL_CTX_set_cert_store(ctx, store);
+	}
+
+	if (HCERTSTORE hStore = CertOpenSystemStoreA(0, "ROOT"); hStore)
+	{
+		PCCERT_CONTEXT pContext = nullptr;
+
+		while ((pContext = CertEnumCertificatesInStore(hStore, pContext)))
+		{
+			unsigned char const* data = pContext->pbCertEncoded;
+
+			X509* x509 = d2i_X509(nullptr, &data, pContext->cbCertEncoded);
+			if (x509)
+			{
+				X509_STORE_add_cert(store, x509);
+				X509_free(x509);
+			}
+		}
+
+		CertCloseStore(hStore, 0);
+	}
+#endif
+
 	return true;
 }
 
@@ -158,8 +195,6 @@ SSL_CTX* get_ssl_context()
 	static SSL_CTX* ctx = nullptr;
 	if (!ctx)
 	{
-		//SSL_load_error_strings();
-
 		SSL_CTX* new_ctx = SSL_CTX_new(TLS_method());
 		if (!new_ctx)
 			return nullptr;
@@ -173,6 +208,11 @@ SSL_CTX* get_ssl_context()
 		ctx = new_ctx;
 	}
 	return ctx;
+}
+
+int yes_verify_func(int preverify_ok, X509_STORE_CTX* x509_ctx)
+{
+	return preverify_ok;
 }
 
 int no_verify_func(int preverify_ok, X509_STORE_CTX* x509_ctx)
@@ -198,8 +238,11 @@ int state_init_as_client(TLSSession::State& state, bool verify_certificate)
 	}
 
 	SSL_set_bio(state.connection, state.rbio, state.wbio);
-	SSL_set_verify(state.connection, SSL_VERIFY_PEER, verify_certificate ? nullptr : &no_verify_func);
+	SSL_set_verify(state.connection, SSL_VERIFY_PEER, verify_certificate ? &yes_verify_func : &no_verify_func);
 	SSL_set_connect_state(state.connection);
+
+	if (!state.remote_name.empty())
+		SSL_set_tlsext_host_name(state.connection, state.remote_name.c_str());
 
 	int result = SSL_do_handshake(state.connection);
 	if (result < 0)

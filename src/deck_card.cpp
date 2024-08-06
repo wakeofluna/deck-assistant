@@ -357,7 +357,7 @@ void DeckCard::desaturate(SDL_Surface* surface, double factor)
 	unsigned char* pixels = reinterpret_cast<unsigned char*>(surface->pixels);
 	std::size_t const bpp = surface->format->BytesPerPixel;
 
-	int ifactor = factor * 1024.0;
+	int ifactor = int(factor * 1024.0);
 
 	for (int y = 0; y < surface->h; ++y)
 	{
