@@ -43,6 +43,23 @@ void adjust_coordinates_for_scale(SDL_Window const* window, DeckCard const* card
 	}
 }
 
+void dispatch_key_event(lua_State* L, SDL_KeyboardEvent const& event, char const* name)
+{
+	lua_getfield(L, 1, name);
+	if (lua_type(L, -1) == LUA_TFUNCTION)
+	{
+		lua_pushvalue(L, 1);
+		lua_pushinteger(L, event.keysym.mod);
+		lua_pushinteger(L, event.keysym.sym);
+		lua_pushinteger(L, event.keysym.scancode);
+		LuaHelpers::yieldable_call(L, 4);
+	}
+	else
+	{
+		lua_pop(L, 1);
+	}
+}
+
 } // namespace
 
 ConnectorWindow::ConnectorWindow()
@@ -75,17 +92,29 @@ void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 		switch (event.type)
 		{
 			case SDL_WINDOWEVENT:
-				handle_window_event(L, event);
+				handle_window_event(L, event.window);
 				break;
 			case SDL_MOUSEMOTION:
-				handle_motion_event(L, event);
+				handle_motion_event(L, event.motion);
 				break;
 			case SDL_MOUSEBUTTONUP:
 			case SDL_MOUSEBUTTONDOWN:
-				handle_button_event(L, event);
+				handle_button_event(L, event.button);
 				break;
 			case SDL_MOUSEWHEEL:
-				handle_wheel_event(L, event);
+				handle_wheel_event(L, event.wheel);
+				break;
+			case SDL_KEYDOWN:
+			case SDL_KEYUP:
+				handle_keyboard_event(L, event.key);
+				break;
+			case SDL_TEXTINPUT:
+				handle_text_input_event(L, event.text);
+				break;
+			case SDL_TEXTEDITING:
+				break;
+			case SDL_TEXTEDITING_EXT:
+				SDL_free(event.editExt.text);
 				break;
 		}
 	}
@@ -178,6 +207,10 @@ void ConnectorWindow::init_instance_table(lua_State* L)
 	LuaHelpers::create_callback_warning(L, "on_mouse_button");
 	LuaHelpers::create_callback_warning(L, "on_mouse_motion");
 	LuaHelpers::create_callback_warning(L, "on_mouse_scroll");
+	LuaHelpers::create_callback_warning(L, "on_key_down");
+	LuaHelpers::create_callback_warning(L, "on_key_press");
+	LuaHelpers::create_callback_warning(L, "on_key_up");
+	LuaHelpers::create_callback_warning(L, "on_text_input");
 	LuaHelpers::create_callback_warning(L, "on_resize");
 }
 
@@ -410,20 +443,40 @@ int ConnectorWindow::_sdl_event_filter(void* userdata, SDL_Event* event)
 		std::lock_guard guard(self->m_mutex);
 		self->m_pending_events.push_back(*event);
 	}
+	else if (event->type == SDL_TEXTINPUT && event->text.windowID == window_id)
+	{
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
+	else if (event->type == SDL_TEXTEDITING && event->edit.windowID == window_id)
+	{
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
+	else if (event->type == SDL_TEXTEDITING_EXT && event->editExt.windowID == window_id)
+	{
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
+	else if ((event->type == SDL_KEYUP || event->type == SDL_KEYDOWN) && event->key.windowID == window_id)
+	{
+		std::lock_guard guard(self->m_mutex);
+		self->m_pending_events.push_back(*event);
+	}
 
 	return 0;
 }
 
-void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
+void ConnectorWindow::handle_window_event(lua_State* L, SDL_WindowEvent const& event)
 {
-	switch (event.window.event)
+	switch (event.event)
 	{
 		case SDL_WINDOWEVENT_EXPOSED:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window redraw requested");
 			m_event_surface_dirty = true;
 			break;
 		case SDL_WINDOWEVENT_SIZE_CHANGED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window changed size to ", event.window.data1, 'x', event.window.data2);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window changed size to ", event.data1, 'x', event.data2);
 			m_event_surface_dirty = true;
 			m_event_size_changed  = true;
 			break;
@@ -435,10 +488,10 @@ void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became hidden");
 			break;
 		case SDL_WINDOWEVENT_MOVED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window moved to ", event.window.data1, 'x', event.window.data2);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window moved to ", event.data1, 'x', event.data2);
 			break;
 		case SDL_WINDOWEVENT_RESIZED:
-			// DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event.window.data1, 'x', event.window.data2);
+			// DeckLogger::log_message(nullptr, DeckLogger::Level::Debug, "Window resized to ", event.data1, 'x', event.data2);
 			break;
 		case SDL_WINDOWEVENT_MINIMIZED:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became minimized");
@@ -479,21 +532,21 @@ void ConnectorWindow::handle_window_event(lua_State* L, SDL_Event const& event)
 		case SDL_WINDOWEVENT_HIT_TEST:
 		case SDL_WINDOWEVENT_ICCPROF_CHANGED:
 		case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window event with type ", event.window.event);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window event with type ", event.event);
 			break;
 		default:
-			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window UNKNOWN event with type ", event.window.event);
+			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window UNKNOWN event with type ", event.event);
 			break;
 	}
 }
 
-void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
+void ConnectorWindow::handle_motion_event(lua_State* L, SDL_MouseMotionEvent const& event)
 {
 	lua_getfield(L, 1, "on_mouse_motion");
 	if (lua_type(L, -1) == LUA_TFUNCTION)
 	{
-		int pointer_x = event.motion.x;
-		int pointer_y = event.motion.y;
+		int pointer_x = event.x;
+		int pointer_y = event.y;
 		adjust_coordinates_for_scale(m_window, m_card, pointer_x, pointer_y);
 
 		lua_pushvalue(L, 1);
@@ -507,19 +560,19 @@ void ConnectorWindow::handle_motion_event(lua_State* L, SDL_Event const& event)
 	}
 }
 
-void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
+void ConnectorWindow::handle_button_event(lua_State* L, SDL_MouseButtonEvent const& event)
 {
 	lua_getfield(L, 1, "on_mouse_button");
 	if (lua_type(L, -1) == LUA_TFUNCTION)
 	{
-		int pointer_x = event.button.x;
-		int pointer_y = event.button.y;
+		int pointer_x = event.x;
+		int pointer_y = event.y;
 		adjust_coordinates_for_scale(m_window, m_card, pointer_x, pointer_y);
 
 		lua_pushvalue(L, 1);
 		lua_pushinteger(L, pointer_x);
 		lua_pushinteger(L, pointer_y);
-		lua_pushinteger(L, event.button.button);
+		lua_pushinteger(L, event.button);
 		lua_pushboolean(L, event.type == SDL_MOUSEBUTTONDOWN);
 		LuaHelpers::yieldable_call(L, 5);
 	}
@@ -529,27 +582,57 @@ void ConnectorWindow::handle_button_event(lua_State* L, SDL_Event const& event)
 	}
 }
 
-void ConnectorWindow::handle_wheel_event(lua_State* L, SDL_Event const& event)
+void ConnectorWindow::handle_wheel_event(lua_State* L, SDL_MouseWheelEvent const& event)
 {
 	lua_getfield(L, 1, "on_mouse_scroll");
 	if (lua_type(L, -1) == LUA_TFUNCTION)
 	{
 		lua_pushvalue(L, 1);
-		lua_pushinteger(L, event.wheel.mouseX);
-		lua_pushinteger(L, event.wheel.mouseY);
+		lua_pushinteger(L, event.mouseX);
+		lua_pushinteger(L, event.mouseY);
 
-		if (event.wheel.direction == SDL_MOUSEWHEEL_NORMAL)
+		if (event.direction == SDL_MOUSEWHEEL_NORMAL)
 		{
-			lua_pushnumber(L, event.wheel.preciseX);
-			lua_pushnumber(L, -event.wheel.preciseY);
+			lua_pushnumber(L, event.preciseX);
+			lua_pushnumber(L, -event.preciseY);
 		}
 		else
 		{
-			lua_pushnumber(L, -event.wheel.preciseX);
-			lua_pushnumber(L, event.wheel.preciseY);
+			lua_pushnumber(L, -event.preciseX);
+			lua_pushnumber(L, event.preciseY);
 		}
 
 		LuaHelpers::yieldable_call(L, 5);
+	}
+	else
+	{
+		lua_pop(L, 1);
+	}
+}
+
+void ConnectorWindow::handle_keyboard_event(lua_State* L, SDL_KeyboardEvent const& event)
+{
+	if (event.type == SDL_KEYUP)
+	{
+		dispatch_key_event(L, event, "on_key_up");
+	}
+	else if (event.type == SDL_KEYDOWN)
+	{
+		if (!event.repeat)
+			dispatch_key_event(L, event, "on_key_down");
+
+		dispatch_key_event(L, event, "on_key_press");
+	}
+}
+
+void ConnectorWindow::handle_text_input_event(lua_State* L, SDL_TextInputEvent const& event)
+{
+	lua_getfield(L, 1, "on_text_input");
+	if (lua_type(L, -1) == LUA_TFUNCTION)
+	{
+		lua_pushvalue(L, 1);
+		lua_pushstring(L, event.text);
+		LuaHelpers::yieldable_call(L, 2);
 	}
 	else
 	{

@@ -23,7 +23,6 @@
 #include "lua_helpers.h"
 #include <SDL_image.h>
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cstring>
 
@@ -102,24 +101,6 @@ std::vector<unsigned char> save_surface_as(SDL_Surface* surface, Format format)
 	}
 
 	return buffer;
-}
-
-inline void component_blend(Uint8& value, Uint8 const target, double factor)
-{
-	value = std::clamp<int>(value + int((target - value) * factor), 0, 255);
-}
-
-void pixel_desaturate(Uint8& r, Uint8& g, Uint8& b, int factor)
-{
-	// Everything *1024 to use integer math
-	unsigned int const luminance = 307 * r + 614 * g + 103 * b;
-	unsigned int const scaled_r  = r << 10;
-	unsigned int const scaled_g  = g << 10;
-	unsigned int const scaled_b  = b << 10;
-
-	r = ((scaled_r << 10) + factor * (luminance - scaled_r)) >> 20;
-	g = ((scaled_g << 10) + factor * (luminance - scaled_g)) >> 20;
-	b = ((scaled_b << 10) + factor * (luminance - scaled_b)) >> 20;
 }
 
 } // namespace
@@ -309,6 +290,9 @@ void DeckCard::fade_to_colour(SDL_Surface* surface, SDL_Color target_colour, dou
 	unsigned char* pixels = reinterpret_cast<unsigned char*>(surface->pixels);
 	std::size_t const bpp = surface->format->BytesPerPixel;
 
+	assert(factor >= 0.0 && factor <= 1.0);
+	Uint32 const ifactor = Uint32(factor * 1024.0);
+
 	for (int y = 0; y < surface->h; ++y)
 	{
 		unsigned char* current_position = pixels;
@@ -328,9 +312,9 @@ void DeckCard::fade_to_colour(SDL_Surface* surface, SDL_Color target_colour, dou
 			Uint8 r, g, b, a;
 			SDL_GetRGBA(pixel_value, surface->format, &r, &g, &b, &a);
 
-			component_blend(r, target_colour.r, factor);
-			component_blend(g, target_colour.b, factor);
-			component_blend(b, target_colour.g, factor);
+			util::Colour::component_blend(r, target_colour.r, ifactor);
+			util::Colour::component_blend(g, target_colour.b, ifactor);
+			util::Colour::component_blend(b, target_colour.g, ifactor);
 
 			pixel_value = SDL_MapRGBA(surface->format, r, g, b, a);
 
@@ -357,7 +341,8 @@ void DeckCard::desaturate(SDL_Surface* surface, double factor)
 	unsigned char* pixels = reinterpret_cast<unsigned char*>(surface->pixels);
 	std::size_t const bpp = surface->format->BytesPerPixel;
 
-	int ifactor = int(factor * 1024.0);
+	assert(factor >= 0.0 && factor <= 1.0);
+	Uint32 const ifactor = Uint32(factor * 1024.0);
 
 	for (int y = 0; y < surface->h; ++y)
 	{
@@ -378,7 +363,7 @@ void DeckCard::desaturate(SDL_Surface* surface, double factor)
 			Uint8 r, g, b, a;
 			SDL_GetRGBA(pixel_value, surface->format, &r, &g, &b, &a);
 
-			pixel_desaturate(r, g, b, ifactor);
+			util::Colour::pixel_desaturate(r, g, b, ifactor);
 
 			pixel_value = SDL_MapRGBA(surface->format, r, g, b, a);
 
@@ -531,7 +516,7 @@ int DeckCard::_lua_clear(lua_State* L)
 int DeckCard::_lua_darken(lua_State* L)
 {
 	DeckCard* self    = from_stack(L, 1);
-	lua_Number factor = luaL_checknumber(L, 2);
+	lua_Number factor = lua_isnone(L, 2) ? 0.3 : luaL_checknumber(L, 2);
 	if (factor >= 1)
 		factor /= 100.0;
 
@@ -566,12 +551,12 @@ int DeckCard::_lua_fade_to(lua_State* L)
 {
 	DeckCard* self     = from_stack(L, 1);
 	DeckColour* colour = DeckColour::from_stack(L, 2);
-	lua_Number factor  = luaL_checknumber(L, 3);
+	lua_Number factor  = lua_isnone(L, 3) ? 0.3 : luaL_checknumber(L, 3);
 	if (factor >= 1)
 		factor /= 100.0;
 
-	luaL_argcheck(L, factor > 0, 2, "factor must be positive");
-	luaL_argcheck(L, factor < 1.0, 2, "factor value out of range");
+	luaL_argcheck(L, factor > 0, 3, "factor must be positive");
+	luaL_argcheck(L, factor < 1.0, 3, "factor value out of range");
 
 	self->dedup(L);
 	fade_to_colour(self->m_surface, colour->get_colour(), factor);
@@ -583,7 +568,7 @@ int DeckCard::_lua_fade_to(lua_State* L)
 int DeckCard::_lua_lighten(lua_State* L)
 {
 	DeckCard* self    = from_stack(L, 1);
-	lua_Number factor = luaL_checknumber(L, 2);
+	lua_Number factor = lua_isnone(L, 2) ? 0.3 : luaL_checknumber(L, 2);
 	if (factor >= 1)
 		factor /= 100.0;
 

@@ -19,6 +19,7 @@
 #include "util_colour.h"
 #include "util_text.h"
 #include <algorithm>
+#include <cassert>
 #include <cctype>
 #include <utility>
 
@@ -237,6 +238,37 @@ bool parse_hex(std::string_view const& value, Colour& target)
 }
 
 } // namespace
+
+void Colour::component_blend(Uint8& value, Uint8 const target, Uint32 ifactor)
+{
+	assert(ifactor >= 0 && ifactor <= 1024);
+
+	Uint32 mod;
+	if (target >= value)
+	{
+		mod   = (Uint32(target - value) * ifactor + 512) >> 10;
+		value = std::clamp<int>(value + mod, 0, 255);
+	}
+	else
+	{
+		mod   = (Uint32(value - target) * ifactor) >> 10;
+		value = std::clamp<int>(value - mod, 0, 255);
+	}
+}
+
+void Colour::pixel_desaturate(Uint8& r, Uint8& g, Uint8& b, Uint32 ifactor)
+{
+	assert(ifactor >= 0 && ifactor <= 1024);
+
+	unsigned int const luminance = 307 * r + 614 * g + 103 * b;
+	unsigned int const scaled_r  = r << 10;
+	unsigned int const scaled_g  = g << 10;
+	unsigned int const scaled_b  = b << 10;
+
+	r = ((scaled_r << 10) + ifactor * (luminance - scaled_r)) >> 20;
+	g = ((scaled_g << 10) + ifactor * (luminance - scaled_g)) >> 20;
+	b = ((scaled_b << 10) + ifactor * (luminance - scaled_b)) >> 20;
+}
 
 bool Colour::parse_colour(std::string_view const& value, Colour& target)
 {

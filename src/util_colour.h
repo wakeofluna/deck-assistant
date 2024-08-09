@@ -35,6 +35,11 @@ struct Colour
 	{
 	}
 
+	static void component_blend(Uint8& value, Uint8 const target, Uint32 factor);
+	static void pixel_desaturate(Uint8& r, Uint8& g, Uint8& b, Uint32 factor);
+	static inline void component_blend(Uint8& value, Uint8 const target, double factor) { component_blend(value, target, Uint32(factor * 1024.0)); }
+	static inline void pixel_desaturate(Uint8& r, Uint8& g, Uint8& b, double factor) { pixel_desaturate(r, g, b, Uint32(factor * 1024.0)); }
+
 	static bool parse_colour(std::string_view const& value, Colour& target);
 	std::string_view to_string(std::array<char, 10>& buffer) const;
 
@@ -45,6 +50,18 @@ struct Colour
 		color.g = 0x82;
 		color.b = 0xEE;
 		color.a = 0xFF;
+	}
+
+	inline void blend(Colour const& target, double factor)
+	{
+		component_blend(color.r, target.color.r, factor);
+		component_blend(color.g, target.color.g, factor);
+		component_blend(color.b, target.color.b, factor);
+	}
+
+	inline void desaturate(double factor)
+	{
+		pixel_desaturate(color.r, color.g, color.b, factor);
 	}
 
 	constexpr inline operator SDL_Color() const

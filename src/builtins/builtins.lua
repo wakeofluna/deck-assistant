@@ -206,16 +206,22 @@ local function default_container()
             hotspot = self:_find_hotspot(x, y)
         end
 
+        local widget = hotspot and hotspot.widget
+
         if pressed then
+            if self._focus and self._focus.blur and self._focus ~= widget then
+                self._focus:blur()
+            end
             self._mousegrab = hotspot
+            self._focus = widget
         else
             self._mousegrab = nil
         end
 
-        if hotspot and hotspot.widget.mouse_button then
+        if widget and widget.mouse_button then
             x = x - hotspot.x
             y = y - hotspot.y
-            hotspot.widget:mouse_button(x, y, button, pressed)
+            widget:mouse_button(x, y, button, pressed)
         end
     end
 
@@ -225,6 +231,37 @@ local function default_container()
             x = x - hotspot.x
             y = y - hotspot.y
             hotspot.widget:mouse_scroll(x, y, scroll_x, scroll_y)
+        end
+    end
+
+    self.blur = function(self)
+        if self._focus and self._focus.blur then
+            self._focus:blur()
+        end
+        self._focus = nil
+    end
+
+    self.key_down = function(self, mods, keysym, scancode)
+        if self._focus and self._focus.key_down then
+            self._focus:key_down(mods, keysym, scancode)
+        end
+    end
+
+    self.key_press = function(self, mods, keysym, scancode)
+        if self._focus and self._focus.key_press then
+            self._focus:key_press(mods, keysym, scancode)
+        end
+    end
+
+    self.key_up = function(self, mods, keysym, scancode)
+        if self._focus and self._focus.key_up then
+            self._focus:key_up(mods, keysym, scancode)
+        end
+    end
+
+    self.text_input = function(self, text)
+        if self._focus and self._focus.text_input then
+            self._focus:text_input(text)
         end
     end
 
@@ -372,6 +409,42 @@ local function connect(widget, ...)
         end
     end
 
+    if widget.key_down then
+        local f = function(connector, mods, keysym, scancode)
+            widget:key_down(mods, keysym, scancode)
+        end
+        for _, connector in ipairs(targets) do
+            connector.on_key_down = f
+        end
+    end
+
+    if widget.key_press then
+        local f = function(connector, mods, keysym, scancode)
+            widget:key_press(mods, keysym, scancode)
+        end
+        for _, connector in ipairs(targets) do
+            connector.on_key_press = f
+        end
+    end
+
+    if widget.key_up then
+        local f = function(connector, mods, keysym, scancode)
+            widget:key_up(mods, keysym, scancode)
+        end
+        for _, connector in ipairs(targets) do
+            connector.on_key_up = f
+        end
+    end
+
+    if widget.text_input then
+        local f = function(connector, text)
+            widget:text_input(text)
+        end
+        for _, connector in ipairs(targets) do
+            connector.on_text_input = f
+        end
+    end
+
     local first_connector = targets[1]
 
     if widget.resize then
@@ -444,7 +517,7 @@ local function create_button(text, callback, initial_enabled)
     btn.font = default_font
     btn.callback = callback
     btn.width = 400
-    btn.height = 200
+    btn.height = 100
 
     if initial_enabled == false then
         btn._internal_state = BUTTON_DISABLED
@@ -463,7 +536,7 @@ local function create_button(text, callback, initial_enabled)
     end
 
     btn.mouse_button = function(self, x, y, button, pressed)
-        if button == 1 and btn._internal_state ~= BUTTON_DISABLED then
+        if button == 1 and self._internal_state ~= BUTTON_DISABLED then
             self._is_pressed = pressed
             if pressed then
                 self:_update_state(BUTTON_PRESSED)
@@ -481,7 +554,7 @@ local function create_button(text, callback, initial_enabled)
     end
 
     btn.mouse_entered = function(self)
-        if btn._internal_state ~= BUTTON_DISABLED then
+        if self._internal_state ~= BUTTON_DISABLED then
             if self._is_pressed then
                 self:_update_state(BUTTON_PRESSED)
             else
@@ -491,7 +564,7 @@ local function create_button(text, callback, initial_enabled)
     end
 
     btn.mouse_left = function(self)
-        if btn._internal_state ~= BUTTON_DISABLED then
+        if self._internal_state ~= BUTTON_DISABLED then
             self:_update_state(BUTTON_NORMAL)
         end
     end
@@ -505,10 +578,12 @@ local function create_button(text, callback, initial_enabled)
         end
 
         if not self.normal or force then
-            local txt = self.font:render(self.text, self.width - 10)
             self.normal = deck:Card(self.width, self.height)
             self.normal:clear(self.bgcolor)
-            self.normal:blit(txt, txt:centered(self.normal))
+            if self.text and self.text ~= '' then
+                local txt = self.font:render(self.text, self.width - 10)
+                self.normal:blit(txt, txt:centered(self.normal))
+            end
             self.hover = nil
             self.pressed = nil
             self.grayed = nil
@@ -571,20 +646,22 @@ local function create_label(text, fgcolor, bgcolor)
     lbl.text = text
     lbl.font = default_font
     lbl.width = 400
-    lbl.height = 200
+    lbl.height = 100
 
     lbl.redraw = function(self, force)
         if not self.card or force then
-            local txt = self.font:render(self.text, self.width - 10, self.alignment, self.fgcolor)
             self.card = deck:Card(self.width, self.height)
             self.card:clear(self.bgcolor)
 
-            local pos = txt:centered(self.card)
-            if self.alignment == ALIGN_LEFT and pos.x > 5 then
-                pos.x = 5
-            end
+            if self.text and self.text ~= '' then
+                local txt = self.font:render(self.text, self.width - 10, self.alignment, self.fgcolor)
+                local pos = txt:centered(self.card)
+                if self.alignment == ALIGN_LEFT and pos.x > 5 then
+                    pos.x = 5
+                end
 
-            self.card:blit(txt, txt:centered(pos))
+                self.card:blit(txt, txt:centered(pos))
+            end
         end
 
         if self.on_update then
@@ -632,6 +709,192 @@ local function create_label(text, fgcolor, bgcolor)
     return lbl
 end
 
+local INPUT_NORMAL = 78134
+local INPUT_FOCUSED = 812087
+local INPUT_HOVERED = 20955
+local INPUT_DISABLED = 43123
+
+local function create_input_field(initial_text)
+    local txt = widget_base()
+
+    txt.bgcolor = deck:Colour 'Dimgray'
+    txt.fgcolor = deck:Colour 'White'
+    txt.text = initial_text
+    txt.font = default_font
+    txt.width = 400
+    txt.height = 100
+    txt._internal_state = INPUT_NORMAL
+
+    txt._update_state = function(self, newstate)
+        if self._internal_state ~= newstate then
+            local was_focused = self._internal_state == INPUT_FOCUSED
+
+            if was_focused and self.numerical then
+                local real_value = tonumber(self.text)
+                local real_text
+                if not real_value then
+                    real_text = '0'
+                else
+                    real_text = tostring(real_value)
+                end
+                self:set_text(real_text)
+            end
+
+            if newstate == INPUT_NORMAL and self._hovered then
+                newstate = INPUT_HOVERED
+            end
+
+            self._internal_state = newstate
+            if self.card then
+                self:redraw()
+            end
+
+            if was_focused and self.on_blur then
+                self:on_blur()
+            end
+        end
+    end
+
+    txt.blur = function(self)
+        if self._internal_state == INPUT_FOCUSED then
+            self:_update_state(INPUT_NORMAL)
+        end
+    end
+
+    txt.mouse_entered = function(self)
+        self._hovered = true
+        if self._internal_state == INPUT_NORMAL then
+            self:_update_state(INPUT_HOVERED)
+        end
+    end
+
+    txt.mouse_left = function(self)
+        self._hovered = false
+        if self._internal_state == INPUT_HOVERED then
+            self:_update_state(INPUT_NORMAL)
+        end
+    end
+
+    txt.mouse_button = function(self, x, y, button, pressed)
+        if pressed and self._internal_state == INPUT_HOVERED then
+            self:_update_state(INPUT_FOCUSED)
+        end
+    end
+
+    txt.key_press = function(self, mods, keysym, scancode)
+        if self._internal_state == INPUT_FOCUSED then
+            if keysym == 8 then -- backspace
+                local new_text = string.sub(self.text, 1, -2)
+                self:set_text(new_text)
+            elseif keysym == 13 then -- enter
+                self:_update_state(INPUT_NORMAL)
+            end
+        end
+    end
+
+    txt.text_input = function(self, text)
+        if self._internal_state == INPUT_FOCUSED then
+            local new_text = self.text .. text
+            self:set_text(new_text)
+        end
+    end
+
+    txt.redraw = function(self, force)
+        if not self._txt or force then
+            if self.text and self.text ~= '' then
+                self._txt = self.font:render(self.text, self.fgcolor)
+            else
+                self._txt = nil
+            end
+        end
+        if not self.card or force then
+            self.card = deck:Card(self.width, self.height)
+        end
+
+        local bgcolor = self.bgcolor.dup
+        if self._internal_state == INPUT_DISABLED then
+            bgcolor:darken()
+        elseif self._internal_state == INPUT_HOVERED then
+            bgcolor:lighten(0.1)
+        elseif self._internal_state == INPUT_FOCUSED then
+            bgcolor:lighten(0.3)
+        end
+
+        self.card:clear(bgcolor)
+        if self._txt then
+            local pos = self._txt:centered(self.card)
+            pos.x = 5
+            self.card:blit(self._txt, pos)
+        end
+
+        if self.on_update then
+            self:on_update()
+        end
+    end
+
+    txt.set_text = function(self, text)
+        if self.text ~= text then
+            if self.numerical and text ~= '' and text ~= '-' and tonumber(text) == nil then
+                return
+            end
+            if self.validate_text then
+                local retval = self:validate_text(text)
+                if retval == false then
+                    return
+                end
+                if type(retval) == 'string' then
+                    text = retval
+                end
+            end
+            self.text = text
+            self._txt = nil
+            if self.card then
+                self:redraw()
+            end
+            if self.on_text_changed then
+                self:on_text_changed(text)
+            end
+        end
+    end
+
+    txt.set_fgcolor = function(self, fgcolor)
+        if self.fgcolor ~= fgcolor then
+            self.fgcolor = fgcolor
+            self._txt = nil
+            if self.card then
+                self:redraw()
+            end
+        end
+    end
+
+    txt.set_bgcolor = function(self, bgcolor)
+        if self.bgcolor ~= bgcolor then
+            self.bgcolor = bgcolor
+            if self.card then
+                self:redraw()
+            end
+        end
+    end
+
+    txt.set_enabled = function(self, enabled)
+        if enabled then
+            self:enable()
+        else
+            self:disable()
+        end
+    end
+
+    txt.disable = function(self)
+        self:_update_state(INPUT_DISABLED)
+    end
+
+    txt.enable = function(self)
+        self:_update_state(INPUT_NORMAL)
+    end
+
+    return txt
+end
+
 
 local exports = {}
 
@@ -646,5 +909,6 @@ exports.widget_base = widget_base
 exports.create_border = create_border
 exports.create_button = create_button
 exports.create_label = create_label
+exports.create_input_field = create_input_field
 
 return exports

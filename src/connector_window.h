@@ -51,10 +51,12 @@ private:
 	static int _lua_redraw(lua_State* L);
 
 	static int _sdl_event_filter(void* userdata, SDL_Event* event);
-	void handle_window_event(lua_State* L, SDL_Event const& event);
-	void handle_motion_event(lua_State* L, SDL_Event const& event);
-	void handle_button_event(lua_State* L, SDL_Event const& event);
-	void handle_wheel_event(lua_State* L, SDL_Event const& event);
+	void handle_window_event(lua_State* L, SDL_WindowEvent const& event);
+	void handle_motion_event(lua_State* L, SDL_MouseMotionEvent const& event);
+	void handle_button_event(lua_State* L, SDL_MouseButtonEvent const& event);
+	void handle_wheel_event(lua_State* L, SDL_MouseWheelEvent const& event);
+	void handle_keyboard_event(lua_State* L, SDL_KeyboardEvent const& event);
+	void handle_text_input_event(lua_State* L, SDL_TextInputEvent const& event);
 
 private:
 	// Window physicals

@@ -677,7 +677,14 @@ int DeckUtil::_lua_retrieve_event_log(lua_State* L)
 
 int DeckUtil::_lua_clipboard_text(lua_State* L)
 {
-	char* text = SDL_GetClipboardText();
+	char* text;
+	if (SDL_HasPrimarySelectionText())
+		text = SDL_GetPrimarySelectionText();
+	else if (SDL_HasClipboardText())
+		text = SDL_GetClipboardText();
+	else
+		return 0;
+
 	lua_pushstring(L, text);
 	SDL_free(text);
 	return 1;
