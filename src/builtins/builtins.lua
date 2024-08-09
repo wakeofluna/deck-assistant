@@ -13,12 +13,23 @@ local function default_container()
 
     self.bgcolor = deck:Colour 'Transparent'
     self.children = deck:RectangleList()
+    self.visible = true
 
     self._find_child = function(self, widget)
         local find_callback = function(rect, widget)
             return rect.widget == widget
         end
         return self.children:foreach(find_callback, widget)
+    end
+
+    self._find_hotspot = function(self, x, y)
+        local hotspot = self.children:reverse_any(x, y)
+
+        if hotspot and not hotspot.widget.visible then
+            hotspot = nil
+        end
+
+        return hotspot
     end
 
     self._assign_child_rect = function(self, child)
@@ -134,7 +145,7 @@ local function default_container()
                 self:redraw_self()
             end
             self.children:foreach(function(child)
-                if child.widget.card then
+                if child.widget.card and child.widget.visible then
                     self.card:sub_card(child):blit(child.widget.card)
                 end
             end)
@@ -145,7 +156,7 @@ local function default_container()
     end
 
     self.mouse_motion = function(self, x, y)
-        local hotspot = self.children:reverse_any(x, y)
+        local hotspot = self:_find_hotspot(x, y)
 
         if self._hotspot and self._hotspot ~= hotspot then
             if self._hotspot.widget.mouse_left then
@@ -192,7 +203,7 @@ local function default_container()
         if self._mousegrab then
             hotspot = self._mousegrab
         else
-            hotspot = self.children:reverse_any(x, y)
+            hotspot = self:_find_hotspot(x, y)
         end
 
         if pressed then
@@ -209,7 +220,7 @@ local function default_container()
     end
 
     self.mouse_scroll = function(self, x, y, scroll_x, scroll_y)
-        local hotspot = self.children:reverse_any(x, y)
+        local hotspot = self:_find_hotspot(x, y)
         if hotspot and hotspot.widget.mouse_scroll then
             x = x - hotspot.x
             y = y - hotspot.y
@@ -275,6 +286,12 @@ local function create_widget_grid(rows, cols, padding, margin)
     end
 
     self.add_child = function(self, widget, row, col, row_span, col_span)
+        if row < 0 then
+            row = self.rows + row
+        end
+        if col < 0 then
+            col = self.cols + col
+        end
         assert(col >= 0 and col < self.cols)
         assert(row >= 0 and row < self.rows)
         col_span = (col_span ~= nil and col_span > 1) and col_span or 1
@@ -389,13 +406,23 @@ end
 
 
 local function widget_base()
-    local wdg = {}
+    local wdg = { visible = true }
 
     wdg.resize = function(self, width, height)
         if not self.card or self.card.width ~= width or self.card.height ~= height then
             self.width = width
             self.height = height
             self:redraw(true)
+        end
+    end
+
+    wdg.set_visible = function(self, visible)
+        assert(visible == true or visible == false, 'visible must be a boolean')
+        if self.visible ~= visible then
+            self.visible = visible
+            if self.card then
+                self:redraw()
+            end
         end
     end
 
@@ -411,10 +438,6 @@ local BUTTON_DISABLED = 33123
 
 local function create_button(text, callback, initial_enabled)
     local btn = widget_base()
-
-    if not callback then
-        logger(logger.WARNING, 'Button \'', text, '\' does not have a callback function')
-    end
 
     btn.bgcolor = deck:Colour 'Blue'
     btn.text = text
@@ -446,7 +469,11 @@ local function create_button(text, callback, initial_enabled)
                 self:_update_state(BUTTON_PRESSED)
             elseif self._internal_state == BUTTON_PRESSED then
                 self:_update_state(BUTTON_HOVERED)
-                self:callback()
+                if self.callback then
+                    self:callback()
+                else
+                    logger(logger.WARNING, 'Button \'', self.text, '\' does not have a callback function')
+                end
             else
                 self:_update_state(BUTTON_NORMAL)
             end
