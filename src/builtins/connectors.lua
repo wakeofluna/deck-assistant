@@ -615,13 +615,13 @@ local twitch_connector = function()
     instance._internal_state = instance.INACTIVE
 
     instance._state_msg = {}
-    instance._state_msg[instance.INACTIVE] = 'Inactive'
-    instance._state_msg[instance.AWAITING_WELCOME] = 'Awaiting welcome from server'
-    instance._state_msg[instance.GETTING_TOKEN] = 'Requesting user access token'
-    instance._state_msg[instance.VALIDATING_TOKEN] = 'Validating user access token'
-    instance._state_msg[instance.CONNECTING] = 'Connecting to api endpoint'
-    instance._state_msg[instance.SUBSCRIBING] = 'Subscribing to required events'
-    instance._state_msg[instance.ACTIVE] = 'Active'
+    instance._state_msg[instance.INACTIVE] = 'inactive'
+    instance._state_msg[instance.AWAITING_WELCOME] = 'awaiting welcome from server'
+    instance._state_msg[instance.GETTING_TOKEN] = 'requesting user access token'
+    instance._state_msg[instance.VALIDATING_TOKEN] = 'validating user access token'
+    instance._state_msg[instance.CONNECTING] = 'connecting to api endpoint'
+    instance._state_msg[instance.SUBSCRIBING] = 'subscribing to required events'
+    instance._state_msg[instance.ACTIVE] = 'active'
 
     instance._update_state = function(self, newstate)
         if self._internal_state ~= newstate then
@@ -663,6 +663,7 @@ local twitch_connector = function()
                 local body = util.from_json(result.body)
                 if result.code == 200 then
                     body.token = token
+                    logger(logger.INFO, 'Twitch: token validated for user ' .. body.login .. ', expires in ' .. body.expires_in .. ' seconds')
                     return body
                 else
                     logger(logger.DEBUG, 'Twitch: token validation failed: ' .. result.code .. ' ' .. body.message)
