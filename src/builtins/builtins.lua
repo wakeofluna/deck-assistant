@@ -384,11 +384,30 @@ local function create_border(size, color)
     return self
 end
 
+local function disconnect(connector)
+    if connector.main_widget then
+        connector.main_widget.on_update = nil
+    end
+    connector.on_mouse_motion = nil
+    connector.on_mouse_button = nil
+    connector.on_mouse_scroll = nil
+    connector.on_key_down = nil
+    connector.on_key_press = nil
+    connector.on_key_up = nil
+    connector.on_text_input = nil
+    connector.on_resize = nil
+end
+
 local function connect(widget, ...)
     local targets = { ... }
     local count = #targets
 
     assert(count > 0)
+
+    for _, connector in ipairs(targets) do
+        disconnect(connector)
+        connector.main_widget = widget
+    end
 
     if widget.mouse_motion then
         local f = function(connector, x, y)
@@ -912,6 +931,7 @@ exports.default_container = default_container
 exports.create_window_manager = create_window_manager
 exports.create_widget_grid = create_widget_grid
 exports.connect = connect
+exports.disconnect = disconnect
 
 exports.widget_base = widget_base
 exports.create_border = create_border
