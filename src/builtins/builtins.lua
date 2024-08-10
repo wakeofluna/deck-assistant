@@ -826,7 +826,7 @@ local function create_input_field(initial_text)
             if keysym == 8 then -- backspace
                 local new_text = string.sub(self.text, 1, -2)
                 self:set_text(new_text)
-            elseif keysym == 13 then -- enter
+            elseif keysym == 13 or keysym == 1073741912 then -- enter or KP enter
                 self:_update_state(INPUT_NORMAL)
             end
         end
