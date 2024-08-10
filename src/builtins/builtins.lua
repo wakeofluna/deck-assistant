@@ -66,6 +66,18 @@ local function default_container()
         end
     end
 
+    self._relayout = function(self)
+        if self.card then
+            local resize_callback = function(child)
+                self:_assign_child_rect(child)
+                self:_resize_child(child)
+                self:_update_child_rect(child)
+            end
+            self.children:foreach(resize_callback)
+            self:redraw()
+        end
+    end
+
     local child_update_cb = function(widget, rect)
         if not self.card then
             return
@@ -104,7 +116,7 @@ local function default_container()
 
         if self.card then
             self:_assign_child_rect(child)
-            widget:resize(child.width, child.height)
+            self:_resize_child(child)
             self:_update_child_rect(child)
             widget:on_update()
         end
@@ -131,19 +143,10 @@ local function default_container()
     end
 
     self.resize = function(self, width, height)
-        local resize_callback = function(child)
-            self:_assign_child_rect(child)
-            if child.widget.resize then
-                child.widget:resize(child.width, child.height)
-            end
-            self:_update_child_rect(child)
-        end
-
         if not self.card or self.card.width ~= width or self.card.height ~= height then
             self.card = deck:Card(width, height)
-            self.children:foreach(resize_callback)
-            self:redraw()
         end
+        self:_relayout()
     end
 
     self.redraw = function(self, rect)
@@ -342,6 +345,16 @@ local function create_widget_grid(rows, cols, padding, margin)
         col_span = (col_span ~= nil and col_span > 1) and col_span or 1
         row_span = (row_span ~= nil and row_span > 1) and row_span or 1
         self:_add_child(widget, { row = row, col = col, row_span = row_span, col_span = col_span })
+    end
+
+    self.set_grid_size = function(self, rows, cols)
+        assert(rows > 0)
+        assert(cols > 0)
+        if self.rows ~= rows or self.cols ~= cols then
+            self.rows = rows
+            self.cols = cols
+            self:_relayout()
+        end
     end
 
     return self
