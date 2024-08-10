@@ -71,6 +71,7 @@ executable(
     link_with: [slib],
     cpp_args: noexcept,
     install: true,
+    win_subsystem: 'windows',
 )
 
 tests = executable(

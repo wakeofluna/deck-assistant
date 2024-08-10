@@ -34,3 +34,34 @@ int main(int argc, char** argv)
 
 	return app.run();
 }
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+// do not reorder
+#include <codecvt>
+#include <locale>
+#include <shellapi.h>
+int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+{
+	int num_args     = 0;
+	LPWSTR* win_args = CommandLineToArgvW(GetCommandLineW(), &num_args);
+
+	std::vector<std::string> char_args;
+	std::vector<char const*> main_args;
+	char_args.reserve(num_args);
+	main_args.reserve(num_args + 1);
+
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> convert;
+	for (int idx = 0; idx < num_args; ++idx)
+	{
+		char_args.push_back(convert.to_bytes(win_args[idx]));
+		main_args.push_back(char_args.back().c_str());
+	}
+
+	LocalFree(win_args);
+
+	main_args.push_back(nullptr);
+	return main(num_args, const_cast<char**>(main_args.data()));
+}
+#endif
