@@ -821,7 +821,7 @@ local twitch_connector = function()
             elseif subtype == 'channel.subscription.gift' then
                 notify('on_subscription_gift', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.total, event.cumulative_total)
             elseif subtype == 'channel.subscription.message' then
-                notify('on_resubscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.duration_months, event.cumulative_months, event.message.text)
+                notify('on_resubscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.cumulative_months, event.streak_months, event.message.text)
             elseif subtype == 'channel.cheer' then
                 notify('on_cheer', event.broadcaster_user_name, event.user_name, event.user_id, event.bits, event.message)
             elseif subtype == 'channel.channel_points_custom_reward_redemption.add' then
