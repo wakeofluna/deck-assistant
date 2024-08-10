@@ -122,6 +122,14 @@ local function default_container()
         end
     end
 
+    self.clear_children = function(self)
+        local clear_callback = function(rect)
+            rect.widget.on_update = nil
+        end
+        self.children:foreach(clear_callback)
+        self.children:clear()
+    end
+
     self.resize = function(self, width, height)
         local resize_callback = function(child)
             self:_assign_child_rect(child)
@@ -355,7 +363,7 @@ local function create_border(size, color)
     end
 
     self.add_child = function(self, widget)
-        self.children:clear()
+        self:clear_children()
         if widget then
             self:_add_child(widget)
         end
