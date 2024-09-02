@@ -167,7 +167,7 @@ local function obs_connector()
         instance[key] = value
         instance[key .. '_event'] = event
         instance[event] = function(self, data)
-            logger(logger.DEBUG, 'OBS.' .. event .. ': ' .. util.to_json(data, true))
+            logger(logger.TRACE, 'OBS.' .. event .. ': ' .. util.to_json(data, true))
         end
     end
 
@@ -543,7 +543,7 @@ local oauth2_twitch_connector = function()
         end
 
         local target = table.concat(url)
-        logger(logger.DEBUG, 'TwitchOAuth2: opening browser to: ' .. target)
+        logger(logger.TRACE, 'TwitchOAuth2: opening browser to: ' .. target)
         util.open_browser(target)
     end
 
@@ -572,11 +572,14 @@ local oauth2_twitch_connector = function()
             self.access_token = params.access_token
             self.access_scopes = reply.scopes
             self.promise:fulfill({ token = self.access_token, scopes = self.access_scopes })
-            logger(logger.DEBUG, 'Got Twitch access token: ' .. self.access_token)
+            logger(logger.TRACE, 'TwitchOAuth2: Got access token: ' .. self.access_token)
 
             if self.on_access_token then
                 pcall(self.on_access_token, self, self.access_token, self.access_scopes)
             end
+        end
+        if not reply.granted then
+            logger(logger.WARNING, 'TwitchOAuth2: ' .. reply.message)
         end
         return reply
     end
@@ -780,7 +783,7 @@ local twitch_connector = function()
 
                 local ok, err = self:_do_subscribe(event, version, condition)
                 if ok then
-                    logger(logger.DEBUG, 'Twitch: subscribed to event ' .. event)
+                    logger(logger.INFO, 'Twitch: subscribed to event ' .. event)
                 else
                     logger(logger.WARNING, 'Twitch: unable to subscribe to event ' .. event .. ': ' .. err)
                 end
