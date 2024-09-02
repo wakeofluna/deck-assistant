@@ -57,7 +57,7 @@ local function default_container()
         -- Optionally overriden by descendent class
         -- Function called to assign child space after the container resized
         local child_w, child_h
-        if child.widget.get_preferred_size then
+        if not child.widget.expand and child.widget.get_preferred_size then
             child_w, child_h = child.widget:get_preferred_size()
             child_w = math.min(self.card.width, child_w)
             child_h = math.min(self.card.height, child_h)
@@ -295,7 +295,7 @@ local function create_window_manager()
     self.bgcolor = deck:Colour 'Black'
 
     self._assign_child_rect = function(self, child)
-        if child.widget.get_preferred_size then
+        if not child.widget.expand and child.widget.get_preferred_size then
             local child_w, child_h = child.widget:get_preferred_size()
             child.width = math.min(self.card.width, child_w)
             child.height = math.min(self.card.height, child_h)
@@ -326,11 +326,11 @@ local function create_window_manager()
     return self
 end
 
-local function create_widget_grid(rows, cols, padding, margin)
+local function create_grid(rows, cols, padding, margin)
     local wgr = default_container()
 
-    assert(rows > 0, 'invalid nr of rows in create_widget_grid')
-    assert(cols > 0, 'invalid nr of columns in create_widget_grid')
+    assert(rows > 0, 'invalid nr of rows in create_grid')
+    assert(cols > 0, 'invalid nr of columns in create_grid')
     wgr.rows = rows
     wgr.cols = cols
     wgr.padding = padding or 5
@@ -566,21 +566,107 @@ local function create_border(size, color, initial_widget)
 end
 
 local function create_vbox(padding, margin)
-    local self = default_container()
+    local vbx = default_container()
 
-    self.padding = padding or 5
-    self.margin = margin or self.padding
+    vbx.padding = padding or 5
+    vbx.margin = margin or vbx.padding
 
-    return self
+    return vbx
 end
 
 local function create_hbox(padding, margin)
-    local self = default_container()
+    local hbx = default_container()
 
-    self.padding = padding or 5
-    self.margin = margin or self.padding
+    hbx.padding = padding or 5
+    hbx.margin = margin or hbx.padding
+    hbx._expanding_size = 0
+    hbx._child_width = 0
+    hbx._child_height = 0
 
-    return self
+    hbx._probe_widget_properties = function(self, widget)
+        local min_width, min_height, expand
+        if widget.get_preferred_size then
+            min_width, min_height = widget:get_preferred_size()
+            expand = widget.expand
+        else
+            min_width = 0
+            min_height = 0
+            expand = true
+        end
+        return { min_width = min_width, min_height = min_height, expand = expand }
+    end
+
+    hbx._update_child_sizes = function(self)
+        self._expanding_size = 0
+        self._child_width = 0
+        self._child_height = 0
+        local query_callback = function(child)
+            local props = self:_probe_widget_properties(child.widget)
+            for k, v in pairs(props) do
+                child[k] = v
+            end
+            self._expanding_size = self._expanding_size + (props.expand and props.min_width or 0)
+            self._child_width = self._child_width + props.min_width
+            self._child_height = math.max(self._child_height, props.min_height)
+        end
+        self.children:foreach(query_callback)
+    end
+
+    hbx._assign_child_rect = function(self, child)
+        local total_padding = self.margin * 2 + (self.children.count - 1) * self.padding
+        local available = self.card.width - total_padding
+        local remaining = available - self._child_width
+
+        local offset = self.margin
+        local query_callback = function(rect)
+            if rect == child then
+                return true
+            end
+            if rect.expand and remaining > 0 then
+                offset = offset + rect.min_width + math.floor((rect.min_width / self._expanding_size) * remaining)
+            elseif remaining < 0 then
+                offset = offset + rect.min_width + (remaining / self._child_width)
+            else
+                offset = offset + rect.min_width
+            end
+            offset = offset + self.padding
+        end
+        self.children:foreach(query_callback)
+
+        child.left = offset
+
+        if child.expand and remaining > 0 then
+            child.width = child.min_width + math.floor((child.min_width / self._expanding_size) * remaining)
+        elseif remaining < 0 then
+            child.width = child.min_width + (remaining / self._child_width)
+        else
+            child.width = child.min_width
+        end
+
+        child.top = self.margin
+        child.bottom = self.card.height - self.margin
+    end
+
+    hbx.add_child = function(self, widget)
+        local props = self:_probe_widget_properties(widget)
+        self._expanding_size = self._expanding_size + (props.expand and props.min_width or 0)
+        self._child_width = self._child_width + props.min_width
+        self._child_height = math.max(self._child_height, props.min_height)
+        self:_add_child(widget, props)
+    end
+
+    hbx.relayout = function(self)
+        self:_update_child_sizes()
+        self:_relayout()
+    end
+
+    hbx.get_preferred_size = function(self)
+        local size_x = self._child_width + self.margin * 2 + (self.children.count - 1) * self.padding
+        local size_y = self._child_height + self.margin * 2
+        return size_x, size_y
+    end
+
+    return hbx
 end
 
 local function disconnect(connector)
@@ -972,23 +1058,23 @@ local INPUT_HOVERED = 20955
 local INPUT_DISABLED = 43123
 
 local function create_input_field(initial_text)
-    local txt = widget_base()
+    local inp = widget_base()
 
-    txt.bgcolor = deck:Colour 'Dimgray'
-    txt.fgcolor = deck:Colour 'White'
-    txt.text = initial_text
-    txt.font = default_font
-    txt.width = 400
-    txt.height = 100
-    txt._internal_state = INPUT_NORMAL
+    inp.bgcolor = deck:Colour 'Dimgray'
+    inp.fgcolor = deck:Colour 'White'
+    inp.text = initial_text
+    inp.font = default_font
+    inp.width = 400
+    inp.height = 100
+    inp._internal_state = INPUT_NORMAL
 
-    txt.get_preferred_size = function(self)
-        local min_size = txt.input_length or 1
+    inp.get_preferred_size = function(self)
+        local min_size = self.input_length or 1
         local dummy = string.rep('F', min_size)
         return font_preferred_size(self.font, dummy)
     end
 
-    txt._update_state = function(self, newstate)
+    inp._update_state = function(self, newstate)
         if self._internal_state ~= newstate then
             local was_focused = self._internal_state == INPUT_FOCUSED
 
@@ -1018,33 +1104,33 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.blur = function(self)
+    inp.blur = function(self)
         if self._internal_state == INPUT_FOCUSED then
             self:_update_state(INPUT_NORMAL)
         end
     end
 
-    txt.mouse_entered = function(self)
+    inp.mouse_entered = function(self)
         self._hovered = true
         if self._internal_state == INPUT_NORMAL then
             self:_update_state(INPUT_HOVERED)
         end
     end
 
-    txt.mouse_left = function(self)
+    inp.mouse_left = function(self)
         self._hovered = false
         if self._internal_state == INPUT_HOVERED then
             self:_update_state(INPUT_NORMAL)
         end
     end
 
-    txt.mouse_button = function(self, x, y, button, pressed)
+    inp.mouse_button = function(self, x, y, button, pressed)
         if pressed and self._internal_state == INPUT_HOVERED then
             self:_update_state(INPUT_FOCUSED)
         end
     end
 
-    txt.key_press = function(self, mods, keysym, scancode)
+    inp.key_press = function(self, mods, keysym, scancode)
         if self._internal_state == INPUT_FOCUSED then
             if keysym == 8 then -- backspace
                 local new_text = string.sub(self.text, 1, -2)
@@ -1055,17 +1141,14 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.text_input = function(self, text)
+    inp.text_input = function(self, text)
         if self._internal_state == INPUT_FOCUSED then
             local new_text = self.text .. text
-            if self.input_length then
-                new_text = string.sub(new_text, 1, self.input_length)
-            end
             self:set_text(new_text)
         end
     end
 
-    txt.redraw = function(self, force)
+    inp.redraw = function(self, force)
         if not self._txt or force then
             if self.text and self.text ~= '' then
                 self._txt = self.font:render(self.text, self.fgcolor)
@@ -1098,10 +1181,17 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.set_text = function(self, text)
+    inp.set_text = function(self, text)
+        if self.input_length and string.len(text) > self.input_length then
+            text = string.sub(text, 1, self.input_length)
+        end
         if self.text ~= text then
-            if self.numerical and text ~= '' and text ~= '-' and tonumber(text) == nil then
-                return
+            if self.numerical and text ~= '' and text ~= '-' then
+                local nr = tonumber(text)
+                if nr == nil then
+                    return
+                end
+                text = tostring(nr)
             end
             if self.validate_text then
                 local retval = self:validate_text(text)
@@ -1123,7 +1213,7 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.set_fgcolor = function(self, fgcolor)
+    inp.set_fgcolor = function(self, fgcolor)
         if self.fgcolor ~= fgcolor then
             self.fgcolor = fgcolor
             self._txt = nil
@@ -1133,7 +1223,7 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.set_bgcolor = function(self, bgcolor)
+    inp.set_bgcolor = function(self, bgcolor)
         if self.bgcolor ~= bgcolor then
             self.bgcolor = bgcolor
             if self.card then
@@ -1142,7 +1232,7 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.set_enabled = function(self, enabled)
+    inp.set_enabled = function(self, enabled)
         if enabled then
             self:enable()
         else
@@ -1150,15 +1240,15 @@ local function create_input_field(initial_text)
         end
     end
 
-    txt.disable = function(self)
+    inp.disable = function(self)
         self:_update_state(INPUT_DISABLED)
     end
 
-    txt.enable = function(self)
+    inp.enable = function(self)
         self:_update_state(INPUT_NORMAL)
     end
 
-    return txt
+    return inp
 end
 
 
@@ -1168,7 +1258,7 @@ exports.default_font = default_font
 
 exports.default_container = default_container
 exports.create_window_manager = create_window_manager
-exports.create_widget_grid = create_widget_grid
+exports.create_grid = create_grid
 exports.create_vbox = create_vbox
 exports.create_hbox = create_hbox
 exports.connect = connect

@@ -293,15 +293,15 @@ local function show_correction_window()
     correction_window.visible = true
 end
 
-local grid = builtins.create_widget_grid(1, 1)
+local grid = builtins.create_grid(1, 1)
 grid.bgcolor = deck:Colour 'Black'
 builtins.connect(grid, secondary_window)
 
-grid = builtins.create_widget_grid(1, 1)
+grid = builtins.create_grid(1, 1)
 grid.bgcolor = deck:Colour 'Black'
 builtins.connect(grid, correction_window)
 
-grid = builtins.create_widget_grid(14, 6)
+grid = builtins.create_grid(14, 6)
 grid.bgcolor = deck:Colour 'Black'
 builtins.connect(grid, main_window)
 
