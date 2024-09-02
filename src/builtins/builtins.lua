@@ -23,10 +23,13 @@ local function default_container()
     end
 
     self._find_hotspot = function(self, x, y)
-        local hotspot = self.children:reverse_any(x, y)
+        local options = self.children:all(x, y)
+        local hotspot = nil
 
-        if hotspot and not hotspot.widget.visible then
-            hotspot = nil
+        for _, option in ipairs(options) do
+            if option.widget.visible == nil or option.widget.visible then
+                hotspot = option
+            end
         end
 
         return hotspot
