@@ -83,11 +83,58 @@ void DeckRectangleList::init_class_table(lua_State* L)
 	lua_setfield(L, -2, "foreach");
 }
 
+int DeckRectangleList::index(lua_State* L, lua_Integer key) const
+{
+	if (key < 0)
+	{
+		lua_pushnil(L);
+	}
+	else
+	{
+		std::size_t idx = std::size_t(key);
+		if (idx >= m_refs.size())
+		{
+			lua_pushnil(L);
+		}
+		else
+		{
+			LuaHelpers::push_instance_table(L, 1);
+			lua_rawgeti(L, -1, m_refs[idx]);
+		}
+	}
+
+	return 1;
+}
+
 int DeckRectangleList::index(lua_State* L, std::string_view const& key) const
 {
 	if (key == "size" || key == "len" || key == "count")
 	{
 		lua_pushinteger(L, m_refs.size());
+	}
+	else if (key == "first" || key == "front")
+	{
+		if (m_refs.empty())
+		{
+			lua_pushnil(L);
+		}
+		else
+		{
+			LuaHelpers::push_instance_table(L, 1);
+			lua_rawgeti(L, -1, m_refs.front());
+		}
+	}
+	else if (key == "last" || key == "back")
+	{
+		if (m_refs.empty())
+		{
+			lua_pushnil(L);
+		}
+		else
+		{
+			LuaHelpers::push_instance_table(L, 1);
+			lua_rawgeti(L, -1, m_refs.back());
+		}
 	}
 	else
 	{
@@ -98,7 +145,7 @@ int DeckRectangleList::index(lua_State* L, std::string_view const& key) const
 
 int DeckRectangleList::newindex(lua_State* L, lua_Integer key)
 {
-	luaL_error(L, "integer slots are reserved for internal use for %s", LUA_TYPENAME);
+	luaL_error(L, "integer slots cannot be manually assigned for %s", LUA_TYPENAME);
 	return 0;
 }
 

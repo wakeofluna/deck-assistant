@@ -99,13 +99,14 @@ end
 local function show_settings_window()
     local grid = secondary_window.main_widget
     grid:clear_children()
-    grid:set_grid_size(13, 5)
+    grid:set_grid_size(13, 3)
+    grid.homogeneous = false
 
     set_window_title(secondary_window, 'Twitch Marathon Timer - Settings')
 
     local function add_setting(row, title, key)
         local lbl = builtins.create_label(title)
-        grid:add_child(lbl, row, 0, 1, 2)
+        grid:add_child(lbl, row, 0)
 
         local is_numerical = type(SETTINGS[key]) == 'number'
         local initial_text
@@ -119,6 +120,7 @@ local function show_settings_window()
 
         local input_value = builtins.create_input_field(initial_text)
         input_value.numerical = is_numerical
+        input_value.input_length = 32
         input_value.on_blur = function(self)
             local value
             if self.numerical then
@@ -138,7 +140,7 @@ local function show_settings_window()
                 render_state()
             end
         end
-        grid:add_child(input_value, row, 2, 1, 2)
+        grid:add_child(input_value, row, 1)
 
         if not input_value.numerical then
             local btn = builtins.create_button('Paste', function(self)
@@ -149,7 +151,7 @@ local function show_settings_window()
                     util.store_table(SETTINGS_TABLE_NAME, SETTINGS)
                 end
             end)
-            grid:add_child(btn, row, 4)
+            grid:add_child(btn, row, 2)
         end
     end
 
@@ -166,6 +168,7 @@ local function show_settings_window()
     add_setting(11, 'Seconds per 100 bits', 'seconds_per_bits')
     add_setting(12, 'Seconds per $1.00 donation', 'seconds_per_donation')
 
+    grid:relayout()
     secondary_window.visible = true
 end
 
@@ -173,6 +176,8 @@ local function show_event_log_window(log_name)
     local grid = secondary_window.main_widget
     grid:clear_children()
     grid:set_grid_size(12, 12)
+    grid.homogeneous = true
+
     set_window_title(secondary_window, 'Twitch Marathon Timer - Logs for ' .. log_name)
 
     local data = util.retrieve_event_log(log_name, 10)
@@ -253,15 +258,18 @@ end
 local function show_correction_window()
     local grid = correction_window.main_widget
     grid:clear_children()
-    grid:set_grid_size(12, 3)
+    grid:set_grid_size(12, 2)
+    grid.homogeneous = false
+
     set_window_title(correction_window, 'Twitch Marathon Timer - Corrections')
 
     local function add_field(desc, row, col)
         local inp = builtins.create_input_field('0')
         inp.numerical = true
+        inp.input_length = 8
         grid:add_child(inp, row, col)
         local lbl = builtins.create_label(desc)
-        grid:add_child(lbl, row, col + 1, 1, 2)
+        grid:add_child(lbl, row, col + 1)
         return inp
     end
 
@@ -277,10 +285,11 @@ local function show_correction_window()
 
     local btn
     btn = builtins.create_button('Adjust WITH changing timers', function() perform_corrections(fields, true) end)
-    grid:add_child(btn, -2, 0, 1, 3)
+    grid:add_child(btn, -2, 0, 1, 2)
     btn = builtins.create_button('Adjust WITHOUT changing timers', function() perform_corrections(fields, false) end)
-    grid:add_child(btn, -1, 0, 1, 3)
+    grid:add_child(btn, -1, 0, 1, 2)
 
+    grid:relayout()
     correction_window.visible = true
 end
 

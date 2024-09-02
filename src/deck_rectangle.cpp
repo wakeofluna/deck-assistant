@@ -55,6 +55,9 @@ void DeckRectangle::init_class_table(lua_State* L)
 	lua_pushcfunction(L, &_lua_set_position);
 	lua_setfield(L, -2, "set_position");
 
+	lua_pushcfunction(L, &_lua_merge);
+	lua_setfield(L, -2, "merge");
+
 	lua_pushcfunction(L, &_lua_move);
 	lua_setfield(L, -2, "move");
 
@@ -266,6 +269,25 @@ int DeckRectangle::_lua_set_position(lua_State* L)
 
 	self->m_rectangle.x = x;
 	self->m_rectangle.y = y;
+
+	lua_settop(L, 1);
+	return 1;
+}
+
+int DeckRectangle::_lua_merge(lua_State* L)
+{
+	DeckRectangle* self  = from_stack(L, 1);
+	DeckRectangle* other = from_stack(L, 2);
+
+	int const self_right   = self->m_rectangle.x + self->m_rectangle.w;
+	int const other_right  = other->m_rectangle.x + other->m_rectangle.w;
+	int const self_bottom  = self->m_rectangle.y + self->m_rectangle.h;
+	int const other_bottom = other->m_rectangle.y + other->m_rectangle.h;
+
+	self->m_rectangle.x = std::min(self->m_rectangle.x, other->m_rectangle.x);
+	self->m_rectangle.y = std::min(self->m_rectangle.y, other->m_rectangle.y);
+	self->m_rectangle.w = std::max(self_right, other_right) - self->m_rectangle.x;
+	self->m_rectangle.h = std::max(self_bottom, other_bottom) - self->m_rectangle.y;
 
 	lua_settop(L, 1);
 	return 1;

@@ -8,6 +8,24 @@ local default_font = deck:Font { 24, deck:Colour 'White' }
 --local log_font = default_font
 
 
+local function font_preferred_size(font, text, margin)
+    assert(font, 'no font provided for font_preferred_size')
+
+    if margin == nil then
+        margin = 5
+    end
+
+    local txt
+    if text and text ~= '' then
+        txt = font:render(text, ALIGN_LEFT)
+        return txt.width + margin * 2, txt.height + margin * 2
+    else
+        txt = font:render('F', ALIGN_LEFT)
+        return margin * 2, txt.height + margin * 2
+    end
+end
+
+
 local function default_container()
     local self = {}
 
@@ -38,48 +56,35 @@ local function default_container()
     self._assign_child_rect = function(self, child)
         -- Optionally overriden by descendent class
         -- Function called to assign child space after the container resized
-        child.x = 0
-        child.y = 0
-        child.width = self.card.width
-        child.height = self.card.height
-    end
-
-    self._resize_child = function(self, child)
-        -- Optionally overriden by descendent class
-        -- Function called to forward resize events to the child widget
-        local widget = child.widget
-        if widget.resize then
-            widget:resize(child.width, child.height)
+        local child_w, child_h
+        if child.widget.get_preferred_size then
+            child_w, child_h = child.widget:get_preferred_size()
+            child_w = math.min(self.card.width, child_w)
+            child_h = math.min(self.card.height, child_h)
+        else
+            child_w, child_h = self.card.width, self.card.height
         end
-    end
-
-    self._update_child_rect = function(self, child)
-        -- Optionally overriden by descendent class
-        -- Function called to react to size of widget after the widget resized
-        local card = child.widget.card
-        if card then
-            if card.width < child.width then
-                child.x = child.x + math.floor((child.width - card.width) / 2)
-                child.width = card.width
-            end
-            if card.height < child.height then
-                child.y = child.y + math.floor((child.height - card.height) / 2)
-                child.height = card.height
-            end
-        end
+        child.x = (self.card.width - child_w) / 2
+        child.y = (self.card.height - child_h) / 2
+        child.width = child_w
+        child.height = child_h
     end
 
     self._relayout = function(self)
         if self.card then
             local resize_callback = function(child)
                 self:_assign_child_rect(child)
-                self:_resize_child(child)
-                self:_update_child_rect(child)
+                if child.width > 0 and child.height > 0 then
+                    child.widget:resize(child.width, child.height)
+                end
             end
             self.children:foreach(resize_callback)
             self:redraw()
         end
     end
+
+    -- Optionally overriden by descendent class
+    self.relayout = self._relayout
 
     local child_update_cb = function(widget, rect)
         if not self.card then
@@ -101,7 +106,7 @@ local function default_container()
     end
 
     self._add_child = function(self, widget, properties)
-        assert(widget)
+        assert(widget, "invalid widget in add_child")
 
         local child = deck:Rectangle()
         child.widget = widget
@@ -119,8 +124,7 @@ local function default_container()
 
         if self.card then
             self:_assign_child_rect(child)
-            self:_resize_child(child)
-            self:_update_child_rect(child)
+            child.widget:resize(child.width, child.height)
             widget:on_update()
         end
     end
@@ -145,12 +149,15 @@ local function default_container()
         self.children:clear()
     end
 
-    self.resize = function(self, width, height)
+    self._resize = function(self, width, height)
         if not self.card or self.card.width ~= width or self.card.height ~= height then
             self.card = deck:Card(width, height)
+            self:relayout()
         end
-        self:_relayout()
     end
+
+    -- Optionally overriden by descendent class
+    self.resize = self._resize
 
     self.redraw = function(self, rect)
         if self.card then
@@ -287,10 +294,11 @@ local function create_window_manager()
 
     self.bgcolor = deck:Colour 'Black'
 
-    self._update_child_rect = function(self, child)
-        if child.widget.card then
-            child.width = child.widget.card.width
-            child.height = child.widget.card.height
+    self._assign_child_rect = function(self, child)
+        if child.widget.get_preferred_size then
+            local child_w, child_h = child.widget:get_preferred_size()
+            child.width = math.min(self.card.width, child_w)
+            child.height = math.min(self.card.height, child_h)
             if child.pos_x > 1 then
                 child.x = child.pos_x
             else
@@ -301,11 +309,15 @@ local function create_window_manager()
             else
                 child.y = math.floor((self.card.height - child.height) * child.pos_y)
             end
+        else
+            child.x = 0
+            child.y = 0
+            child.width = self.card.width
+            child.height = self.card.height
         end
     end
 
     self.add_child = function(self, widget, pos_x, pos_y)
-        assert(widget)
         pos_x = pos_x ~= nil and pos_x or 0.5
         pos_y = pos_y ~= nil and pos_y or 0.5
         self:_add_child(widget, { pos_x = pos_x, pos_y = pos_y })
@@ -315,55 +327,192 @@ local function create_window_manager()
 end
 
 local function create_widget_grid(rows, cols, padding, margin)
-    local self = default_container()
+    local wgr = default_container()
 
-    assert(rows > 0)
-    assert(cols > 0)
-    self.rows = rows
-    self.cols = cols
-    self.padding = padding or 5
-    self.margin = margin or self.padding
+    assert(rows > 0, 'invalid nr of rows in create_widget_grid')
+    assert(cols > 0, 'invalid nr of columns in create_widget_grid')
+    wgr.rows = rows
+    wgr.cols = cols
+    wgr.padding = padding or 5
+    wgr.margin = margin or wgr.padding
+    wgr.homogeneous = true
 
-    self._assign_child_rect = function(self, child)
+    wgr._row_sizes = {}
+    wgr._col_sizes = {}
+    wgr._total_row_size = 0
+    wgr._total_col_size = 0
+    wgr._max_row_size = 0
+    wgr._max_col_size = 0
+
+    wgr._assign_child_rect = function(self, child)
         local total_padding_x = (self.cols - 1) * self.padding + 2 * self.margin
         local total_padding_y = (self.rows - 1) * self.padding + 2 * self.margin
-        local cell_w = math.floor((self.card.width - total_padding_x) / self.cols)
-        local cell_h = math.floor((self.card.height - total_padding_y) / self.rows)
+        if self.homogeneous then
+            local cell_w = math.floor((self.card.width - total_padding_x) / self.cols)
+            local cell_h = math.floor((self.card.height - total_padding_y) / self.rows)
 
-        child.left = (self.padding + cell_w) * child.col + self.margin
-        child.top = (self.padding + cell_h) * child.row + self.margin
-        child.right = (self.padding + cell_w) * (child.col + child.col_span) + self.margin - self.padding
-        child.bottom = (self.padding + cell_h) * (child.row + child.row_span) + self.margin - self.padding
+            child.left = (self.padding + cell_w) * child.col + self.margin
+            child.top = (self.padding + cell_h) * child.row + self.margin
+            child.right = (self.padding + cell_w) * (child.col + child.col_span) + self.margin - self.padding
+            child.bottom = (self.padding + cell_h) * (child.row + child.row_span) + self.margin - self.padding
+        else
+            local scale_x = (self.card.width - total_padding_x) / self._total_col_size
+            local scale_y = (self.card.height - total_padding_y) / self._total_row_size
+
+            local start_x = 0
+            local start_y = 0
+            local size_x = 0
+            local size_y = 0
+            for i, x in pairs(self._col_sizes) do
+                if i < child.col then
+                    start_x = start_x + x
+                elseif i < child.col + child.col_span then
+                    size_x = size_x + x
+                end
+            end
+            for i, y in pairs(self._row_sizes) do
+                if i < child.row then
+                    start_y = start_y + y
+                elseif i < child.row + child.row_span then
+                    size_y = size_y + y
+                end
+            end
+            child.x = self.margin + (self.padding * child.col) + math.floor(start_x * scale_x)
+            child.y = self.margin + (self.padding * child.row) + math.floor(start_y * scale_y)
+            child.width = (child.col_span - 1) * self.padding + math.floor(size_x * scale_x)
+            child.height = (child.row_span - 1) * self.padding + math.floor(size_y * scale_y)
+        end
     end
 
-    self.add_child = function(self, widget, row, col, row_span, col_span)
+    wgr.add_child = function(self, widget, row, col, row_span, col_span)
         if row < 0 then
             row = self.rows + row
         end
         if col < 0 then
             col = self.cols + col
         end
-        assert(col >= 0 and col < self.cols)
-        assert(row >= 0 and row < self.rows)
+        assert(col >= 0 and col < self.cols, 'invalid column in widget_grid add_child')
+        assert(row >= 0 and row < self.rows, 'invalid row in widget_grid add_child')
         col_span = (col_span ~= nil and col_span > 1) and col_span or 1
         row_span = (row_span ~= nil and row_span > 1) and row_span or 1
         self:_add_child(widget, { row = row, col = col, row_span = row_span, col_span = col_span })
     end
 
-    self.set_grid_size = function(self, rows, cols)
-        assert(rows > 0)
-        assert(cols > 0)
+    wgr.set_grid_size = function(self, rows, cols)
+        assert(rows > 0, 'invalid nr of rows in widget_grid set_grid_size')
+        assert(cols > 0, 'invalid nr of columns in widget_grid set_grid_size')
         if self.rows ~= rows or self.cols ~= cols then
             self.rows = rows
             self.cols = cols
-            self:_relayout()
+            self:relayout()
         end
     end
 
-    return self
+    wgr.relayout = function(self)
+        self:_calc_row_col_sizes()
+        self:_relayout()
+    end
+
+    wgr._calc_row_col_sizes = function(self)
+        local child_data = {}
+        local query_callback = function(child)
+            if child.widget.get_preferred_size then
+                local child_w, child_h = child.widget:get_preferred_size()
+                table.insert(child_data, { col = child.col, row = child.row, col_span = child.col_span, row_span = child.row_span, width = child_w, height = child_h })
+            end
+        end
+        self.children:foreach(query_callback)
+
+        self._row_sizes = {}
+        self._col_sizes = {}
+
+        local done = false
+        local span_count = 0
+        while not done do
+            done = true
+            span_count = span_count + 1
+            for _, data in ipairs(child_data) do
+                if data.col_span == span_count then
+                    local given = 0
+                    for x = data.col, (data.col + data.col_span - 1) do
+                        given = given + (self._col_sizes[x] or 0)
+                    end
+                    local needed = data.width - (data.col_span - 1) * self.padding
+                    if needed > given then
+                        if given == 0 then
+                            local value = math.ceil(needed / data.col_span)
+                            for x = data.col, (data.col + data.col_span - 1) do
+                                self._col_sizes[x] = value
+                            end
+                        else
+                            local stretch = needed / given
+                            for x = data.col, (data.col + data.col_span - 1) do
+                                self._col_sizes[x] = math.ceil((self._col_sizes[x] or 0) * stretch)
+                            end
+                        end
+                    end
+                end
+                if data.row_span == span_count then
+                    local given = 0
+                    for y = data.row, (data.row + data.row_span - 1) do
+                        given = given + (self._row_sizes[y] or 0)
+                    end
+                    local needed = data.height - (data.row_span - 1) * self.padding
+                    if needed > given then
+                        if given == 0 then
+                            local value = math.ceil(needed / data.row_span)
+                            for y = data.row, (data.row + data.row_span - 1) do
+                                self._row_sizes[y] = value
+                            end
+                        else
+                            local stretch = needed / given
+                            for y = data.row, (data.row + data.row_span - 1) do
+                                self._row_sizes[y] = math.ceil((self._row_sizes[y] or 0) * stretch)
+                            end
+                        end
+                    end
+                end
+                if data.col_span > span_count then
+                    done = false
+                end
+                if data.row_span > span_count then
+                    done = false
+                end
+            end
+        end
+
+        self._max_row_size = 0
+        self._max_col_size = 0
+        self._total_row_size = 0
+        self._total_col_size = 0
+        for _, x in pairs(self._col_sizes) do
+            self._max_col_size = math.max(self._max_col_size, x)
+            self._total_col_size = self._total_col_size + x
+        end
+        for _, y in pairs(self._row_sizes) do
+            self._max_row_size = math.max(self._max_row_size, y)
+            self._total_row_size = self._total_row_size + y
+        end
+    end
+
+    wgr.get_preferred_size = function(self)
+        self:_calc_row_col_sizes()
+        local total_w = self.margin * 2 + self.padding * (self.cols - 1)
+        local total_h = self.margin * 2 + self.padding * (self.rows - 1)
+        if self.homogeneous then
+            total_w = total_w + self._max_col_size * self.cols
+            total_h = total_h + self._max_row_size * self.rows
+        else
+            total_w = total_w + self._total_col_size
+            total_h = total_h + self._total_row_size
+        end
+        return total_w, total_h
+    end
+
+    return wgr
 end
 
-local function create_border(size, color)
+local function create_border(size, color, initial_widget)
     local self = default_container()
 
     self.size = size or 2
@@ -385,6 +534,18 @@ local function create_border(size, color)
         end
     end
 
+    self.get_preferred_size = function(self)
+        local w, h
+        local child = self.children.first
+        if child and child.widget.get_preferred_size then
+            w, h = child.widget:get_preferred_size()
+        else
+            w, h = 1, 1
+        end
+        local total_margin = (self.size + self.margin) * 2
+        return w + total_margin, h + total_margin
+    end
+
     self.redraw_self = function(self, force)
         local w, h, sz = self.card.width, self.card.height, self.size
         -- top
@@ -397,12 +558,35 @@ local function create_border(size, color)
         self.card:sub_card(0, sz, sz, h - sz):clear(self.color)
     end
 
+    if initial_widget then
+        self:_add_child(initial_widget)
+    end
+
+    return self
+end
+
+local function create_vbox(padding, margin)
+    local self = default_container()
+
+    self.padding = padding or 5
+    self.margin = margin or self.padding
+
+    return self
+end
+
+local function create_hbox(padding, margin)
+    local self = default_container()
+
+    self.padding = padding or 5
+    self.margin = margin or self.padding
+
     return self
 end
 
 local function disconnect(connector)
     if connector.main_widget then
         connector.main_widget.on_update = nil
+        connector.main_widget = nil
     end
     connector.on_mouse_motion = nil
     connector.on_mouse_button = nil
@@ -418,7 +602,7 @@ local function connect(widget, ...)
     local targets = { ... }
     local count = #targets
 
-    assert(count > 0)
+    assert(count > 0, 'no targets provided for connect()')
 
     for _, connector in ipairs(targets) do
         disconnect(connector)
@@ -528,7 +712,11 @@ local function widget_base()
         if not self.card or self.card.width ~= width or self.card.height ~= height then
             self.width = width
             self.height = height
-            self:redraw(true)
+            if width > 0 and height > 0 then
+                self:redraw(true)
+            else
+                self.card = nil
+            end
         end
     end
 
@@ -612,6 +800,10 @@ local function create_button(text, callback, initial_enabled)
         end
     end
 
+    btn.get_preferred_size = function(self)
+        return font_preferred_size(self.font, self.text)
+    end
+
     btn.redraw = function(self, force)
         if self.disabled or self.enabled == false then
             self._internal_state = BUTTON_DISABLED
@@ -690,6 +882,11 @@ local function create_label(text, fgcolor, bgcolor)
     lbl.font = default_font
     lbl.width = 400
     lbl.height = 100
+    lbl.wordwrap = true
+
+    lbl.get_preferred_size = function(self)
+        return font_preferred_size(self.font, self.text)
+    end
 
     lbl.redraw = function(self, force)
         if not self.card or force then
@@ -697,13 +894,21 @@ local function create_label(text, fgcolor, bgcolor)
             self.card:clear(self.bgcolor)
 
             if self.text and self.text ~= '' then
-                local txt = self.font:render(self.text, self.width - 10, self.alignment, self.fgcolor)
-                local pos = txt:centered(self.card)
-                if self.alignment == ALIGN_LEFT and pos.x > 5 then
-                    pos.x = 5
+                local txt
+                if self.wordwrap then
+                    txt = self.font:render(self.text, self.width - 10, self.alignment, self.fgcolor)
+                else
+                    txt = self.font:render(self.text, self.fgcolor)
                 end
 
-                self.card:blit(txt, txt:centered(pos))
+                local pos = txt:centered(self.card)
+                if self.alignment == ALIGN_LEFT then
+                    pos.x = 5
+                elseif self.alignment == ALIGN_RIGHT then
+                    pos.x = self.card.width - 5 - txt.width
+                end
+
+                self.card:blit(txt, pos)
             end
         end
 
@@ -749,6 +954,15 @@ local function create_label(text, fgcolor, bgcolor)
         end
     end
 
+    lbl.set_wordwrap = function(self, wordwrap)
+        if self.wordwrap ~= wordwrap then
+            self.wordwrap = wordwrap
+            if self.card then
+                self:redraw(true)
+            end
+        end
+    end
+
     return lbl
 end
 
@@ -767,6 +981,12 @@ local function create_input_field(initial_text)
     txt.width = 400
     txt.height = 100
     txt._internal_state = INPUT_NORMAL
+
+    txt.get_preferred_size = function(self)
+        local min_size = txt.input_length or 1
+        local dummy = string.rep('F', min_size)
+        return font_preferred_size(self.font, dummy)
+    end
 
     txt._update_state = function(self, newstate)
         if self._internal_state ~= newstate then
@@ -838,6 +1058,9 @@ local function create_input_field(initial_text)
     txt.text_input = function(self, text)
         if self._internal_state == INPUT_FOCUSED then
             local new_text = self.text .. text
+            if self.input_length then
+                new_text = string.sub(new_text, 1, self.input_length)
+            end
             self:set_text(new_text)
         end
     end
@@ -946,6 +1169,8 @@ exports.default_font = default_font
 exports.default_container = default_container
 exports.create_window_manager = create_window_manager
 exports.create_widget_grid = create_widget_grid
+exports.create_vbox = create_vbox
+exports.create_hbox = create_hbox
 exports.connect = connect
 exports.disconnect = disconnect
 
