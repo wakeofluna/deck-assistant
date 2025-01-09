@@ -66,6 +66,7 @@ private:
 	HeadersVector m_default_headers;
 	std::queue<Request> m_queue;
 	util::Blob m_response;
+	lua_Integer m_request_timeout;
 	lua_Integer m_request_started_at;
 	lua_Integer m_next_connect_attempt;
 	int m_request_counter;

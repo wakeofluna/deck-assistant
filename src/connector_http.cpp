@@ -147,6 +147,7 @@ char const* ConnectorHttp::LUA_TYPENAME = "deck:ConnectorHttp";
 
 ConnectorHttp::ConnectorHttp(std::shared_ptr<util::SocketSet> const& socketset)
     : m_socket(socketset)
+    , m_request_timeout(2000)
     , m_request_started_at(0)
     , m_next_connect_attempt(0)
     , m_request_counter(0)
@@ -209,7 +210,7 @@ void ConnectorHttp::tick_inputs(lua_State* L, lua_Integer clock)
 			push_error_response(L, "Connection closed by peer");
 			have_message = -1;
 		}
-		else if (clock > m_request_started_at + 2000)
+		else if (clock > m_request_started_at + m_request_timeout)
 		{
 			DeckLogger::log_message(L, DeckLogger::Level::Debug, "ConnectorHttp ", m_base_url.get_connection_string(), " request timed out, closing socket");
 			m_socket.shutdown();
@@ -428,6 +429,10 @@ int ConnectorHttp::index(lua_State* L, std::string_view const& key) const
 		bool const use_tls = (m_base_url.get_schema() == "https");
 		lua_pushboolean(L, use_tls);
 	}
+	else if (key == "timeout")
+	{
+		lua_pushinteger(L, m_request_timeout);
+	}
 	else if (key == "connection_string")
 	{
 		std::string_view const value = m_base_url.get_connection_string();
@@ -480,6 +485,11 @@ int ConnectorHttp::newindex(lua_State* L, std::string_view const& key)
 	{
 		bool value = LuaHelpers::check_arg_bool(L, 3);
 		m_base_url.set_schema(value ? "https" : "http");
+	}
+	else if (key == "timeout")
+	{
+		lua_Integer value = LuaHelpers::check_arg_int(L, 3);
+		m_request_timeout = value;
 	}
 	else if (key == "connection_string" || key == "base_url")
 	{
