@@ -19,6 +19,7 @@
 #ifndef DECK_ASSISTANT_APPLICATION_H
 #define DECK_ASSISTANT_APPLICATION_H
 
+#include <filesystem>
 #include <memory_resource>
 #include <string_view>
 #include <vector>
@@ -55,11 +56,16 @@ private:
 	static void install_function_overrides(lua_State* L);
 	static void build_environment_table(lua_State* L, util::Paths const* paths);
 	static void process_yielded_functions(lua_State* L, long long clock);
+	void reload_deckfile(lua_State* L);
 
 private:
 	lua_State* L;
 	std::pmr::memory_resource* m_mem_resource;
 	util::Paths* m_paths;
+
+	std::filesystem::path m_deckfile;
+	std::filesystem::file_time_type m_deckfile_mtime;
+	std::size_t m_deckfile_size;
 };
 
 #endif // DECK_ASSISTANT_APPLICATION_H

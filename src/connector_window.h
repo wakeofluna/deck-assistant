@@ -35,6 +35,7 @@ public:
 	ConnectorWindow();
 	~ConnectorWindow();
 
+	void initial_setup(lua_State* L, bool is_reload) override;
 	void tick_inputs(lua_State* L, lua_Integer clock) override;
 	void tick_outputs(lua_State* L, lua_Integer clock) override;
 	void shutdown(lua_State* L) override;

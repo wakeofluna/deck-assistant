@@ -80,6 +80,12 @@ ConnectorWindow::~ConnectorWindow()
 		SDL_DestroyWindow(m_window);
 }
 
+void ConnectorWindow::initial_setup(lua_State* L, bool is_reload)
+{
+	if (m_window)
+		m_event_size_changed = true;
+}
+
 void ConnectorWindow::tick_inputs(lua_State* L, lua_Integer clock)
 {
 	std::lock_guard guard(m_mutex);
@@ -179,6 +185,8 @@ void ConnectorWindow::tick_outputs(lua_State* L, lua_Integer clock)
 
 		if (card_surface)
 			SDL_BlitScaled(card_surface, nullptr, surface, nullptr);
+		else
+			SDL_FillRect(surface, nullptr, SDL_MapRGB(surface->format, 0, 0, 0));
 
 		SDL_UpdateWindowSurface(m_window);
 	}
@@ -511,6 +519,11 @@ void ConnectorWindow::handle_window_event(lua_State* L, SDL_WindowEvent const& e
 			break;
 		case SDL_WINDOWEVENT_FOCUS_GAINED:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became focused");
+			{
+				DeckModule* deck = DeckModule::push_global_instance(L);
+				deck->set_reload_requested();
+				lua_pop(L, 1);
+			}
 			break;
 		case SDL_WINDOWEVENT_FOCUS_LOST:
 			DeckLogger::log_message(nullptr, DeckLogger::Level::Trace, "Window became unfocused");

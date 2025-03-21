@@ -40,6 +40,9 @@ public:
 	void tick_outputs(lua_State* L, lua_Integer clock);
 	void shutdown(lua_State* L);
 
+	void set_reload_requested(bool do_reload = true);
+	bool is_reload_requested() const;
+
 	void set_exit_requested(int exit_code);
 	bool is_exit_requested() const;
 	int get_exit_code() const;
@@ -64,10 +67,11 @@ private:
 	static int _lua_request_quit(lua_State* L);
 
 private:
+	std::shared_ptr<util::SocketSet> m_socketset;
 	lua_Integer m_last_clock;
 	lua_Integer m_last_delta;
 	std::optional<int> m_exit_requested;
-	std::shared_ptr<util::SocketSet> m_socketset;
+	bool m_reload_requested;
 };
 
 #endif // DECK_ASSISTANT_DECK_MODULE_H

@@ -112,6 +112,15 @@ ConnectorVnc::~ConnectorVnc()
 		SDL_FreeSurface(m_screen_surface);
 }
 
+void ConnectorVnc::initial_setup(lua_State* L, bool is_reload)
+{
+	if (m_screen_surface)
+	{
+		m_screen_surface->w = 0;
+		m_screen_surface->h = 0;
+	}
+}
+
 void ConnectorVnc::tick_inputs(lua_State* L, lua_Integer clock)
 {
 	if (!m_screen_info)

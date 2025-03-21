@@ -200,8 +200,10 @@ int override_require(lua_State* L)
 
 Application::Application()
 {
-	m_mem_resource = new std::pmr::unsynchronized_pool_resource({ 1024, 4096 }, std::pmr::new_delete_resource());
-	m_paths        = new util::Paths();
+	m_mem_resource   = new std::pmr::unsynchronized_pool_resource({ 1024, 4096 }, std::pmr::new_delete_resource());
+	m_paths          = new util::Paths();
+	m_deckfile_mtime = {};
+	m_deckfile_size  = 0;
 
 	L = lua_newstate(&_lua_alloc, m_mem_resource);
 	lua_checkstack(L, 200);
@@ -243,12 +245,18 @@ bool Application::init(std::vector<std::string_view>&& args)
 		return false;
 
 	m_paths->set_sandbox_path(full_path.parent_path());
+	m_deckfile       = full_path;
+	m_deckfile_mtime = std::filesystem::last_write_time(m_deckfile, ec);
+	m_deckfile_size  = std::filesystem::file_size(m_deckfile, ec);
 
 	// Duplicate the function so we can get the ENV table
 	lua_pushvalue(L, -1);
 
 	if (!LuaHelpers::pcall(L, 0, 0))
+	{
+		lua_pop(L, 1);
 		return false;
+	}
 
 	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading and running script");
 
@@ -271,6 +279,13 @@ int Application::run()
 
 	while (!deck_module->is_exit_requested())
 	{
+		if (deck_module->is_reload_requested())
+		{
+			deck_module->set_reload_requested(false);
+			reload_deckfile(L);
+			assert(lua_gettop(L) == resettop && "Application deckfile reload is not stack balanced");
+		}
+
 		auto const real_clock        = std::chrono::steady_clock::now();
 		lua_Integer const clock_msec = std::chrono::duration_cast<std::chrono::milliseconds>(real_clock - start_time).count();
 
@@ -530,4 +545,47 @@ void Application::process_yielded_functions(lua_State* L, long long clock)
 	}
 
 	lua_pop(L, 1);
+}
+
+void Application::reload_deckfile(lua_State* L)
+{
+	std::error_code ec;
+
+	auto const deckfile_mtime = std::filesystem::last_write_time(m_deckfile, ec);
+	auto const deckfile_size  = !ec ? std::filesystem::file_size(m_deckfile, ec) : 0;
+
+	if (m_deckfile_mtime == deckfile_mtime && m_deckfile_size == deckfile_size)
+		return;
+
+	DeckLogger::log_message(nullptr, DeckLogger::Level::Info, "Reloading deckfile from ", m_deckfile.filename().string());
+
+	if (ec)
+	{
+		DeckLogger::log_message(nullptr, DeckLogger::Level::Error, "Reload failed: ", ec.message());
+		return;
+	}
+
+	if (!LuaHelpers::load_script(L, m_deckfile))
+		return;
+
+	// Duplicate the function so we can get the ENV table
+	lua_pushvalue(L, -1);
+
+	if (!LuaHelpers::pcall(L, 0, 0))
+	{
+		lua_pop(L, 1);
+		return;
+	}
+
+	m_deckfile_mtime = deckfile_mtime;
+	m_deckfile_size  = deckfile_size;
+
+	// Save a copy of the new global table
+	lua_getfenv(L, -1);
+
+	lua_pushvalue(L, -1);
+	lua_setfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
+
+	LuaHelpers::emit_event(L, -1, "on_reload");
+	lua_pop(L, 2);
 }

@@ -43,9 +43,10 @@ constexpr int const g_connector_container_idx    = 1;
 char const* DeckModule::LUA_TYPENAME = "deck:DeckModule";
 
 DeckModule::DeckModule()
-    : m_last_clock(0)
+    : m_socketset(util::SocketSet::create(32))
+    , m_last_clock(0)
     , m_last_delta(0)
-    , m_socketset(util::SocketSet::create(32))
+    , m_reload_requested(false)
 {
 }
 
@@ -100,6 +101,16 @@ void DeckModule::shutdown(lua_State* L)
 	DeckConnectorContainer::for_each(L, "shutdown", 0);
 
 	lua_pop(L, 1);
+}
+
+void DeckModule::set_reload_requested(bool do_reload)
+{
+	m_reload_requested = do_reload;
+}
+
+bool DeckModule::is_reload_requested() const
+{
+	return m_reload_requested;
 }
 
 void DeckModule::set_exit_requested(int exit_code)
@@ -350,19 +361,17 @@ int DeckModule::_lua_create_connector(lua_State* L)
 		}
 	}
 
-	// If it was a new connector, allow some initial setup after the settings were set
-	if (!connector_exists)
+	// Allow some initial setup after the settings were set
+	lua_getfield(L, -1, "initial_setup");
+	if (lua_isfunction(L, -1))
 	{
-		lua_getfield(L, -1, "initial_setup");
-		if (lua_isfunction(L, -1))
-		{
-			lua_pushvalue(L, -2);
-			LuaHelpers::pcall(L, 1, 0);
-		}
-		else
-		{
-			lua_pop(L, 1);
-		}
+		lua_pushvalue(L, -2);
+		lua_pushboolean(L, connector_exists);
+		LuaHelpers::pcall(L, 2, 0);
+	}
+	else
+	{
+		lua_pop(L, 1);
 	}
 
 	// Finally done!

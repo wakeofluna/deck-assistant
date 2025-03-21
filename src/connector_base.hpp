@@ -24,8 +24,16 @@
 #include "lua_helpers.h"
 
 template <typename T>
+void ConnectorBase<T>::initial_setup(lua_State* L, bool is_reload)
+{
+}
+
+template <typename T>
 void ConnectorBase<T>::init_class_table(lua_State* L)
 {
+	lua_pushcfunction(L, &_lua_initial_setup);
+	lua_setfield(L, -2, "initial_setup");
+
 	lua_pushcfunction(L, &_lua_tick_inputs);
 	lua_setfield(L, -2, "tick_inputs");
 
@@ -41,6 +49,16 @@ void ConnectorBase<T>::finalize(lua_State* L)
 {
 	shutdown(L);
 	DeckLogger::log_message(L, DeckLogger::Level::Trace, T::LUA_TYPENAME, " finalized");
+}
+
+template <typename T>
+int ConnectorBase<T>::_lua_initial_setup(lua_State* L)
+{
+	T* self        = LuaClass<T>::from_stack(L, 1);
+	bool is_reload = LuaHelpers::check_arg_bool(L, 2);
+
+	self->initial_setup(L, is_reload);
+	return 0;
 }
 
 template <typename T>
