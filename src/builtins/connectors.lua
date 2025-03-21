@@ -521,6 +521,8 @@ local oauth2_twitch_connector = function()
         'channel:read:subscriptions',
         'channel:read:redemptions',
         'bits:read',
+        'user:read:chat',
+        --'user:write:chat',
     }
 
     instance.on_connect = function(self, port)
@@ -796,6 +798,12 @@ local twitch_connector = function()
             do_subscribe('channel.subscription.message')
             do_subscribe('channel.cheer')
             do_subscribe('channel.channel_points_custom_reward_redemption.add')
+            local chat_condition = { broadcaster_user_id = self.user_id, user_id = self.user_id }
+            do_subscribe('channel.chat.clear', 1, chat_condition )
+            do_subscribe('channel.chat.clear_user_messages', 1, chat_condition )
+            do_subscribe('channel.chat.message', 1, chat_condition )
+            do_subscribe('channel.chat.message_delete', 1, chat_condition )
+            do_subscribe('channel.chat.notification', 1, chat_condition )
 
             self:_update_state(self.ACTIVE)
         elseif metatype == 'session_keepalive' then
@@ -829,6 +837,19 @@ local twitch_connector = function()
                 notify('on_cheer', event.broadcaster_user_name, event.user_name, event.user_id, event.bits, event.message)
             elseif subtype == 'channel.channel_points_custom_reward_redemption.add' then
                 notify('on_channel_points', event.broadcaster_user_name, event.user_name, event.user_id, event.reward.cost, event.reward.title, event.user_input)
+            elseif subtype == 'channel.chat.clear' then
+                notify('on_channel_chat_clear', event.broadcaster_user_name)
+            elseif subtype == 'channel.chat.clear_user_messages' then
+                local target = { id = event.target_user_id, name = event.target_user_name, login = event.target_user_login }
+                notify('on_channel_chat_clear_user_messages', event.broadcaster_user_name, target)
+            elseif subtype == 'channel.chat.message' then
+                local chatter = { id = event.chatter_user_id, name = event.chatter_user_name, login = event.chatter_user_login, color = event.color }
+                notify('on_channel_chat_message', event.broadcaster_user_name, event.message_id, chatter, event.message, event.reply)
+            elseif subtype == 'channel.chat.message_delete' then
+                local target = { id = event.target_user_id, name = event.target_user_name, login = event.target_user_login }
+                notify('on_channel_chat_message_delete', event.broadcaster_user_name, event.message_id, target)
+            elseif subtype == 'channel.chat.notification' then
+                notify('on_channel_chat_notification', event.broadcaster_user_name, event)
             else
                 logger(logger.WARNING, 'Twitch: unhandled notification of type ' .. subtype .. ': ' .. util.to_json(payload, true))
             end
