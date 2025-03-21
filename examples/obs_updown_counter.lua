@@ -2,7 +2,7 @@ local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
 local widgets = require('deck.widgets')
-require('deck.connectors')
+require('connector.obs')
 
 widgets.default_font.size = 20
 

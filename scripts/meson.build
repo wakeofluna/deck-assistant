@@ -1,4 +1,10 @@
-scripts = files('deck.connectors.lua', 'deck.widgets.lua')
+scripts = files(
+    'connector.oauth2.lua',
+    'connector.obs.lua',
+    'connector.ollama.lua',
+    'connector.twitch.lua',
+    'deck.widgets.lua',
+)
 
 install_data(
     scripts,

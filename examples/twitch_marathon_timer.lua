@@ -3,7 +3,8 @@ local logger = require('deck.logger')
 local util = require('deck.util')
 local widgets = require('deck.widgets')
 local ALIGN_CENTER = ALIGN_CENTER
-require('deck.connectors')
+require('connector.obs')
+require('connector.twitch')
 
 widgets.default_font.size = 20
 
