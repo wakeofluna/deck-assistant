@@ -75,11 +75,22 @@ end
 reload_settings_table()
 reload_stats_table()
 
-obs = deck:Connector('OBS', 'Obs', { enabled = false })
-twitch = deck:Connector('Twitch', { enabled = false })
-main_window = deck:Connector('Window', 'MainWindow', { width = 600, height = 425 })
-secondary_window = deck:Connector('Window', 'SecondaryWindow', { width = 1200, height = 435, visible = false, exit_on_close = false })
-correction_window = deck:Connector('Window', 'CorrectionWindow', { width = 450, height = 400, visible = false, exit_on_close = false })
+obs = deck:Connector('OBS', 'Obs', { initial_enabled = false })
+twitch = deck:Connector('Twitch', { initial_enabled = false })
+main_window = deck:Connector('Window', 'MainWindow', { initial_width = 600, initial_height = 425 })
+secondary_window = deck:Connector('Window', 'SecondaryWindow', { initial_width = 1200, initial_height = 435, initial_visible = false, exit_on_close = false })
+correction_window = deck:Connector('Window', 'CorrectionWindow', { initial_width = 450, initial_height = 400, initial_visible = false, exit_on_close = false })
+
+--twitch.scopes.follower_data = true
+--twitch.scopes.subscriber_data = true
+--twitch.scopes.redemption_notifications = true
+--twitch.scopes.bits_notifications = true
+twitch.scopes.view_chat = true
+--twitch.scopes.send_chat = true
+--twitch.scopes.send_shoutouts = true
+--twitch.scopes.send_announcements = true
+--twitch.scopes.automod = true
+--twitch.scopes.moderate = true
 
 local color_disabled = deck:Colour 'darkred'
 local color_connecting = deck:Colour 'gold'
@@ -582,7 +593,13 @@ local obs_button = widgets.create_button('OBS', function(self)
         self:redraw(true)
     end
 end)
-obs_button.bgcolor = color_disabled
+if obs.connected then
+    obs_button.bgcolor = color_enabled
+elseif obs.enabled then
+    obs_button.bgcolor = color_connecting
+else
+    obs_button.bgcolor = color_disabled
+end
 grid:add_child(obs_button, -1, -2)
 
 obs.on_connect_failed = function(self, reason)
@@ -607,14 +624,20 @@ end
 local twitch_button = widgets.create_button('Twitch', function(self)
     twitch.enabled = not twitch.enabled
 end)
-twitch_button.bgcolor = color_disabled
+if twitch._internal_state == twitch.INACTIVE then
+    twitch_button.bgcolor = color_disabled
+elseif twitch._internal_state == twitch.ACTIVE then
+    twitch_button.bgcolor = color_enabled
+else
+    twitch_button.bgcolor = color_connecting
+end
 grid:add_child(twitch_button, -1, -1)
 
 twitch.on_state_changed = function(self, newstate, msg)
     logger(logger.INFO, 'Twitch:', msg)
-    if newstate == twitch.INACTIVE then
+    if newstate == self.INACTIVE then
         twitch_button.bgcolor = color_disabled
-    elseif newstate == twitch.ACTIVE then
+    elseif newstate == self.ACTIVE then
         twitch_button.bgcolor = color_enabled
     else
         twitch_button.bgcolor = color_connecting
@@ -642,7 +665,7 @@ local function tier_to_key(tier)
     return 'amount_subs_' .. postfix, 'seconds_per_sub_' .. postfix
 end
 
-twitch.on_follow = function(self, channel, user_name, user_id)
+twitch.on_follow = function(self, channel, user)
     print('FOLLOW', user_name)
 
     STATS.amount_followers = STATS.amount_followers + 1
@@ -650,15 +673,15 @@ twitch.on_follow = function(self, channel, user_name, user_id)
     render_state()
 
     local ts = os.time()
-    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user_name }
+    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user.name }
     util.append_event_log('follows', log)
 end
-twitch.on_subscribe = function(self, channel, user_name, user_id, tier, is_gift)
+twitch.on_subscribe = function(self, channel, user, tier, is_gift)
     print('SUB', user_name, 'TIER', tier, 'GIFT', is_gift)
 
     if is_gift then
         local ts = os.time()
-        local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user_name, tier = tier }
+        local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user.name, tier = tier }
         util.append_event_log('gifted_subs', log)
     else
         --[[
@@ -681,19 +704,19 @@ twitch.on_subscribe = function(self, channel, user_name, user_id, tier, is_gift)
         --render_state()
 
         local ts = os.time()
-        local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'sub', user_name = user_name, tier = tier }
+        local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'sub', user_name = user.name, tier = tier }
         util.append_event_log('subs', log)
     end
 end
-twitch.on_unsubscribe = function(self, channel, user_name, user_id, tier, is_gift)
+twitch.on_unsubscribe = function(self, channel, user, tier, is_gift)
     print('UNSUB', user_name, 'TIER', tier, 'GIFT', is_gift)
 
     local ts = os.time()
-    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user_name, tier = tier, was_gift = is_gift }
+    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user.name, tier = tier, was_gift = is_gift }
     util.append_event_log('expired_subs', log)
 end
-twitch.on_subscription_gift = function(self, channel, user_name, user_id, tier, total, cumulative_total)
-    print('GIFT', user_name, 'TIER', tier, 'AMOUNT', total, 'TOTAL', cumulative_total)
+twitch.on_subscription_gift = function(self, channel, user, tier, total, cumulative_total)
+    print('GIFT', user.name, 'TIER', tier, 'AMOUNT', total, 'TOTAL', cumulative_total)
 
     local stat_key, setting_key = tier_to_key(tier)
     stat_key = stat_key .. '_gifted'
@@ -704,11 +727,11 @@ twitch.on_subscription_gift = function(self, channel, user_name, user_id, tier, 
     render_state()
 
     local ts = os.time()
-    local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'gift', user_name = user_name or '(anonymous)', tier = tier, amount = total, cumulative_total = cumulative_total, time_added = time_added }
+    local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'gift', user_name = user.name or '(anonymous)', tier = tier, amount = total, cumulative_total = cumulative_total, time_added = time_added }
     util.append_event_log('subs', log)
 end
-twitch.on_resubscribe = function(self, channel, user_name, user_id, tier, months, streak, message)
-    print('RESUB', user_name, 'TIER', tier, 'MONTHS', months, 'STREAK', streak, 'MESSAGE', message)
+twitch.on_resubscribe = function(self, channel, user, tier, months, streak, message)
+    print('RESUB', user.name, 'TIER', tier, 'MONTHS', months, 'STREAK', streak, 'MESSAGE', message)
 
     local stat_key, setting_key = tier_to_key(tier)
     STATS[stat_key] = STATS[stat_key] + 1
@@ -717,11 +740,11 @@ twitch.on_resubscribe = function(self, channel, user_name, user_id, tier, months
     render_state()
 
     local ts = os.time()
-    local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'resub', user_name = user_name, tier = tier, months = months, streak = streak, message = message, time_added = SETTINGS[setting_key] }
+    local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'resub', user_name = user.name, tier = tier, months = months, streak = streak, message = message, time_added = SETTINGS[setting_key] }
     util.append_event_log('subs', log)
 end
-twitch.on_cheer = function(self, channel, user_name, user_id, bits, message)
-    print('CHEER', user_name, 'BITS', bits, 'MESSAGE', message)
+twitch.on_cheer = function(self, channel, user, bits, message)
+    print('CHEER', user.name, 'BITS', bits, 'MESSAGE', message)
 
     local prev_added = math.floor((STATS.amount_bits + STATS.correction_bits) * SETTINGS.seconds_per_bits / 100.0 + 0.5)
     STATS.amount_bits = STATS.amount_bits + bits
@@ -732,11 +755,11 @@ twitch.on_cheer = function(self, channel, user_name, user_id, bits, message)
     render_state()
 
     local ts = os.time()
-    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user_name, bits = bits, message = message, time_added = new_added - prev_added }
+    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user.name, bits = bits, message = message, time_added = new_added - prev_added }
     util.append_event_log('bits', log)
 end
-twitch.on_channel_points = function(self, channel, user_name, user_id, points, title, message)
-    print('REDEEM', user_name, 'POINTS', points, 'TITLE', title, 'MESSAGE', message)
+twitch.on_channel_points = function(self, channel, user, points, title, message)
+    print('REDEEM', user.name, 'POINTS', points, 'TITLE', title, 'MESSAGE', message)
 
     STATS.amount_channel_points = STATS.amount_channel_points + points
     STATS.count_channel_points = STATS.count_channel_points + 1
@@ -745,10 +768,35 @@ twitch.on_channel_points = function(self, channel, user_name, user_id, points, t
     render_state()
 
     local ts = os.time()
-    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user_name or '(anonymous)', points = points, title = title, message = message }
+    local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user.name or '(anonymous)', points = points, title = title, message = message }
     util.append_event_log('redeems', log)
 end
-
+twitch.on_channel_chat_clear = function(self, channel)
+    local ts = os.time()
+    local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'clear_chat', channel = channel }
+    util.append_event_log('chat', log)
+end
+twitch.on_channel_chat_message = function(self, channel, message_id, user, message, extra)
+    local ts = os.time()
+    local log = { timestamp = ts, time = os.date('%F %T', ts), event = 'message', channel = channel, user_name = user.name, message = message, extra = extra }
+    util.append_event_log('chat', log)
+end
+twitch.on_channel_chat_message_delete = function(self, channel, message_id, user)
+    local ts = os.time()
+    local log = { timestamp = ts, time = os.date('%F %T', ts), channel = channel, user_name = user.name }
+    if message_id then
+        log.message_id = message_id
+        log.event = 'delete_message'
+    else
+        log.event = 'clear_user'
+    end
+    util.append_event_log('chat', log)
+end
+twitch.on_channel_chat_notification = function(self, channel, event)
+    local ts = os.time()
+    local log = { timestamp = ts, time = os.date('%F %T', ts), channel = channel, event = 'notification', notification = event }
+    util.append_event_log('chat', log)
+end
 
 local settings_button = widgets.create_button('Settings', function(self)
     show_settings_window()

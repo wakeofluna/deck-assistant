@@ -9,31 +9,24 @@ local oauth2_twitch_connector = function()
     local instance = deck.connector_factory.OAuth2()
 
     instance.client_id = twitch_client_id
-    instance.scopes = {
-        'moderator:read:followers',
-        'channel:read:subscriptions',
-        'channel:read:redemptions',
-        'bits:read',
-        'user:read:chat',
-        --'user:write:chat',
-    }
+    instance.scopes = {}
 
     instance.on_connect = function(self, port)
-        instance.nonce = util.to_hex(util.random_bytes(8))
+        self.nonce = util.to_hex(util.random_bytes(8))
 
         local url = {
             'https://id.twitch.tv/oauth2/authorize?client_id=',
-            instance.client_id,
+            self.client_id,
             '&redirect_uri=http://localhost:',
             port,
             '&response_type=token',
             '&state=',
-            instance.nonce,
+            self.nonce,
             '&scope=',
-            table.concat(instance.scopes, '+')
+            table.concat(self.scopes, '+')
         }
 
-        if instance.force_verify then
+        if self.force_verify then
             table.insert(url, '&force_verify=true')
         end
 
@@ -98,10 +91,26 @@ local twitch_connector = function()
         instance._ws = deck:Connector('Websocket', 'TwitchWS', { connection_string = 'wss://eventsub.wss.twitch.tv/ws', enabled = false })
     end
     instance._promise = deck:Promise(2000)
+    instance._user_cache = {}
 
     instance.enabled = true
     instance.secret_name = 'twitch_access_token'
     instance.client_id = twitch_client_id
+
+    instance.scopes = {
+        follower_data = false,
+        subscriber_data = false,
+        redemption_notifications = false,
+        bits_notifications = false,
+        view_chat = false,
+        send_chat = false,
+        send_shoutouts = false,
+        send_announcements = false,
+        automod = false,
+        moderate = false,
+    }
+
+    instance.active_subscriptions = {}
 
     instance.INACTIVE = 89172634
     instance.AWAITING_WELCOME = 109702145
@@ -118,7 +127,7 @@ local twitch_connector = function()
     instance._state_msg[instance.GETTING_TOKEN] = 'requesting user access token'
     instance._state_msg[instance.VALIDATING_TOKEN] = 'validating user access token'
     instance._state_msg[instance.CONNECTING] = 'connecting to api endpoint'
-    instance._state_msg[instance.SUBSCRIBING] = 'subscribing to required events'
+    instance._state_msg[instance.SUBSCRIBING] = 'initial subscribing phase'
     instance._state_msg[instance.ACTIVE] = 'active'
 
     instance._update_state = function(self, newstate)
@@ -148,7 +157,6 @@ local twitch_connector = function()
                 result.login = 'testBroadcaster'
                 result.user_id = '99532582'
                 result.expires_in = 5279237
-                result.scopes = { 'bits.read' }
                 result.token = token
                 return result
             end
@@ -176,8 +184,24 @@ local twitch_connector = function()
         self:_update_state(self.GETTING_TOKEN)
         logger(logger.DEBUG, 'Twitch: asking user for access token')
 
+        local scopes = {}
+        if self.scopes.follower_data then table.insert(scopes, 'moderator:read:followers') end
+        if self.scopes.subscriber_data then table.insert(scopes, 'channel:read:subscriptions') end
+        if self.scopes.redemption_notifications then table.insert(scopes, 'channel:read:redemptions') end
+        if self.scopes.bits_notifications then table.insert(scopes, 'bits:read') end
+        if self.scopes.view_chat then table.insert(scopes, 'user:read:chat') end
+        if self.scopes.send_chat then table.insert(scopes, 'user:write:chat') end
+        if self.scopes.send_shoutouts then table.insert(scopes, 'moderator:manage:shoutouts') end
+        if self.scopes.send_announcements then table.insert(scopes, 'moderator:manage:announcements') end
+        if self.scopes.automod then table.insert(scopes, 'moderator:manage:automod') end
+        if self.scopes.moderate then
+            table.insert(scopes, 'moderator:manage:banned_users')
+            table.insert(scopes, 'channel:moderate')
+        end
+
         local oauth = deck:Connector('TwitchOAuth2', { enabled = false })
         oauth.client_id = self.client_id
+        oauth.scopes = scopes
         oauth.enabled = true
         local result = oauth:wait()
         oauth.enabled = false
@@ -220,7 +244,11 @@ local twitch_connector = function()
         self._ws.enabled = true
     end
 
-    instance._do_subscribe = function(self, event, version, condition)
+    instance.get_state = function(self)
+        return self._internal_state
+    end
+
+    instance.subscribe = function(self, event, version, condition)
         assert(event, "no event type in Twitch subscribe")
         assert(version, "no event version in Twitch subscribe")
 
@@ -236,13 +264,176 @@ local twitch_connector = function()
         if result.ok then
             local body = util.from_json(result.body)
             if result.code >= 200 and result.code < 300 then
+                self.active_subscriptions[body.data[1].id] = body.data[1]
+                logger(logger.INFO, 'Twitch: subscribed to event ' .. event)
                 return true
             else
+                logger(logger.WARNING, 'Twitch: unable to subscribe to event ' .. event .. ': ' .. body.message)
                 return false, body.message
             end
         else
+            logger(logger.WARNING, 'Twitch: failed to subscribe to event ' .. event .. ': ' .. result.error)
             return false, result.error
         end
+    end
+
+    instance.subscribe_all = function(self, broadcaster_user_id)
+        broadcaster_user_id = broadcaster_user_id or self.user_id
+
+        local succeeded = {}
+        local failed = {}
+
+        local function do_subscribe(event, version, condition)
+            version = version or '1'
+            condition = condition or {}
+            condition.broadcaster_user_id = broadcaster_user_id
+            local ok, err = self:subscribe(event, version, condition)
+            if ok then
+                table.insert(succeeded, event)
+            else
+                failed[event] = err
+            end
+        end
+
+        logger(logger.INFO, 'Twitch: subscribing to broadcaster ' .. broadcaster_user_id)
+
+        if self.scopes.follower_data then
+            do_subscribe('channel.follow', 2, { moderator_user_id = self.user_id })
+        end
+        if self.scopes.bits_notifications then
+            do_subscribe('channel.cheer')
+        end
+        if self.scopes.redemption_notifications then
+            do_subscribe('channel.channel_points_custom_reward_redemption.add')
+        end
+        if self.scopes.view_chat and broadcaster_user_id == self.user_id then
+            do_subscribe('channel.chat.notification', 1, { user_id = self.user_id })
+        elseif self.scopes.subscriber_data then
+            do_subscribe('channel.subscribe')
+            do_subscribe('channel.subscription.end')
+            do_subscribe('channel.subscription.gift')
+            do_subscribe('channel.subscription.message')
+        end
+        if self.scopes.moderate then
+            do_subscribe('channel.ban')
+            do_subscribe('channel.unban')
+        end
+
+        return succeeded, failed
+    end
+
+    instance.subscribe_chat = function(self, broadcaster_user_id)
+        if not self.scopes.view_chat then
+            return false, "missing view_chat scope"
+        end
+
+        broadcaster_user_id = broadcaster_user_id or self.user_id
+
+        local function do_subscribe(event, version, as_moderator)
+            version = version or '1'
+            local condition = {}
+            condition.broadcaster_user_id = broadcaster_user_id
+            if as_moderator then
+                condition.moderator_user_id = self.user_id
+            else
+                condition.user_id = self.user_id
+            end
+            return self:subscribe(event, version, condition)
+        end
+
+        logger(logger.INFO, 'Twitch: entering chat of broadcaster ' .. broadcaster_user_id)
+
+        local ok, err = do_subscribe('channel.chat.message')
+        if not ok then
+            return ok, err
+        end
+
+        do_subscribe('channel.chat.message_delete')
+        do_subscribe('channel.chat.clear')
+        do_subscribe('channel.chat.clear_user_messages')
+
+        if broadcaster_user_id ~= self.user_id then
+            do_subscribe('channel.chat.notification')
+        end
+
+        if self.scopes.automod then
+            ok = do_subscribe('automod.message.hold', 2, true)
+            if ok then
+                do_subscribe('automod.message.update', 2, true)
+            end
+        end
+
+        return true
+    end
+
+    instance.unsubscribe = function(self, event, broadcaster_user_id)
+        local found = false
+        for key, data in pairs(self.active_subscriptions) do
+            if data.type == event and (broadcaster_user_id == nil or broadcaster_user_id == data.condition.broadcaster_user_id) then
+                logger(logger.INFO, 'Twitch: unsubscribing ' .. event)
+                self._api:delete('/eventsub/subscriptions?id=' .. data.id)
+                self.active_subscriptions[key] = nil
+                found = true
+            end
+        end
+        return found
+    end
+
+    instance.unsubscribe_all = function(self, broadcaster_user_id)
+        if broadcaster_user_id then
+            logger(logger.INFO, 'Twitch: unsubscribing from broadcaster ' .. broadcaster_user_id)
+        else
+            logger(logger.INFO, 'Twitch: unsubscribing all subscriptions')
+        end
+
+        for key, data in pairs(self.active_subscriptions) do
+            if broadcaster_user_id == nil or broadcaster_user_id == data.condition.broadcaster_user_id then
+                logger(logger.INFO, 'Twitch: unsubscribed from event ' .. data.type)
+                self._api:delete('/eventsub/subscriptions?id=' .. data.id)
+                self.active_subscriptions[key] = nil
+            end
+        end
+    end
+
+    instance.unsubscribe_chat = function(self, broadcaster_user_id)
+        broadcaster_user_id = broadcaster_user_id or self.user_id
+
+        logger(logger.INFO, 'Twitch: leaving chat of broadcaster ' .. broadcaster_user_id)
+
+        self:unsubscribe('channel.chat.message', broadcaster_user_id)
+        self:unsubscribe('channel.chat.message_delete', broadcaster_user_id)
+        self:unsubscribe('channel.chat.clear', broadcaster_user_id)
+        self:unsubscribe('channel.chat.clear_user_messages', broadcaster_user_id)
+        if broadcaster_user_id ~= self.user_id then
+            self:unsubscribe('channel.chat.notification', broadcaster_user_id)
+        end
+        self:unsubscribe('automod.message.hold', broadcaster_user_id)
+        self:unsubscribe('automod.message.update', broadcaster_user_id)
+    end
+
+    instance.resolve_user = function(self, user)
+        if self._user_cache[user] then
+            return self._user_cache[user]
+        end
+
+        local promise
+        if tonumber(user) then
+            promise = self._api:get('/users?id=' .. user)
+        else
+            promise = self._api:get('/users?login=' .. user)
+        end
+
+        local result = promise:wait()
+        if result.ok then
+            local body = util.from_json(result.body)
+            for _, data in ipairs(body.data) do
+                logger(logger.INFO, 'Twitch: resolved user', user, 'to', data.id, '/', data.login)
+                self._user_cache[data.id] = data
+                self._user_cache[data.login] = data
+            end
+        end
+
+        return self._user_cache[user]
     end
 
     instance.tick_inputs = function(self, clock)
@@ -266,37 +457,19 @@ local twitch_connector = function()
         local metatype = metadata.message_type
 
         if metatype == 'session_welcome' then
-            self:_update_state(instance.SUBSCRIBING)
-
             self.api_id = payload.session.id
             self.api_transport = { method = 'websocket', session_id = payload.session.id }
             self.api_keepalive = payload.session.keepalive_timeout_seconds
 
-            local function do_subscribe(event, version, condition)
-                version = version or '1'
-                condition = condition or { broadcaster_user_id = self.user_id }
+            self:_update_state(self.SUBSCRIBING)
 
-                local ok, err = self:_do_subscribe(event, version, condition)
-                if ok then
-                    logger(logger.INFO, 'Twitch: subscribed to event ' .. event)
-                else
-                    logger(logger.WARNING, 'Twitch: unable to subscribe to event ' .. event .. ': ' .. err)
-                end
+            -- Give the user a chance to do their own subscribing
+            if self.on_initial_subscribe then
+                self:on_initial_subscribe()
+            else
+                self:subscribe_all()
+                self:subscribe_chat()
             end
-
-            do_subscribe('channel.follow', 2, { broadcaster_user_id = self.user_id, moderator_user_id = self.user_id })
-            do_subscribe('channel.subscribe')
-            do_subscribe('channel.subscription.end')
-            do_subscribe('channel.subscription.gift')
-            do_subscribe('channel.subscription.message')
-            do_subscribe('channel.cheer')
-            do_subscribe('channel.channel_points_custom_reward_redemption.add')
-            local chat_condition = { broadcaster_user_id = self.user_id, user_id = self.user_id }
-            do_subscribe('channel.chat.clear', 1, chat_condition )
-            do_subscribe('channel.chat.clear_user_messages', 1, chat_condition )
-            do_subscribe('channel.chat.message', 1, chat_condition )
-            do_subscribe('channel.chat.message_delete', 1, chat_condition )
-            do_subscribe('channel.chat.notification', 1, chat_condition )
 
             self:_update_state(self.ACTIVE)
         elseif metatype == 'session_keepalive' then
@@ -317,30 +490,41 @@ local twitch_connector = function()
             end
 
             if subtype == 'channel.follow' then
-                notify('on_follow', event.broadcaster_user_name, event.user_name, event.user_id)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_follow', event.broadcaster_user_name, user)
             elseif subtype == 'channel.subscribe' then
-                notify('on_subscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.is_gift)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_subscribe', event.broadcaster_user_name, user, event.tier, event.is_gift)
             elseif subtype == 'channel.subscription.end' then
-                notify('on_unsubscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.is_gift)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_unsubscribe', event.broadcaster_user_name, user, event.tier, event.is_gift)
             elseif subtype == 'channel.subscription.gift' then
-                notify('on_subscription_gift', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.total, event.cumulative_total)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_subscription_gift', event.broadcaster_user_name, user, event.tier, event.total, event.cumulative_total)
             elseif subtype == 'channel.subscription.message' then
-                notify('on_resubscribe', event.broadcaster_user_name, event.user_name, event.user_id, event.tier, event.cumulative_months, event.streak_months, event.message.text)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_resubscribe', event.broadcaster_user_name, user, event.tier, event.cumulative_months, event.streak_months, event.message.text)
             elseif subtype == 'channel.cheer' then
-                notify('on_cheer', event.broadcaster_user_name, event.user_name, event.user_id, event.bits, event.message)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_cheer', event.broadcaster_user_name, user, event.bits, event.message)
             elseif subtype == 'channel.channel_points_custom_reward_redemption.add' then
-                notify('on_channel_points', event.broadcaster_user_name, event.user_name, event.user_id, event.reward.cost, event.reward.title, event.user_input)
+                local user = { id = event.user_id, name = event.user_name, login = event.user_login }
+                notify('on_channel_points', event.broadcaster_user_name, user, event.reward.cost, event.reward.title, event.user_input)
             elseif subtype == 'channel.chat.clear' then
                 notify('on_channel_chat_clear', event.broadcaster_user_name)
-            elseif subtype == 'channel.chat.clear_user_messages' then
-                local target = { id = event.target_user_id, name = event.target_user_name, login = event.target_user_login }
-                notify('on_channel_chat_clear_user_messages', event.broadcaster_user_name, target)
             elseif subtype == 'channel.chat.message' then
                 local chatter = { id = event.chatter_user_id, name = event.chatter_user_name, login = event.chatter_user_login, color = event.color }
-                notify('on_channel_chat_message', event.broadcaster_user_name, event.message_id, chatter, event.message, event.reply)
+                local extra = { cheer = event.cheer, reply = event.reply, redeem = event.channel_points_custom_reward_id }
+                if event.source_broadcaster_user_id then
+                    extra.source = { id = event.source_broadcaster_user_id, name = event.source_broadcaster_user_name, login = event.source_broadcaster_user_login }
+                end
+                notify('on_channel_chat_message', event.broadcaster_user_name, event.message_id, chatter, event.message, extra)
             elseif subtype == 'channel.chat.message_delete' then
                 local target = { id = event.target_user_id, name = event.target_user_name, login = event.target_user_login }
                 notify('on_channel_chat_message_delete', event.broadcaster_user_name, event.message_id, target)
+            elseif subtype == 'channel.chat.clear_user_messages' then
+                local target = { id = event.target_user_id, name = event.target_user_name, login = event.target_user_login }
+                notify('on_channel_chat_message_delete', event.broadcaster_user_name, nil, target)
             elseif subtype == 'channel.chat.notification' then
                 notify('on_channel_chat_notification', event.broadcaster_user_name, event)
             else
@@ -358,6 +542,7 @@ local twitch_connector = function()
     end
 
     instance._ws.on_connect = function(ws)
+        instance.active_subscriptions = {}
         instance:_update_state(instance.AWAITING_WELCOME)
     end
 

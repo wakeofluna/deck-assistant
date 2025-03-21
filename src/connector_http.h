@@ -46,6 +46,7 @@ public:
 private:
 	static int _lua_get(lua_State* L);
 	static int _lua_post(lua_State* L);
+	static int _lua_delete(lua_State* L);
 	static int _lua_set_header(lua_State* L);
 	static int _lua_clear_header(lua_State* L);
 

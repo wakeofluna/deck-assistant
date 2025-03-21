@@ -372,6 +372,9 @@ void ConnectorHttp::init_class_table(lua_State* L)
 	lua_pushcfunction(L, &_lua_post);
 	lua_setfield(L, -2, "post");
 
+	lua_pushcfunction(L, &_lua_delete);
+	lua_setfield(L, -2, "delete");
+
 	lua_pushcfunction(L, &_lua_set_header);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -3, "add_header");
@@ -532,7 +535,7 @@ int ConnectorHttp::_lua_get(lua_State* L)
 	assert(self->queue_request(L, std::move(payload)));
 
 	if (!self->m_enabled)
-		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "HttpConnector request queued but connector is disabled");
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "HttpConnector GET request queued but connector is disabled");
 
 	return 1;
 }
@@ -568,7 +571,25 @@ int ConnectorHttp::_lua_post(lua_State* L)
 	assert(self->queue_request(L, std::move(payload)));
 
 	if (!self->m_enabled)
-		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "HttpConnector request queued but connector is disabled");
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "HttpConnector POST request queued but connector is disabled");
+
+	return 1;
+}
+
+int ConnectorHttp::_lua_delete(lua_State* L)
+{
+	ConnectorHttp* self           = from_stack(L, 1);
+	std::string_view request_path = LuaHelpers::check_arg_string(L, 2);
+	int const htype               = lua_type(L, 3);
+	luaL_argcheck(L, (htype == LUA_TTABLE || htype == LUA_TNONE), 3, "GET extra headers must be a table");
+
+	luaL_checktype(L, 4, LUA_TNONE);
+
+	util::BlobBuffer payload = self->compose_payload(L, request_path, "DELETE", 3, std::string_view(), std::string_view());
+	assert(self->queue_request(L, std::move(payload)));
+
+	if (!self->m_enabled)
+		DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "HttpConnector DELETE request queued but connector is disabled");
 
 	return 1;
 }
