@@ -353,14 +353,19 @@ int DeckModule::_lua_create_connector(lua_State* L)
 		{
 			lua_pushvalue(L, -2);
 			lua_pushvalue(L, 4);
-			LuaHelpers::pcall(L, 2, 0);
+			lua_pushboolean(L, connector_exists);
+			LuaHelpers::pcall(L, 3, 0);
 		}
 		else
 		{
 			// No apply_settings function, just copy the table values using newindex
 			lua_pop(L, 1);
-			lua_pushvalue(L, 4);
-			LuaHelpers::copy_table_fields(L);
+			
+			if (!connector_exists)
+			{
+				lua_pushvalue(L, 4);
+				LuaHelpers::copy_table_fields(L);
+			}
 		}
 	}
 
