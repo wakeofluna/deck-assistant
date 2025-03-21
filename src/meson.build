@@ -43,10 +43,7 @@ test_sources = files(
 
 builtin_sources = files(
     'builtins/Vera.ttf',
-    'builtins/builtins.lua',
-    'builtins/connectors.lua',
     'builtins/deck_assistant.svg',
-    'builtins/main_window_script.lua',
     'builtins/oauth2_callback.html',
 )
 

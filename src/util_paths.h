@@ -38,6 +38,7 @@ public:
 	std::filesystem::path find_data_file(std::string_view const& file_name, bool allow_local, bool allow_home, bool allow_system) const;
 	std::filesystem::path find_config_file(std::string_view const& file_name, bool allow_home) const;
 	std::filesystem::path find_executable(std::string_view const& file_name, bool allow_path) const;
+	std::filesystem::path find_script_file(std::string_view const& file_name, bool allow_local, bool allow_home, bool allow_system) const;
 
 	std::filesystem::path const& get_sandbox_dir() const;
 	inline std::filesystem::path const& get_user_data_dir() const { return m_user_data_dir; }
@@ -51,6 +52,8 @@ private:
 	std::filesystem::path m_sandbox_dir;
 	std::filesystem::path m_user_data_dir;
 	std::filesystem::path m_user_config_dir;
+	std::filesystem::path m_exec_dir;
+	std::filesystem::path m_exec_script_dir;
 	std::vector<std::filesystem::path> m_system_path_dirs;
 	std::vector<std::filesystem::path> m_system_data_dirs;
 };

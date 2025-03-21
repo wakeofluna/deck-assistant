@@ -1,10 +1,11 @@
 local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
-local builtins = require('deck.builtins')
+local widgets = require('deck.widgets')
 local ALIGN_CENTER = ALIGN_CENTER
+require('deck.connectors')
 
-builtins.default_font.size = 20
+widgets.default_font.size = 20
 
 --logger.min_level = logger.DEBUG
 logger.on_message = function(level, message)
@@ -90,7 +91,7 @@ local render_state
 
 local function set_window_title(win, title)
     win.title = title
-    local lbl = builtins.create_label(title)
+    local lbl = widgets.create_label(title)
     lbl.bgcolor = deck:Colour 'indigo'
     lbl.alignment = ALIGN_CENTER
     win.main_widget:add_child(lbl, 0, 0, 1, win.main_widget.cols)
@@ -105,7 +106,7 @@ local function show_settings_window()
     set_window_title(secondary_window, 'Twitch Marathon Timer - Settings')
 
     local function add_setting(row, title, key)
-        local lbl = builtins.create_label(title)
+        local lbl = widgets.create_label(title)
         grid:add_child(lbl, row, 0)
 
         local is_numerical = type(SETTINGS[key]) == 'number'
@@ -118,7 +119,7 @@ local function show_settings_window()
             initial_text = SETTINGS[key]
         end
 
-        local input_value = builtins.create_input_field(initial_text)
+        local input_value = widgets.create_input_field(initial_text)
         input_value.numerical = is_numerical
         input_value.input_length = 32
         input_value.on_blur = function(self)
@@ -143,7 +144,7 @@ local function show_settings_window()
         grid:add_child(input_value, row, 1)
 
         if not input_value.numerical then
-            local btn = builtins.create_button('Paste', function(self)
+            local btn = widgets.create_button('Paste', function(self)
                 local txt = util.clipboard_text()
                 input_value:set_text(txt)
                 if SETTINGS[key] ~= txt then
@@ -206,7 +207,7 @@ local function show_event_log_window(log_name)
 
     local col = 0
     for _, def in ipairs(defs) do
-        local lbl = builtins.create_label(def.title)
+        local lbl = widgets.create_label(def.title)
         grid:add_child(lbl, 1, col, 1, def.cols or 1)
         col = col + (def.cols or 1)
     end
@@ -216,7 +217,7 @@ local function show_event_log_window(log_name)
         for _, def in ipairs(defs) do
             local value = item[def.field]
             if value then
-                local lbl = builtins.create_label(tostring(item[def.field]))
+                local lbl = widgets.create_label(tostring(item[def.field]))
                 grid:add_child(lbl, row + 1, col, 1, def.cols or 1)
             end
             col = col + (def.cols or 1)
@@ -264,11 +265,11 @@ local function show_correction_window()
     set_window_title(correction_window, 'Twitch Marathon Timer - Corrections')
 
     local function add_field(desc, row, col)
-        local inp = builtins.create_input_field('0')
+        local inp = widgets.create_input_field('0')
         inp.numerical = true
         inp.input_length = 8
         grid:add_child(inp, row, col)
-        local lbl = builtins.create_label(desc)
+        local lbl = widgets.create_label(desc)
         grid:add_child(lbl, row, col + 1)
         return inp
     end
@@ -284,26 +285,26 @@ local function show_correction_window()
     fields.donations = add_field('Donation ($)', 8, 0)
 
     local btn
-    btn = builtins.create_button('Adjust WITH changing timers', function() perform_corrections(fields, true) end)
+    btn = widgets.create_button('Adjust WITH changing timers', function() perform_corrections(fields, true) end)
     grid:add_child(btn, -2, 0, 1, 2)
-    btn = builtins.create_button('Adjust WITHOUT changing timers', function() perform_corrections(fields, false) end)
+    btn = widgets.create_button('Adjust WITHOUT changing timers', function() perform_corrections(fields, false) end)
     grid:add_child(btn, -1, 0, 1, 2)
 
     grid:relayout()
     correction_window.visible = true
 end
 
-local grid = builtins.create_grid(1, 1)
+local grid = widgets.create_grid(1, 1)
 grid.bgcolor = deck:Colour 'Black'
-builtins.connect(grid, secondary_window)
+widgets.connect(grid, secondary_window)
 
-grid = builtins.create_grid(1, 1)
+grid = widgets.create_grid(1, 1)
 grid.bgcolor = deck:Colour 'Black'
-builtins.connect(grid, correction_window)
+widgets.connect(grid, correction_window)
 
-grid = builtins.create_grid(14, 6)
+grid = widgets.create_grid(14, 6)
 grid.bgcolor = deck:Colour 'Black'
-builtins.connect(grid, main_window)
+widgets.connect(grid, main_window)
 
 set_window_title(main_window, 'Twitch Marathon Timer')
 
@@ -311,9 +312,9 @@ local row = 0
 
 local function create_key_value(text)
     row = row + 1
-    local key = builtins.create_label(text)
+    local key = widgets.create_label(text)
     grid:add_child(key, row, 0, 1, 2)
-    local value = builtins.create_label('...')
+    local value = widgets.create_label('...')
     value.alignment = ALIGN_CENTER
     grid:add_child(value, row, 2, 1, 2)
     return value, key
@@ -328,15 +329,15 @@ lbl_paused.visible = false
 lbl_paused_at.visible = false
 
 local lbl_online_time = create_key_value('Online time:')
-local start_button = builtins.create_button('Start')
+local start_button = widgets.create_button('Start')
 grid:add_child(start_button, row, 4)
-local stop_button = builtins.create_button('Stop')
+local stop_button = widgets.create_button('Stop')
 grid:add_child(stop_button, row, 5)
 
 local lbl_active_time = create_key_value('Active time:')
-local resume_button = builtins.create_button('Resume')
+local resume_button = widgets.create_button('Resume')
 grid:add_child(resume_button, row, 4)
-local pause_button = builtins.create_button('Pause')
+local pause_button = widgets.create_button('Pause')
 grid:add_child(pause_button, row, 5)
 
 local lbl_remaining_time = create_key_value('Time remaining:')
@@ -344,15 +345,15 @@ local lbl_remaining_time = create_key_value('Time remaining:')
 row = row + 1
 
 local lbl_follows = create_key_value('Follows:')
-grid:add_child(builtins.create_button('Log', function() show_event_log_window('follows') end), row, 4)
+grid:add_child(widgets.create_button('Log', function() show_event_log_window('follows') end), row, 4)
 local lbl_subs = create_key_value('Subs:')
-grid:add_child(builtins.create_button('Log', function() show_event_log_window('subs') end), row, 4)
+grid:add_child(widgets.create_button('Log', function() show_event_log_window('subs') end), row, 4)
 local lbl_bits = create_key_value('Bits:')
-grid:add_child(builtins.create_button('Log', function() show_event_log_window('bits') end), row, 4)
+grid:add_child(widgets.create_button('Log', function() show_event_log_window('bits') end), row, 4)
 local lbl_channel_points = create_key_value('Channel points:')
-grid:add_child(builtins.create_button('Log', function() show_event_log_window('redeems') end), row, 4)
+grid:add_child(widgets.create_button('Log', function() show_event_log_window('redeems') end), row, 4)
 local lbl_donations = create_key_value('Donations:')
-grid:add_child(builtins.create_button('Log', function() show_event_log_window('donations') end), row, 4)
+grid:add_child(widgets.create_button('Log', function() show_event_log_window('donations') end), row, 4)
 
 
 local timestamps = {}
@@ -546,7 +547,7 @@ pause_button.callback = function(self)
 end
 
 
-local reload_tables_button = builtins.create_button('Reload', function(self)
+local reload_tables_button = widgets.create_button('Reload', function(self)
     reload_settings_table()
     reload_stats_table()
     render_state()
@@ -557,12 +558,12 @@ local reload_tables_button = builtins.create_button('Reload', function(self)
 end)
 grid:add_child(reload_tables_button, -1, 0)
 
-local correct_button = builtins.create_button('Correct', function(self)
+local correct_button = widgets.create_button('Correct', function(self)
     show_correction_window()
 end)
 grid:add_child(correct_button, -1, 1)
 
-local obs_button = builtins.create_button('OBS', function(self)
+local obs_button = widgets.create_button('OBS', function(self)
     if not SETTINGS.obs_password then
         show_settings_window()
     elseif not obs.enabled then
@@ -602,7 +603,7 @@ obs.on_disconnect = function(self)
     self.connected = false
 end
 
-local twitch_button = builtins.create_button('Twitch', function(self)
+local twitch_button = widgets.create_button('Twitch', function(self)
     twitch.enabled = not twitch.enabled
 end)
 twitch_button.bgcolor = color_disabled
@@ -748,7 +749,7 @@ twitch.on_channel_points = function(self, channel, user_name, user_id, points, t
 end
 
 
-local settings_button = builtins.create_button('Settings', function(self)
+local settings_button = widgets.create_button('Settings', function(self)
     show_settings_window()
 end)
 grid:add_child(settings_button, 1, -1)

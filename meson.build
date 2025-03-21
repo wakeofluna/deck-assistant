@@ -15,6 +15,10 @@ feature_gnutls = get_option('gnutls')
 feature_ssl = get_option('ssl')
 feature_vnc = get_option('vnc')
 
+if get_option('buildtype') == 'debug'
+    buildflags += '-D_DEBUG'
+endif
+
 if host_machine.system() == 'windows'
     do_fallbacks = true
 else
@@ -22,29 +26,17 @@ else
 endif
 
 # MIT license
-lua = dependency(
-    'luajit',
-    version: '>=2.1.0',
-    required: feature_luajit,
-)
+lua = dependency('luajit', version: '>=2.1.0', required: feature_luajit)
 
 if lua.found()
     buildflags += '-DHAVE_LUAJIT'
 else
     # MIT license
-    lua = dependency(
-        'lua5.1',
-        version: '>=5.1.5',
-        required: false,
-    )
+    lua = dependency('lua5.1', version: '>=5.1.5', required: false)
 endif
 
 if not lua.found()
-    lua = dependency(
-        'luajit-2.1',
-        required: true,
-        allow_fallback: do_fallbacks,
-    )
+    lua = dependency('luajit-2.1', required: true, allow_fallback: do_fallbacks)
     buildflags += '-DHAVE_LUAJIT'
 endif
 
@@ -85,11 +77,7 @@ sdl_ttf = dependency(
 )
 
 # LGPL-2.1 or later
-ssl = dependency(
-    'gnutls',
-    disabler: false,
-    required: feature_gnutls,
-)
+ssl = dependency('gnutls', disabler: false, required: feature_gnutls)
 
 if ssl.found()
     buildflags += '-DHAVE_GNUTLS'
@@ -103,7 +91,7 @@ else
         default_options: ['default_library=shared'],
     )
     if ssl.found()
-        buildflags += ['-DHAVE_OPENSSL','-DOPENSSL_NO_DEPRECATED']
+        buildflags += ['-DHAVE_OPENSSL', '-DOPENSSL_NO_DEPRECATED']
     endif
 endif
 
@@ -155,3 +143,4 @@ summary(
 
 subdir('tools')
 subdir('src')
+subdir('scripts')

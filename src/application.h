@@ -20,7 +20,6 @@
 #define DECK_ASSISTANT_APPLICATION_H
 
 #include <memory_resource>
-#include <string>
 #include <string_view>
 #include <vector>
 
@@ -50,11 +49,11 @@ public:
 	bool init(std::vector<std::string_view>&& args);
 	int run();
 
-	static void build_environment_tables(lua_State* L, util::Paths const* paths);
+	static void build_initial_environment(lua_State* L, util::Paths const* paths);
 
 private:
 	static void install_function_overrides(lua_State* L);
-	static void build_environment_table(lua_State* L, LuaHelpers::Trust trust, util::Paths const* paths);
+	static void build_environment_table(lua_State* L, util::Paths const* paths);
 	static void process_yielded_functions(lua_State* L, long long clock);
 
 private:

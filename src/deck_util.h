@@ -30,7 +30,7 @@ class Paths;
 class DeckUtil : public LuaClass<DeckUtil>
 {
 public:
-	DeckUtil(LuaHelpers::Trust trust, util::Paths const& paths);
+	DeckUtil(util::Paths const& paths);
 
 	static char const* LUA_TYPENAME;
 
@@ -63,7 +63,6 @@ private:
 	static int _lua_open_browser(lua_State* L);
 
 	util::Paths const& m_paths;
-	LuaHelpers::Trust m_trust;
 };
 
 #endif // DECK_ASSISTANT_DECK_UTIL_H

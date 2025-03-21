@@ -1,9 +1,10 @@
 local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
-local builtins = require('deck.builtins')
+local widgets = require('deck.widgets')
+require('deck.connectors')
 
-builtins.default_font.size = 20
+widgets.default_font.size = 20
 
 local MODE_COUNTDOWN = 'Countdown'
 local MODE_STOPWATCH = 'Stopwatch'
@@ -21,29 +22,29 @@ obs = deck:Connector('OBS', 'Obs', { enabled = false })
 main_window = deck:Connector('Window', 'MainWindow', { width = 300, height = 175 })
 settings_window = deck:Connector('Window', 'SettingsWindow', { width = 850, height = 200, visible = false, exit_on_close = false })
 
-local grid = builtins.create_grid(4, 3)
+local grid = widgets.create_grid(4, 3)
 grid.bgcolor = deck:Colour 'Black'
-builtins.connect(grid, main_window)
+widgets.connect(grid, main_window)
 
-local start_button = builtins.create_button('Start')
+local start_button = widgets.create_button('Start')
 grid:add_child(start_button, 0, 0)
-local stop_button = builtins.create_button('Stop')
+local stop_button = widgets.create_button('Stop')
 grid:add_child(stop_button, 0, 1)
-local reset_button = builtins.create_button('Reset')
+local reset_button = widgets.create_button('Reset')
 grid:add_child(reset_button, 0, 2)
 
-local time_label = builtins.create_label('00:00:00')
+local time_label = widgets.create_label('00:00:00')
 time_label.alignment = ALIGN_CENTER
-time_label.font = builtins.default_font:clone()
+time_label.font = widgets.default_font:clone()
 time_label.font.size = 48
 grid:add_child(time_label, 1, 0, 2, grid.cols)
 
-local obs_label = builtins.create_label('OBS')
+local obs_label = widgets.create_label('OBS')
 obs_label.alignment = ALIGN_CENTER
 obs_label.bgcolor = color_disabled
 grid:add_child(obs_label, -1, 0)
 
-local settings_button = builtins.create_button('Settings', function(self)
+local settings_button = widgets.create_button('Settings', function(self)
     settings_window.visible = true
 end)
 grid:add_child(settings_button, -1, -1)
@@ -144,14 +145,14 @@ if SETTINGS.obs_password then
 end
 
 
-local grid = builtins.create_grid(6, 3)
+local grid = widgets.create_grid(6, 3)
 grid.bgcolor = deck:Colour 'Black'
 grid.homogeneous = false
-builtins.connect(grid, settings_window)
+widgets.connect(grid, settings_window)
 
-local setting_obs_password_label = builtins.create_label('OBS password')
+local setting_obs_password_label = widgets.create_label('OBS password')
 grid:add_child(setting_obs_password_label, 0, 0)
-local setting_obs_password_inp = builtins.create_input_field(SETTINGS.obs_password or '')
+local setting_obs_password_inp = widgets.create_input_field(SETTINGS.obs_password or '')
 setting_obs_password_inp.input_length = 16
 setting_obs_password_inp.on_blur = function(self)
     SETTINGS.obs_password = self.text
@@ -160,15 +161,15 @@ setting_obs_password_inp.on_blur = function(self)
     obs.enabled = (obs.password ~= '')
 end
 grid:add_child(setting_obs_password_inp, 0, 1)
-local setting_obs_password_paste = builtins.create_button('Paste', function(self)
+local setting_obs_password_paste = widgets.create_button('Paste', function(self)
     setting_obs_password_inp:set_text(util.clipboard_text())
     setting_obs_password_inp:on_blur()
 end)
 grid:add_child(setting_obs_password_paste, 0, 2)
 
-local setting_obs_source_label = builtins.create_label('OBS timer source name')
+local setting_obs_source_label = widgets.create_label('OBS timer source name')
 grid:add_child(setting_obs_source_label, 1, 0)
-local setting_obs_source_inp = builtins.create_input_field(SETTINGS.obs_source or '')
+local setting_obs_source_inp = widgets.create_input_field(SETTINGS.obs_source or '')
 setting_obs_source_inp.input_length = 32
 setting_obs_source_inp.on_blur = function(self)
     SETTINGS.obs_source = self.text
@@ -176,17 +177,17 @@ setting_obs_source_inp.on_blur = function(self)
     render_outputs(true)
 end
 grid:add_child(setting_obs_source_inp, 1, 1)
-local setting_obs_source_paste = builtins.create_button('Paste', function(self)
+local setting_obs_source_paste = widgets.create_button('Paste', function(self)
     setting_obs_source_inp:set_text(util.clipboard_text())
     setting_obs_source_inp:on_blur()
 end)
 grid:add_child(setting_obs_source_paste, 1, 2)
 
-local setting_mode_label = builtins.create_label('Counter mode')
+local setting_mode_label = widgets.create_label('Counter mode')
 grid:add_child(setting_mode_label, 2, 0)
-local setting_mode_value = builtins.create_label(SETTINGS.mode)
+local setting_mode_value = widgets.create_label(SETTINGS.mode)
 grid:add_child(setting_mode_value, 2, 1)
-local setting_mode_swap = builtins.create_button('Swap Mode', function(self)
+local setting_mode_swap = widgets.create_button('Swap Mode', function(self)
     if SETTINGS.mode == MODE_COUNTDOWN then
         SETTINGS.mode = MODE_STOPWATCH
     else
@@ -198,12 +199,12 @@ local setting_mode_swap = builtins.create_button('Swap Mode', function(self)
 end)
 grid:add_child(setting_mode_swap, 2, 2)
 
-local setting_countdown_time_label = builtins.create_label('Countdown time')
+local setting_countdown_time_label = widgets.create_label('Countdown time')
 grid:add_child(setting_countdown_time_label, 3, 0)
 
 local start_time_parts = fractionalize_time(SETTINGS.countdown_time)
 local function add_time_component(box, idx, postfix, length)
-    local inp = builtins.create_input_field(tostring(start_time_parts[idx]))
+    local inp = widgets.create_input_field(tostring(start_time_parts[idx]))
     inp.numerical = true
     inp.input_length = length
     inp.on_blur = function(self)
@@ -213,10 +214,10 @@ local function add_time_component(box, idx, postfix, length)
         render_outputs(true)
     end
     box:add_child(inp)
-    local lbl = builtins.create_label(postfix)
+    local lbl = widgets.create_label(postfix)
     box:add_child(lbl)
 end
-local hbox = builtins.create_hbox()
+local hbox = widgets.create_hbox()
 add_time_component(hbox, 1, 'h  ', 2)
 add_time_component(hbox, 2, 'm  ', 2)
 add_time_component(hbox, 3, 's  ', 2)
@@ -224,9 +225,9 @@ add_time_component(hbox, 4, 'msec  ', 3)
 hbox:relayout()
 grid:add_child(hbox, 3, 1)
 
-local setting_countdown_finished_label = builtins.create_label('Text to display when countdown time reaches zero:')
+local setting_countdown_finished_label = widgets.create_label('Text to display when countdown time reaches zero:')
 grid:add_child(setting_countdown_finished_label, 4, 0, 1, grid.cols)
-local setting_countdown_finished_inp = builtins.create_input_field(SETTINGS.countdown_finished)
+local setting_countdown_finished_inp = widgets.create_input_field(SETTINGS.countdown_finished)
 setting_countdown_finished_inp.input_length = 48
 setting_countdown_finished_inp.on_blur = function(self)
     SETTINGS.countdown_finished = self.text

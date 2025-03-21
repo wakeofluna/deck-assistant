@@ -48,24 +48,12 @@ struct ErrorContext
 	int line;
 };
 
-enum class Trust : char
-{
-	// Cannot do anything scary: call debug commands, access the filesystem outside the sandbox, make network connections outside localhost
-	Untrusted = 1,
-
-	// Can load scripts (max level: trusted), can make network connections
-	Trusted = 2,
-
-	// Can do everything
-	Admin = 3,
-};
-
 int absidx(lua_State* L, int idx);
 
 void push_standard_weak_key_metatable(lua_State* L);
 void push_standard_weak_value_metatable(lua_State* L);
 void push_yielded_calls_table(lua_State* L);
-void push_global_environment_table(lua_State* L, Trust trust);
+void push_global_environment_table(lua_State* L);
 
 void push_class_table(lua_State* L, int idx);
 void push_instance_table(lua_State* L, int idx);
@@ -86,9 +74,9 @@ void create_callback_warning(lua_State* L, std::string_view const& function_name
 template <typename... ARGS>
 bool emit_event(lua_State* L, int idx, char const* function_name, ARGS&&... args);
 
-bool load_script(lua_State* L, std::filesystem::path const& file, Trust trust, bool log_error = true);
-bool load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, Trust trust, bool log_error = true);
-void assign_new_env_table(lua_State* L, int idx, char const* chunk_name, Trust trust);
+bool load_script(lua_State* L, std::filesystem::path const& file, bool log_error = true);
+bool load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, bool log_error = true);
+void assign_new_env_table(lua_State* L, int idx, char const* chunk_name);
 
 bool pcall(lua_State* L, int nargs, int nresults, bool log_error = true);
 bool yieldable_call(lua_State* L, int nargs, bool log_error = true);

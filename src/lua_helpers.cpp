@@ -29,9 +29,7 @@ namespace
 constexpr char const k_weak_key_metatable_key[]   = "deck:WeakKeyMetatable";
 constexpr char const k_weak_value_metatable_key[] = "deck:WeakValueMetatable";
 constexpr char const k_yielded_calls_table_key[]  = "deck:YieldedCalls";
-constexpr char const k_untrusted_table_name[]     = "deck:EnvironmentUntrusted";
-constexpr char const k_trusted_table_name[]       = "deck:EnvironmentTrusted";
-constexpr char const k_admin_table_name[]         = "deck:EnvironmentAdmin";
+constexpr char const k_global_env_table_name[]    = "deck:EnvironmentGlobal";
 
 LuaHelpers::ErrorContext g_last_error_context;
 
@@ -186,38 +184,15 @@ void LuaHelpers::push_yielded_calls_table(lua_State* L)
 	}
 }
 
-void LuaHelpers::push_global_environment_table(lua_State* L, Trust trust)
+void LuaHelpers::push_global_environment_table(lua_State* L)
 {
-	char const* table_name = nullptr;
-
-	switch (trust)
+	lua_getfield(L, LUA_REGISTRYINDEX, k_global_env_table_name);
+	if (lua_type(L, -1) != LUA_TTABLE)
 	{
-		case Trust::Untrusted:
-			table_name = k_untrusted_table_name;
-			break;
-		case Trust::Trusted:
-			table_name = k_trusted_table_name;
-			break;
-		case Trust::Admin:
-			table_name = k_admin_table_name;
-			break;
-	}
-
-	if (table_name == nullptr)
-	{
-		assert(false && "Invalid trust value while pushing global environment table");
-		lua_pushnil(L);
-	}
-	else
-	{
-		lua_getfield(L, LUA_REGISTRYINDEX, table_name);
-		if (lua_type(L, -1) != LUA_TTABLE)
-		{
-			lua_pop(L, 1);
-			lua_createtable(L, 0, 48);
-			lua_pushvalue(L, -1);
-			lua_setfield(L, LUA_REGISTRYINDEX, table_name);
-		}
+		lua_pop(L, 1);
+		lua_createtable(L, 0, 48);
+		lua_pushvalue(L, -1);
+		lua_setfield(L, LUA_REGISTRYINDEX, k_global_env_table_name);
 	}
 }
 
@@ -432,7 +407,7 @@ void LuaHelpers::create_callback_warning(lua_State* L, std::string_view const& f
 	lua_settable(L, -3);
 }
 
-bool LuaHelpers::load_script(lua_State* L, std::filesystem::path const& file, Trust trust, bool log_error)
+bool LuaHelpers::load_script(lua_State* L, std::filesystem::path const& file, bool log_error)
 {
 	std::string file_name;
 	file_name.reserve(64);
@@ -467,11 +442,11 @@ bool LuaHelpers::load_script(lua_State* L, std::filesystem::path const& file, Tr
 		return false;
 	}
 
-	assign_new_env_table(L, -1, file_name.c_str(), trust);
+	assign_new_env_table(L, -1, file_name.c_str());
 	return true;
 }
 
-bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, Trust trust, bool log_error)
+bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::string_view const& script, bool log_error)
 {
 	g_last_error_context.clear();
 	g_last_error_context.result = luaL_loadbuffer(L, script.data(), script.size(), chunk_name);
@@ -487,11 +462,11 @@ bool LuaHelpers::load_script_inline(lua_State* L, char const* chunk_name, std::s
 		return false;
 	}
 
-	assign_new_env_table(L, -1, chunk_name, trust);
+	assign_new_env_table(L, -1, chunk_name);
 	return true;
 }
 
-void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_name, Trust trust)
+void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_name)
 {
 	idx = absidx(L, idx);
 	assert(lua_isfunction(L, idx));
@@ -546,14 +521,14 @@ void LuaHelpers::assign_new_env_table(lua_State* L, int idx, char const* chunk_n
 
 		// Modify the trust table to what we want
 		lua_pop(L, 1);
-		push_global_environment_table(L, trust);
+		push_global_environment_table(L);
 
 		lua_pushcclosure(L, &_lua_upvalue_index, nr_tables);
 	}
 	else
 	{
 		// This is a new protected ENV, no inheritance
-		push_global_environment_table(L, trust);
+		push_global_environment_table(L);
 		lua_pushcclosure(L, &_lua_upvalue_index, 1);
 	}
 

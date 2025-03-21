@@ -17,6 +17,7 @@
  */
 
 #include "util_paths.h"
+#include "SDL_filesystem.h"
 #include <cassert>
 #include <cstdlib>
 
@@ -206,6 +207,24 @@ void Paths::resolve_standard_paths()
 	append_and_or_filter_paths(m_system_path_dirs, nullptr, true);
 
 	append_and_or_filter_paths(m_system_data_dirs, "deck-assistant", true);
+
+	char* base_path = SDL_GetBasePath();
+	if (base_path)
+	{
+		m_exec_dir = base_path;
+		m_exec_dir.make_preferred();
+		SDL_free(base_path);
+	}
+	else
+	{
+		m_exec_dir = std::filesystem::current_path();
+	}
+
+#ifdef _DEBUG
+	m_exec_script_dir = std::filesystem::current_path() / "scripts";
+#else
+	m_exec_script_dir = m_exec_dir / "scripts";
+#endif
 }
 
 void Paths::set_sandbox_path(std::filesystem::path path)
@@ -257,6 +276,22 @@ std::filesystem::path Paths::find_executable(std::string_view const& file_name, 
 		for (std::filesystem::path const& base : m_system_path_dirs)
 			if (find_file_in(base, file_name, target, false))
 				return target;
+
+	return std::filesystem::path();
+}
+
+std::filesystem::path Paths::find_script_file(std::string_view const& file_name, bool allow_local, bool allow_home, bool allow_system) const
+{
+	std::filesystem::path target;
+
+	if (allow_local && find_file_in(m_sandbox_dir, file_name, target))
+		return target;
+
+	if (allow_home && find_file_in(m_user_config_dir, file_name, target))
+		return target;
+
+	if (allow_system && find_file_in(m_exec_script_dir, file_name, target))
+		return target;
 
 	return std::filesystem::path();
 }

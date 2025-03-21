@@ -127,9 +127,8 @@ bool is_ascii(std::string_view const& str, bool allow_empty = false)
 
 char const* DeckUtil::LUA_TYPENAME = "deck:DeckUtil";
 
-DeckUtil::DeckUtil(LuaHelpers::Trust trust, util::Paths const& paths)
+DeckUtil::DeckUtil(util::Paths const& paths)
     : m_paths(paths)
-    , m_trust(trust)
 {
 }
 
@@ -184,23 +183,8 @@ void DeckUtil::init_class_table(lua_State* L)
 
 void DeckUtil::init_instance_table(lua_State* L)
 {
-	switch (m_trust)
-	{
-		case LuaHelpers::Trust::Trusted:
-			lua_pushliteral(L, "Trusted");
-			break;
-		case LuaHelpers::Trust::Untrusted:
-			lua_pushliteral(L, "Untrusted");
-			break;
-		case LuaHelpers::Trust::Admin:
-			lua_pushliteral(L, "Admin");
-			break;
-	}
-	lua_setfield(L, -2, "trust");
-
 	lua_pushlightuserdata(L, (void*)&m_paths);
-	lua_pushinteger(L, int(m_trust));
-	lua_pushcclosure(L, &_lua_ls, 2);
+	lua_pushcclosure(L, &_lua_ls, 1);
 	lua_setfield(L, -2, "ls");
 
 	lua_pushlightuserdata(L, (void*)&m_paths);
@@ -208,8 +192,7 @@ void DeckUtil::init_instance_table(lua_State* L)
 	lua_setfield(L, -2, "store_secret");
 
 	lua_pushlightuserdata(L, (void*)&m_paths);
-	lua_pushinteger(L, int(m_trust));
-	lua_pushcclosure(L, &_lua_retrieve_secret, 2);
+	lua_pushcclosure(L, &_lua_retrieve_secret, 1);
 	lua_setfield(L, -2, "retrieve_secret");
 
 	lua_pushlightuserdata(L, (void*)&m_paths);
@@ -506,8 +489,7 @@ int DeckUtil::_lua_store_secret(lua_State* L)
 
 int DeckUtil::_lua_retrieve_secret(lua_State* L)
 {
-	util::Paths const* paths      = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
-	LuaHelpers::Trust const trust = static_cast<LuaHelpers::Trust>(lua_tointeger(L, lua_upvalueindex(2)));
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
 
 	std::string_view key = LuaHelpers::check_arg_string(L, 1);
 
@@ -530,9 +512,6 @@ int DeckUtil::_lua_retrieve_secret(lua_State* L)
 				return 1;
 			}
 		}
-
-		if (trust == LuaHelpers::Trust::Untrusted)
-			break;
 	}
 
 	return 0;
@@ -699,30 +678,20 @@ int DeckUtil::_lua_yieldable_call(lua_State* L)
 
 int DeckUtil::_lua_ls(lua_State* L)
 {
-	util::Paths const* paths      = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
-	LuaHelpers::Trust const trust = static_cast<LuaHelpers::Trust>(lua_tointeger(L, lua_upvalueindex(2)));
-
-	std::string_view request = LuaHelpers::check_arg_string_or_none(L, 1);
-	std::filesystem::path request_path(request.empty() ? "." : request);
-
-	// Trust rules:
-	// Untrusted: sandbox only, no symlinks escape
-	// Trusted: sandbox only, but symlinks can escape
-	// Admin: no restrictions
-
+	util::Paths const* paths             = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
 	std::filesystem::path const& sandbox = paths->get_sandbox_dir();
+
+	std::string_view const request = LuaHelpers::check_arg_string_or_none(L, 1);
+	std::filesystem::path const request_path(request.empty() ? "." : request);
 	std::filesystem::path normal_path;
+
 	if (request_path.is_absolute())
 	{
-		if (trust != LuaHelpers::Trust::Admin)
-			luaL_error(L, "absolute paths not allowed");
+		luaL_error(L, "absolute paths not allowed");
+		return 0;
+	}
 
-		normal_path = request_path.lexically_normal();
-	}
-	else
-	{
-		normal_path = (sandbox / request_path).lexically_normal();
-	}
+	normal_path = (sandbox / request_path).lexically_normal();
 
 	std::error_code ec;
 	std::filesystem::path abs_path = std::filesystem::absolute(normal_path, ec);
@@ -736,11 +705,11 @@ int DeckUtil::_lua_ls(lua_State* L)
 	canon_path.make_preferred();
 
 	bool const canon_path_contained = util::Paths::verify_path_contains_path(canon_path, sandbox);
-	if (trust == LuaHelpers::Trust::Untrusted && !canon_path_contained)
+	if (!canon_path_contained)
 		luaL_error(L, "access denied");
 
 	bool const abs_path_contained = util::Paths::verify_path_contains_path(abs_path, sandbox);
-	if (trust != LuaHelpers::Trust::Admin && !abs_path_contained)
+	if (!abs_path_contained)
 		luaL_error(L, "access denied");
 
 	std::filesystem::file_status dir_status = std::filesystem::status(canon_path, ec);
@@ -763,15 +732,6 @@ int DeckUtil::_lua_ls(lua_State* L)
 		std::filesystem::path rel_path = (abs_path_contained ? abs_path : canon_path).lexically_relative(sandbox);
 		lua_pushstring(L, rel_path.generic_string().c_str());
 		lua_setfield(L, -2, "relative");
-	}
-
-	if (trust == LuaHelpers::Trust::Admin)
-	{
-		lua_pushstring(L, abs_path.generic_string().c_str());
-		lua_setfield(L, -2, "absolute");
-
-		lua_pushstring(L, canon_path.generic_string().c_str());
-		lua_setfield(L, -2, "canonical");
 	}
 
 	std::filesystem::directory_iterator dir_end;
@@ -804,12 +764,9 @@ int DeckUtil::_lua_ls(lua_State* L)
 
 	for (; dir_iter != dir_end; ++dir_iter)
 	{
-		if (trust == LuaHelpers::Trust::Untrusted)
-		{
-			std::filesystem::file_status sym_status = dir_iter->symlink_status(ec);
-			if (ec || std::filesystem::is_symlink(sym_status))
-				continue;
-		}
+		std::filesystem::file_status sym_status = dir_iter->symlink_status(ec);
+		if (ec || std::filesystem::is_symlink(sym_status))
+			continue;
 
 		std::filesystem::file_status file_status = dir_iter->status(ec);
 		if (ec)

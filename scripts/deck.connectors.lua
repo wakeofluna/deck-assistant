@@ -1138,3 +1138,5 @@ local ollama_connector = function()
 end
 
 deck.connector_factory.Ollama = ollama_connector
+
+return {}
