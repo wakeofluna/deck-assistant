@@ -65,6 +65,7 @@ private:
 	static int _lua_create_rectangle(lua_State* L);
 	static int _lua_create_rectangle_list(lua_State* L);
 	static int _lua_request_quit(lua_State* L);
+	static int _lua_request_reload(lua_State* L);
 
 private:
 	std::shared_ptr<util::SocketSet> m_socketset;

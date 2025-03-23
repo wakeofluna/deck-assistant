@@ -169,6 +169,9 @@ void DeckModule::init_class_table(lua_State* L)
 	lua_setfield(L, -3, "quit");
 	lua_setfield(L, -2, "exit");
 
+	lua_pushcfunction(L, &DeckModule::_lua_request_reload);
+	lua_setfield(L, -2, "reload");
+
 	DeckConnectorContainer::push_new(L);
 	lua_setfield(L, -2, g_connector_container_name);
 
@@ -507,5 +510,12 @@ int DeckModule::_lua_request_quit(lua_State* L)
 {
 	DeckModule* self = from_stack(L, 1);
 	self->set_exit_requested(lua_tointeger(L, 2));
+	return 0;
+}
+
+int DeckModule::_lua_request_reload(lua_State* L)
+{
+	DeckModule* self = from_stack(L, 1);
+	self->set_reload_requested();
 	return 0;
 }
