@@ -820,6 +820,33 @@ local function widget_base()
 end
 
 
+local function create_color_rect(color, callback)
+    local wdg = widget_base()
+
+    wdg.color = color or deck:Colour { r = 20, g = 20, b = 20, a = 180 }
+    wdg.expand = true
+    wdg.on_click = callback
+
+    wdg.mouse_button = function(self, x, y, button, pressed)
+        if pressed and self.on_click then
+            self:on_click(x, y, button, pressed)
+        end
+    end
+
+    wdg.redraw = function(self, force)
+        if not self.card or force then
+            self.card = deck:Card(self.width, self.height)
+            self.card:clear(self.color)
+        end
+        if self.on_update then
+            self:on_update()
+        end
+    end
+
+    return wdg
+end
+
+
 -- Banged my keyboard for some unique integers
 local BUTTON_NORMAL = 68134
 local BUTTON_PRESSED = 912087
@@ -1259,13 +1286,14 @@ exports.default_font = default_font
 exports.default_container = default_container
 exports.create_window_manager = create_window_manager
 exports.create_grid = create_grid
+exports.create_border = create_border
 exports.create_vbox = create_vbox
 exports.create_hbox = create_hbox
 exports.connect = connect
 exports.disconnect = disconnect
 
 exports.widget_base = widget_base
-exports.create_border = create_border
+exports.create_color_rect = create_color_rect
 exports.create_button = create_button
 exports.create_label = create_label
 exports.create_input_field = create_input_field
