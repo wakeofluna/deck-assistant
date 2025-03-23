@@ -6,6 +6,7 @@ project(
     license: 'GPL-3.0',
     license_files: ['LICENSE'],
     default_options: ['cpp_std=c++20'],
+    meson_version: '>=1.1',
 )
 
 buildflags = []
