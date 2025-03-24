@@ -26,13 +26,47 @@ local function font_preferred_size(font, text, margin)
 end
 
 
-local function default_container()
+local function default_base()
     local self = {}
+
+    self.visible = true
+    self.expand = true
+
+    self.get_preferred_size = function(self)
+        local w, h
+        if self._get_preferred_size then
+            w, h = self:_get_preferred_size()
+        elseif self.card then
+            w, h = self.card
+        end
+        if self.min_width and w < self.min_width then
+            w = self.min_width
+        end
+        if self.min_height and h < self.min_height then
+            h = self.min_height
+        end
+        return w, h
+    end
+
+    self.set_visible = function(self, visible)
+        assert(visible == true or visible == false, 'visible must be a boolean')
+        if self.visible ~= visible then
+            self.visible = visible
+            if self.card then
+                self:redraw()
+            end
+        end
+    end
+
+    return self
+end
+
+
+local function default_container()
+    local self = default_base()
 
     self.bgcolor = deck:Colour 'Transparent'
     self.children = deck:RectangleList()
-    self.visible = true
-    self.expand = true
 
     self._find_child = function(self, widget)
         local find_callback = function(rect, widget)
@@ -496,7 +530,7 @@ local function create_grid(rows, cols, padding, margin)
         end
     end
 
-    wgr.get_preferred_size = function(self)
+    wgr._get_preferred_size = function(self)
         self:_calc_row_col_sizes()
         local total_w = self.margin * 2 + self.padding * (self.cols - 1)
         local total_h = self.margin * 2 + self.padding * (self.rows - 1)
@@ -535,7 +569,7 @@ local function create_border(size, color, initial_widget)
         end
     end
 
-    self.get_preferred_size = function(self)
+    self._get_preferred_size = function(self)
         local w, h
         local child = self.children.first
         if child and child.widget.get_preferred_size then
@@ -656,6 +690,7 @@ local function create_box_layout(is_vertical, padding, margin)
         self._child_major = self._child_major + props.min_major
         self._child_minor = math.max(self._child_minor, props.min_minor)
         self:_add_child(widget, props)
+        self:_relayout()
     end
 
     box.relayout = function(self)
@@ -663,7 +698,7 @@ local function create_box_layout(is_vertical, padding, margin)
         self:_relayout()
     end
 
-    box.get_preferred_size = function(self)
+    box._get_preferred_size = function(self)
         local size_major = self._child_major + self.margin * 2 + (self.children.count - 1) * self.padding
         local size_minor = self._child_minor + self.margin * 2
         if self.vertical then
@@ -810,8 +845,8 @@ local function connect(widget, ...)
 end
 
 
-local function widget_base()
-    local wdg = { visible = true, expand = true }
+local function default_widget()
+    local wdg = default_base()
 
     wdg.resize = function(self, width, height)
         if not self.card or self.card.width ~= width or self.card.height ~= height then
@@ -825,22 +860,12 @@ local function widget_base()
         end
     end
 
-    wdg.set_visible = function(self, visible)
-        assert(visible == true or visible == false, 'visible must be a boolean')
-        if self.visible ~= visible then
-            self.visible = visible
-            if self.card then
-                self:redraw()
-            end
-        end
-    end
-
     return wdg
 end
 
 
 local function create_color_rect(color, callback)
-    local wdg = widget_base()
+    local wdg = default_widget()
 
     wdg.color = color or deck:Colour { r = 20, g = 20, b = 20, a = 180 }
     wdg.on_click = callback
@@ -872,7 +897,7 @@ local BUTTON_HOVERED = 10955
 local BUTTON_DISABLED = 33123
 
 local function create_button(text, callback, initial_enabled)
-    local btn = widget_base()
+    local btn = default_widget()
 
     btn.bgcolor = deck:Colour 'Blue'
     btn.text = text
@@ -931,7 +956,7 @@ local function create_button(text, callback, initial_enabled)
         end
     end
 
-    btn.get_preferred_size = function(self)
+    btn._get_preferred_size = function(self)
         return font_preferred_size(self.font, self.text)
     end
 
@@ -1004,7 +1029,7 @@ end
 
 
 local function create_label(text, fgcolor, bgcolor)
-    local lbl = widget_base()
+    local lbl = default_widget()
 
     lbl.bgcolor = bgcolor and bgcolor or deck:Colour 'Transparent'
     lbl.fgcolor = fgcolor and fgcolor or deck:Colour 'White'
@@ -1015,7 +1040,7 @@ local function create_label(text, fgcolor, bgcolor)
     lbl.height = 100
     lbl.wordwrap = true
 
-    lbl.get_preferred_size = function(self)
+    lbl._get_preferred_size = function(self)
         return font_preferred_size(self.font, self.text)
     end
 
@@ -1103,7 +1128,7 @@ local INPUT_HOVERED = 20955
 local INPUT_DISABLED = 43123
 
 local function create_input_field(initial_text)
-    local inp = widget_base()
+    local inp = default_widget()
 
     inp.bgcolor = deck:Colour 'Dimgray'
     inp.fgcolor = deck:Colour 'White'
@@ -1113,7 +1138,7 @@ local function create_input_field(initial_text)
     inp.height = 100
     inp._internal_state = INPUT_NORMAL
 
-    inp.get_preferred_size = function(self)
+    inp._get_preferred_size = function(self)
         local min_size = self.input_length or 1
         local dummy = string.rep('F', min_size)
         return font_preferred_size(self.font, dummy)
@@ -1310,7 +1335,7 @@ exports.create_hbox = create_hbox
 exports.connect = connect
 exports.disconnect = disconnect
 
-exports.widget_base = widget_base
+exports.default_widget = default_widget
 exports.create_color_rect = create_color_rect
 exports.create_button = create_button
 exports.create_label = create_label
