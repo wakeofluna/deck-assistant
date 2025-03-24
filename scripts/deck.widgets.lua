@@ -32,6 +32,7 @@ local function default_container()
     self.bgcolor = deck:Colour 'Transparent'
     self.children = deck:RectangleList()
     self.visible = true
+    self.expand = true
 
     self._find_child = function(self, widget)
         local find_callback = function(rect, widget)
@@ -810,7 +811,7 @@ end
 
 
 local function widget_base()
-    local wdg = { visible = true }
+    local wdg = { visible = true, expand = true }
 
     wdg.resize = function(self, width, height)
         if not self.card or self.card.width ~= width or self.card.height ~= height then
@@ -842,7 +843,6 @@ local function create_color_rect(color, callback)
     local wdg = widget_base()
 
     wdg.color = color or deck:Colour { r = 20, g = 20, b = 20, a = 180 }
-    wdg.expand = true
     wdg.on_click = callback
 
     wdg.mouse_button = function(self, x, y, button, pressed)
