@@ -168,6 +168,27 @@ local function default_container()
     -- Optionally overriden by descendent class
     self.add_child = self._add_child
 
+    self._swap_child = function(self, child, new_widget)
+        if not child or not new_widget then
+            return new_widget
+        end
+        if child.widget == new_widget then
+            return nil
+        end
+
+        local old_widget = child.widget
+        new_widget.on_update = old_widget.on_update
+        old_widget.on_update = nil
+        child.widget = new_widget
+
+        if self.card and not self.frozen then
+            new_widget:resize(child.width, child.height)
+            new_widget:on_update()
+        end
+
+        return old_widget
+    end
+
     self.remove_child = function(self, widget)
         local child = self:_find_child(widget)
         if child then
@@ -441,6 +462,22 @@ local function create_grid(rows, cols, padding, margin)
         col_span = (col_span ~= nil and col_span > 1) and col_span or 1
         row_span = (row_span ~= nil and row_span > 1) and row_span or 1
         self:_add_child(widget, { row = row, col = col, row_span = row_span, col_span = col_span })
+    end
+
+    wgr.get_child = function(self, row, col)
+        local find_callback = function(rect, row, col)
+            return row >= rect.row and row < rect.row + rect.row_span and col >= rect.col and col < rect.col + rect.col_span
+        end
+        local found = self.children:foreach(find_callback, row, col)
+        return found and found.widget
+    end
+
+    wgr.swap_child = function(self, row, col, widget)
+        local find_callback = function(rect, row, col)
+            return row >= rect.row and row < rect.row + rect.row_span and col >= rect.col and col < rect.col + rect.col_span
+        end
+        local found = self.children:foreach(find_callback, row, col)
+        return self:_swap_child(found, widget)
     end
 
     wgr.set_grid_size = function(self, rows, cols)
