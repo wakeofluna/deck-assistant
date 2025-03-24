@@ -565,25 +565,17 @@ local function create_border(size, color, initial_widget)
     return self
 end
 
-local function create_vbox(padding, margin)
-    local vbx = default_container()
+local function create_box_layout(is_vertical, padding, margin)
+    local box = default_container()
 
-    vbx.padding = padding or 5
-    vbx.margin = margin or vbx.padding
+    box.padding = padding or 5
+    box.margin = margin or box.padding
+    box.vertical = is_vertical
+    box._expanding_size = 0
+    box._child_major = 0
+    box._child_minor = 0
 
-    return vbx
-end
-
-local function create_hbox(padding, margin)
-    local hbx = default_container()
-
-    hbx.padding = padding or 5
-    hbx.margin = margin or hbx.padding
-    hbx._expanding_size = 0
-    hbx._child_width = 0
-    hbx._child_height = 0
-
-    hbx._probe_widget_properties = function(self, widget)
+    box._probe_widget_properties = function(self, widget)
         local min_width, min_height, expand
         if widget.get_preferred_size then
             min_width, min_height = widget:get_preferred_size()
@@ -593,29 +585,31 @@ local function create_hbox(padding, margin)
             min_height = 0
             expand = true
         end
-        return { min_width = min_width, min_height = min_height, expand = expand }
+        local major = self.vertical and min_height or min_width
+        local minor = self.vertical and min_width or min_height
+        return { min_major = major, min_minor = minor, expand = expand }
     end
 
-    hbx._update_child_sizes = function(self)
+    box._update_child_sizes = function(self)
         self._expanding_size = 0
-        self._child_width = 0
-        self._child_height = 0
+        self._child_major = 0
+        self._child_minor = 0
         local query_callback = function(child)
             local props = self:_probe_widget_properties(child.widget)
             for k, v in pairs(props) do
                 child[k] = v
             end
-            self._expanding_size = self._expanding_size + (props.expand and props.min_width or 0)
-            self._child_width = self._child_width + props.min_width
-            self._child_height = math.max(self._child_height, props.min_height)
+            self._expanding_size = self._expanding_size + (props.expand and props.min_major or 0)
+            self._child_major = self._child_major + props.min_major
+            self._child_minor = math.max(self._child_minor, props.min_minor)
         end
         self.children:foreach(query_callback)
     end
 
-    hbx._assign_child_rect = function(self, child)
+    box._assign_child_rect = function(self, child)
         local total_padding = self.margin * 2 + (self.children.count - 1) * self.padding
-        local available = self.card.width - total_padding
-        local remaining = available - self._child_width
+        local available = (self.vertical and self.card.height or self.card.width) - total_padding
+        local remaining = available - self._child_major
 
         local offset = self.margin
         local query_callback = function(rect)
@@ -623,49 +617,73 @@ local function create_hbox(padding, margin)
                 return true
             end
             if rect.expand and remaining > 0 then
-                offset = offset + rect.min_width + math.floor((rect.min_width / self._expanding_size) * remaining)
+                offset = offset + rect.min_major + math.floor((rect.min_major / self._expanding_size) * remaining)
             elseif remaining < 0 then
-                offset = offset + rect.min_width + (remaining / self._child_width)
+                offset = offset + rect.min_major + (remaining / self._child_major)
             else
-                offset = offset + rect.min_width
+                offset = offset + rect.min_major
             end
             offset = offset + self.padding
         end
         self.children:foreach(query_callback)
 
-        child.left = offset
-
+        local size
         if child.expand and remaining > 0 then
-            child.width = child.min_width + math.floor((child.min_width / self._expanding_size) * remaining)
+            size = child.min_major + math.floor((child.min_major / self._expanding_size) * remaining)
         elseif remaining < 0 then
-            child.width = child.min_width + (remaining / self._child_width)
+            size = child.min_major + (remaining / self._child_major)
         else
-            child.width = child.min_width
+            size = child.min_major
         end
 
-        child.top = self.margin
-        child.bottom = self.card.height - self.margin
+        if self.vertical then
+            child.top = offset
+            child.height = size
+            child.left = self.margin
+            child.right = self.card.width - self.margin
+        else
+            child.left = offset
+            child.width = size
+            child.top = self.margin
+            child.bottom = self.card.height - self.margin
+        end
     end
 
-    hbx.add_child = function(self, widget)
+    box.add_child = function(self, widget)
         local props = self:_probe_widget_properties(widget)
-        self._expanding_size = self._expanding_size + (props.expand and props.min_width or 0)
-        self._child_width = self._child_width + props.min_width
-        self._child_height = math.max(self._child_height, props.min_height)
+        self._expanding_size = self._expanding_size + (props.expand and props.min_major or 0)
+        self._child_major = self._child_major + props.min_major
+        self._child_minor = math.max(self._child_minor, props.min_minor)
         self:_add_child(widget, props)
     end
 
-    hbx.relayout = function(self)
+    box.relayout = function(self)
         self:_update_child_sizes()
         self:_relayout()
     end
 
-    hbx.get_preferred_size = function(self)
-        local size_x = self._child_width + self.margin * 2 + (self.children.count - 1) * self.padding
-        local size_y = self._child_height + self.margin * 2
-        return size_x, size_y
+    box.get_preferred_size = function(self)
+        local size_major = self._child_major + self.margin * 2 + (self.children.count - 1) * self.padding
+        local size_minor = self._child_minor + self.margin * 2
+        if self.vertical then
+            return size_minor, size_major
+        else
+            return size_major, size_minor
+        end
     end
 
+    return box
+end
+
+local function create_vbox(padding, margin)
+    local vbx = create_box_layout(padding, margin)
+    vbx.vertical = true
+    return vbx
+end
+
+local function create_hbox(padding, margin)
+    local hbx = create_box_layout(padding, margin)
+    hbx.vertical = false
     return hbx
 end
 
