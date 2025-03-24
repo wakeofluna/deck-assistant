@@ -67,6 +67,7 @@ local function default_container()
 
     self.bgcolor = deck:Colour 'Transparent'
     self.children = deck:RectangleList()
+    self.frozen = false
 
     self._find_child = function(self, widget)
         local find_callback = function(rect, widget)
@@ -106,7 +107,7 @@ local function default_container()
     end
 
     self._relayout = function(self)
-        if self.card then
+        if self.card and not self.frozen then
             local resize_callback = function(child)
                 self:_assign_child_rect(child)
                 if child.width > 0 and child.height > 0 then
@@ -195,7 +196,7 @@ local function default_container()
     self.resize = self._resize
 
     self.redraw = function(self, rect)
-        if self.card then
+        if self.card and not self.frozen then
             self.card:clear(self.bgcolor)
             if self.redraw_self then
                 self:redraw_self()
@@ -209,6 +210,15 @@ local function default_container()
                 self:on_update(rect)
             end
         end
+    end
+
+    self.freeze = function(self)
+        self.frozen = true
+    end
+
+    self.unfreeze = function(self)
+        self.frozen = false
+        self:relayout()
     end
 
     self.mouse_motion = function(self, x, y)
@@ -444,8 +454,10 @@ local function create_grid(rows, cols, padding, margin)
     end
 
     wgr.relayout = function(self)
-        self:_calc_row_col_sizes()
-        self:_relayout()
+        if not self.frozen then
+            self:_calc_row_col_sizes()
+            self:_relayout()
+        end
     end
 
     wgr._calc_row_col_sizes = function(self)
@@ -690,12 +702,16 @@ local function create_box_layout(is_vertical, padding, margin)
         self._child_major = self._child_major + props.min_major
         self._child_minor = math.max(self._child_minor, props.min_minor)
         self:_add_child(widget, props)
-        self:_relayout()
+        if not self.frozen then
+            self:_relayout()
+        end
     end
 
     box.relayout = function(self)
-        self:_update_child_sizes()
-        self:_relayout()
+        if not self.frozen then
+            self:_update_child_sizes()
+            self:_relayout()
+        end
     end
 
     box._get_preferred_size = function(self)
