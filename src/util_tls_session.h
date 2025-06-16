@@ -30,6 +30,7 @@ class TLSSession
 public:
 	struct IO
 	{
+		virtual ~IO()                                = 0;
 		virtual int read(void* data, int maxlen)     = 0;
 		virtual int write(void const* data, int len) = 0;
 	};

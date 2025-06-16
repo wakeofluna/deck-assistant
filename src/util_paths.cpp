@@ -220,7 +220,7 @@ void Paths::resolve_standard_paths()
 		m_exec_dir = std::filesystem::current_path();
 	}
 
-#ifdef _DEBUG
+#ifdef DEBUG
 	m_exec_script_dir = std::filesystem::current_path() / "scripts";
 #else
 	m_exec_script_dir = m_exec_dir / "scripts";

@@ -258,6 +258,8 @@ int state_init_as_client(TLSSession::State& state, bool verify_certificate)
 #endif
 } // namespace
 
+TLSSession::IO::~IO() = default;
+
 TLSSession::TLSSession() = default;
 
 TLSSession::TLSSession(TLSSession&&) = default;

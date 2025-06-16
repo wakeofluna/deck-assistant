@@ -27,6 +27,8 @@ class ConnectorBase : public LuaClass<T>
 public:
 	using Super = ConnectorBase<T>;
 
+	virtual ~ConnectorBase();
+
 	virtual void initial_setup(lua_State* L, bool is_reload);
 	virtual void tick_inputs(lua_State* L, lua_Integer clock)  = 0;
 	virtual void tick_outputs(lua_State* L, lua_Integer clock) = 0;

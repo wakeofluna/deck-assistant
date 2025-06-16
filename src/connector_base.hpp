@@ -24,6 +24,9 @@
 #include "lua_helpers.h"
 
 template <typename T>
+ConnectorBase<T>::~ConnectorBase() = default;
+
+template <typename T>
 void ConnectorBase<T>::initial_setup(lua_State* L, bool is_reload)
 {
 }

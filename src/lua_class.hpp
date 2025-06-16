@@ -49,7 +49,7 @@ struct is_available : public not_available
 template <typename T>
 constexpr inline char const* __typename(not_available)
 {
-	return typeid(T).name();
+	return "(no typename available)"; // typeid(T).name();
 }
 
 template <typename T>
