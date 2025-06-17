@@ -45,7 +45,7 @@ inline std::string_view oauth2_callback_page()
 template <typename T>
 inline SDL_RWops* as_rwops(std::basic_string_view<T> const& builtin)
 {
-	return SDL_RWFromConstMem(builtin.data(), builtin.size());
+	return SDL_RWFromConstMem(builtin.data(), builtin.size() * sizeof(T));
 }
 
 } // namespace builtins

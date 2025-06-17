@@ -425,10 +425,9 @@ void DeckFont::release_font()
 
 int DeckFont::_lua_clone(lua_State* L)
 {
-	DeckFont* self = from_stack(L, 1);
+	DeckFont const* self = from_stack(L, 1);
 
-	DeckFont* new_formatter = DeckFont::push_new(L);
-	*new_formatter          = *self;
+	(void)DeckFont::push_new(L, *self);
 
 	if (lua_type(L, 2) == LUA_TTABLE)
 	{
