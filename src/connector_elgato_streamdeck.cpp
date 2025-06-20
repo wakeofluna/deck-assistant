@@ -468,7 +468,7 @@ void ConnectorElgatoStreamDeck::set_button(unsigned char button, SDL_Surface* su
 
 	if (surface->w == m_button_size && surface->h == m_button_size)
 	{
-		new_surface = SDL_CreateRGBSurfaceWithFormat(0, m_button_size, m_button_size, 32, SDL_PIXELFORMAT_ARGB8888);
+		new_surface = SDL_CreateRGBSurfaceWithFormat(0, m_button_size, m_button_size, 32, SDL_PIXELFORMAT_RGBA32);
 
 		unsigned char* source_data = reinterpret_cast<unsigned char*>(surface->pixels);
 		unsigned char* target_data = reinterpret_cast<unsigned char*>(new_surface->pixels) + (new_surface->h * new_surface->pitch);

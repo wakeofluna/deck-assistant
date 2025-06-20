@@ -21,9 +21,8 @@
 #include "connector_http.h"
 #include "connector_server_socket.h"
 #include "connector_server_socket_client.h"
-#ifdef HAVE_VNC
+#include "connector_spout.h"
 #include "connector_vnc.h"
-#endif
 #include "connector_websocket.h"
 #include "connector_window.h"
 #include "deck_card.h"
@@ -60,4 +59,8 @@ template class LuaClass<DeckUtil>;
 
 #ifdef HAVE_VNC
 template class LuaClass<ConnectorVnc>;
+#endif
+
+#ifdef HAVE_SPOUT
+template class LuaClass<ConnectorSpout>;
 #endif

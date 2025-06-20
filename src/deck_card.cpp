@@ -263,7 +263,7 @@ SDL_Surface* DeckCard::resize_surface(SDL_Surface* surface, int new_width, int n
 	if (new_height <= 0)
 		new_height = (surface->h * new_width) / surface->w;
 
-	SDL_Surface* new_surface = SDL_CreateRGBSurfaceWithFormat(0, new_width, new_height, 32, SDL_PIXELFORMAT_ARGB8888);
+	SDL_Surface* new_surface = SDL_CreateRGBSurfaceWithFormat(0, new_width, new_height, 32, SDL_PIXELFORMAT_RGBA32);
 	if (!new_surface)
 		return nullptr;
 

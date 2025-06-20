@@ -20,6 +20,7 @@
 #include "connector_elgato_streamdeck.h"
 #include "connector_http.h"
 #include "connector_server_socket.h"
+#include "connector_spout.h"
 #include "connector_vnc.h"
 #include "connector_websocket.h"
 #include "connector_window.h"
@@ -84,6 +85,14 @@ void DeckConnectorFactory::init_class_table(lua_State* L)
 	lua_pushcclosure(L, &no_connector, 1);
 #endif
 	lua_setfield(L, -2, "Vnc");
+
+#ifdef HAVE_SPOUT
+	lua_pushcfunction(L, &new_connector<ConnectorSpout>);
+#else
+	lua_pushliteral(L, "Spout connector not available, recompile with Spout2 support");
+	lua_pushcclosure(L, &no_connector, 1);
+#endif
+	lua_setfield(L, -2, "Spout");
 
 	lua_pushcfunction(L, &new_socket_connector<ConnectorWebsocket>);
 	lua_setfield(L, -2, "Websocket");

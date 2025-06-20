@@ -5,6 +5,7 @@ set(SOURCES
     connector_http.cpp
     connector_server_socket.cpp
     connector_server_socket_client.cpp
+    connector_spout.cpp
     connector_vnc.cpp
     connector_websocket.cpp
     connector_window.cpp
@@ -63,6 +64,7 @@ target_link_libraries(decklib PUBLIC
     lua
     ssl
     vnc
+    spout
     builtins
 )
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -72,6 +74,7 @@ endif()
 catchtest(decklib ${TEST_SOURCES})
 
 add_executable(${PROJECT_NAME} main.cpp)
-set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE 1)
+set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE $<$<CONFIG:Release>:TRUE>)
+set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 target_link_libraries(${PROJECT_NAME} decklib)
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

@@ -379,7 +379,7 @@ int ConnectorVnc::newindex(lua_State* L, std::string_view const& key)
 		if (card)
 		{
 			SDL_Surface* surface = card->get_surface();
-			if (surface->format->format != SDL_PIXELFORMAT_ARGB8888)
+			if (surface->format->format != SDL_PIXELFORMAT_RGBA32)
 				luaL_error(L, "card does not have correct surface format, use a new deck:Card instead");
 		}
 

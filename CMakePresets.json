@@ -7,48 +7,55 @@
   },
   "configurePresets": [
     {
-      "name": "default",
+      "name": "debug-base",
       "hidden": true,
-      "displayName": "Default Config",
-      "description": "Default build using Ninja generator",
-      "generator": "Ninja"
-    },
-    {
-      "name": "debug",
-      "inherits": "default",
-      "displayName": "Default Debug Config",
-      "description": "Default debug build",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
-      "name": "debug-clang",
-      "inherits": "debug",
+      "name": "release-base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "debug-base",
+      "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "clang++"
       }
     },
     {
-      "name": "release",
-      "inherits": "default",
-      "displayName": "Default Release Config",
-      "description": "Default release build",
-      "binaryDir": "${sourceDir}/build-release",
+      "name": "debug-windows",
+      "inherits": "debug-base",
+      "generator": "Visual Studio 17 2022",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_INSTALL_PREFIX": "install"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "release-base",
+      "generator": "Ninja"
+    },
+    {
+      "name": "release-windows",
+      "inherits": "release-base",
+      "generator": "Visual Studio 17 2022",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "install"
       }
     }
   ],
   "buildPresets": [
     {
       "name": "debug",
-      "configurePreset": "debug"
-    },
-    {
-      "name": "debug-clang",
-      "configurePreset": "debug-clang",
+      "configurePreset": "debug",
       "condition": {
         "type": "notEquals",
         "lhs": "${hostSystemName}",
@@ -57,7 +64,30 @@
     },
     {
       "name": "release",
-      "configurePreset": "release"
+      "configurePreset": "release",
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "debug-windows",
+      "configurePreset": "debug-windows",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "release-windows",
+      "configurePreset": "release-windows",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     }
   ]
 }

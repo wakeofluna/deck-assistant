@@ -216,7 +216,6 @@ if (NOT vncserver_FOUND)
 		EXCLUDE_FROM_ALL
 		URL https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-0.9.15.tar.gz
 		URL_HASH SHA256=62352c7795e231dfce044beb96156065a05a05c974e5de9e023d688d8ff675d7
-		#FIND_PACKAGE_ARGS NAMES libvncserver
 	)
 	FetchContent_MakeAvailable(vncserver)
 	FetchContent_GetProperties(vncserver SOURCE_DIR VNCSERVER_SRC_DIR BINARY_DIR VNCSERVER_BUILD_DIR)
@@ -227,6 +226,24 @@ if (NOT vncserver_FOUND)
 else()
 	target_compile_definitions(PkgConfig::vncserver INTERFACE HAVE_VNC)
 	add_library(vnc ALIAS PkgConfig::vncserver)
+endif()
+
+add_library(spout INTERFACE)
+if (WIN32)
+	FetchContent_Declare(
+		Spout2
+		SYSTEM
+		EXCLUDE_FROM_ALL
+		URL https://github.com/leadedge/Spout2/archive/refs/tags/2.007.016.zip
+		URL_HASH SHA256=2DB0BE5604F9A16B6FDB41743F39F972717B0CAFA4BB5D6BA7464C56D5E25657
+		SOURCE_SUBDIR SPOUTSDK/SpoutDirectX/SpoutDX
+	)
+	FetchContent_MakeAvailable(Spout2)
+	FetchContent_GetProperties(Spout2 SOURCE_DIR SPOUT2_SRC_DIR)
+	target_link_libraries(spout INTERFACE SpoutDX_static)
+	target_compile_definitions(spout INTERFACE HAVE_SPOUT)
+	target_include_directories(spout INTERFACE ${SPOUT2_SRC_DIR}/SPOUTSDK/SpoutGL)
+	target_include_directories(spout INTERFACE ${SPOUT2_SRC_DIR}/SPOUTSDK/SpoutDirectX/SpoutDX)
 endif()
 
 find_package(Catch2 QUIET)

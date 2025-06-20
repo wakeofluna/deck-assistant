@@ -221,7 +221,7 @@ int DeckModule::_lua_create_card(lua_State* L)
 	luaL_argcheck(L, width > 0, 2, "width must be larger than 0");
 	luaL_argcheck(L, height > 0, 3, "height must be larger than 0");
 
-	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
+	SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
 	if (!surface)
 	{
 		DeckLogger::lua_log_message(L, DeckLogger::Level::Error, "failed to allocate new surface: ", SDL_GetError());
@@ -411,9 +411,9 @@ int DeckModule::_lua_create_image(lua_State* L)
 	}
 
 	// Optimization for blitting
-	if (new_surface->format->format != SDL_PIXELFORMAT_ARGB8888)
+	if (new_surface->format->format != SDL_PIXELFORMAT_RGBA32)
 	{
-		SDL_Surface* tmp_surface = SDL_ConvertSurfaceFormat(new_surface, SDL_PIXELFORMAT_ARGB8888, 0);
+		SDL_Surface* tmp_surface = SDL_ConvertSurfaceFormat(new_surface, SDL_PIXELFORMAT_RGBA32, 0);
 		if (!tmp_surface)
 		{
 			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, "failed to optimize image to ARGB: ", SDL_GetError());

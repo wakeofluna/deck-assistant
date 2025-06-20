@@ -20,6 +20,7 @@
 #include "connector_elgato_streamdeck.h"
 #include "connector_http.h"
 #include "connector_server_socket.h"
+#include "connector_spout.h"
 #include "connector_vnc.h"
 #include "connector_websocket.h"
 #include "connector_window.h"
@@ -32,4 +33,8 @@ template class ConnectorBase<ConnectorWindow>;
 
 #ifdef HAVE_VNC
 template class ConnectorBase<ConnectorVnc>;
+#endif
+
+#ifdef HAVE_SPOUT
+template class ConnectorBase<ConnectorSpout>;
 #endif
