@@ -290,8 +290,18 @@ std::filesystem::path Paths::find_script_file(std::string_view const& file_name,
 	if (allow_home && find_file_in(m_user_config_dir, file_name, target))
 		return target;
 
-	if (allow_system && find_file_in(m_exec_script_dir, file_name, target))
-		return target;
+	if (allow_system)
+	{
+		for (std::filesystem::path const& base : m_system_data_dirs)
+			if (find_file_in(base, file_name, target))
+				return target;
+
+		if (find_file_in(m_exec_script_dir, file_name, target))
+			return target;
+
+		if (find_file_in(m_exec_dir, file_name, target))
+			return target;
+	}
 
 	return std::filesystem::path();
 }
