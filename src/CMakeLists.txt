@@ -62,7 +62,7 @@ target_link_libraries(decklib PUBLIC
     SDL2_ttf
     lua
     ssl
-    vncserver
+    vnc
     builtins
 )
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")

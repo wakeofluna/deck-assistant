@@ -47,16 +47,16 @@ option(SDL2_DISABLE_INSTALL "" ON)
 include(FetchContent)
 include(ExternalProject)
 
-if (NOT sdl2_FOUND)
+if (NOT SDL2_FOUND)
 	FetchContent_Declare(
 		SDL2
 		SYSTEM
 		EXCLUDE_FROM_ALL
+		OVERRIDE_FIND_PACKAGE
 		GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
 		GIT_TAG release-2.32.8
 		GIT_SHALLOW TRUE
 		GIT_PROGRESS TRUE
-		FIND_PACKAGE_ARGS NAMES SDL2
 	)
 	FetchContent_MakeAvailable(SDL2)
 else()
@@ -76,11 +76,11 @@ if (NOT SDL2_image_FOUND)
 		SDL2_image
 		SYSTEM
 		EXCLUDE_FROM_ALL
+		OVERRIDE_FIND_PACKAGE
 		GIT_REPOSITORY https://github.com/libsdl-org/SDL_image.git
 		GIT_TAG release-2.8.8
 		GIT_SHALLOW TRUE
 		GIT_PROGRESS TRUE
-		FIND_PACKAGE_ARGS NAMES SDL2_image
 	)
 	FetchContent_MakeAvailable(SDL2_image)
 else()
@@ -92,11 +92,11 @@ if (NOT SDL2_ttf_FOUND)
 		SDL2_ttf
 		SYSTEM
 		EXCLUDE_FROM_ALL
+		OVERRIDE_FIND_PACKAGE
 		GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
 		GIT_TAG release-2.24.0
 		GIT_SHALLOW TRUE
 		GIT_PROGRESS TRUE
-		FIND_PACKAGE_ARGS NAMES SDL2_ttf
 	)
 	FetchContent_MakeAvailable(SDL2_ttf)
 else()
@@ -108,11 +108,11 @@ if (NOT SDL2_net_FOUND)
 		SDL2_net
 		SYSTEM
 		EXCLUDE_FROM_ALL
+		OVERRIDE_FIND_PACKAGE
 		GIT_REPOSITORY https://github.com/libsdl-org/SDL_net.git
 		GIT_TAG release-2.2.0
 		GIT_SHALLOW TRUE
 		GIT_PROGRESS TRUE
-		FIND_PACKAGE_ARGS NAMES SDL2_net
 	)
 	FetchContent_MakeAvailable(SDL2_net)
 else()
@@ -174,6 +174,7 @@ if (NOT ssl_FOUND)
 			openssl
 			SYSTEM
 			EXCLUDE_FROM_ALL
+			OVERRIDE_FIND_PACKAGE
 			URL https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.0.zip
 			URL_HASH SHA256=9AC6B98D947E558E6ADBBC9CC9EAF504B3540BAB90767CF71E3582A14F75AFBD
 		)
@@ -193,7 +194,7 @@ if (NOT ssl_FOUND)
 		target_link_libraries(ssl INTERFACE libssl libcrypto crypt32.lib)
 		target_include_directories(ssl INTERFACE ${OPENSSL_SRC_DIR}/x64/include)
 		target_compile_definitions(ssl INTERFACE HAVE_OPENSSL OPENSSL_NO_DEPRECATED)
-		install(TARGETS libssl libcrypto RUNTIME DESTINATION bin)
+		install(FILES $<TARGET_FILE:libssl> $<TARGET_FILE:libcrypto> DESTINATION bin)
 	endif ()
 else()
 	if (ssl_MODULE_NAME STREQUAL "gnutls")
@@ -215,13 +216,17 @@ if (NOT vncserver_FOUND)
 		EXCLUDE_FROM_ALL
 		URL https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-0.9.15.tar.gz
 		URL_HASH SHA256=62352c7795e231dfce044beb96156065a05a05c974e5de9e023d688d8ff675d7
-		FIND_PACKAGE_ARGS NAMES libvncserver
+		#FIND_PACKAGE_ARGS NAMES libvncserver
 	)
 	FetchContent_MakeAvailable(vncserver)
-	target_compile_definitions(vncserver INTERFACE HAVE_VNC)
+	FetchContent_GetProperties(vncserver SOURCE_DIR VNCSERVER_SRC_DIR BINARY_DIR VNCSERVER_BUILD_DIR)
+	add_library(vnc INTERFACE)
+	target_link_libraries(vnc INTERFACE vncserver)
+	target_compile_definitions(vnc INTERFACE HAVE_VNC)
+	target_include_directories(vnc INTERFACE ${VNCSERVER_SRC_DIR}/include ${VNCSERVER_BUILD_DIR}/include)
 else()
 	target_compile_definitions(PkgConfig::vncserver INTERFACE HAVE_VNC)
-	add_library(vncserver ALIAS PkgConfig::vncserver)
+	add_library(vnc ALIAS PkgConfig::vncserver)
 endif()
 
 find_package(Catch2 QUIET)
