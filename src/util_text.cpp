@@ -798,7 +798,7 @@ HttpMessage parse_http_message(std::string_view const& buffer)
 			return true;
 
 		auto [key, value] = split1(segment, " ", true);
-		if (key.empty() || key.back() != ':' || value.empty())
+		if (key.empty() || key.back() != ':')
 		{
 			msg.error = "Invalid HTTP header";
 			return true;

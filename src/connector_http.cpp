@@ -705,7 +705,7 @@ int ConnectorHttp::queue_request(lua_State* L, util::BlobBuffer&& payload)
 	DeckPromiseList* promises = push_promise_list(L);
 	lua_pushinteger(L, promise_idx);
 
-	int result = promises->new_promise(L);
+	int result = promises->new_promise(L, m_request_timeout + 100);
 	if (!result)
 	{
 		lua_pop(L, 1);
