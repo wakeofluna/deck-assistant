@@ -141,7 +141,7 @@ end
 if SETTINGS.obs_password then
     obs.password = SETTINGS.obs_password
     obs.enabled = true
-    obs_label:set_bgcolor(color_connecting)
+    obs_label:set_bgcolor(obs.connected and color_enabled or color_connecting)
 end
 
 
