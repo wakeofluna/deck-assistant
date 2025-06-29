@@ -26,7 +26,7 @@
 
 class DeckFont : public LuaClass<DeckFont>
 {
-public:
+private:
 	enum class Alignment : char
 	{
 		Left,
@@ -58,6 +58,11 @@ public:
 	int tostring(lua_State* L) const;
 
 private:
+	static int to_ttf_alignment(DeckFont::Alignment alignment);
+	static int to_ttf_style(DeckFont::Style style);
+	static std::string_view to_string(DeckFont::Alignment alignment);
+	static std::string_view to_string(DeckFont::Style style);
+
 	void load_font();
 	void release_font();
 

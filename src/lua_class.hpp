@@ -681,7 +681,7 @@ void LuaClass<T>::push_instance_list_table(lua_State* L)
 }
 
 template <typename T>
-void LuaClass<T>::push_this(lua_State* L)
+void LuaClass<T>::push_this(lua_State* L) const
 {
 	if constexpr (is_push_this_enabled<T>())
 	{

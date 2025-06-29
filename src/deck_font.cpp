@@ -20,113 +20,33 @@
 #include "builtins.h"
 #include "deck_card.h"
 #include "deck_colour.h"
+#include "deck_enum.h"
 #include "lua_helpers.h"
 #include <optional>
 
 namespace
 {
 
-constexpr DeckFont::Alignment const k_align_left   = DeckFont::Alignment::Left;
-constexpr DeckFont::Alignment const k_align_center = DeckFont::Alignment::Center;
-constexpr DeckFont::Alignment const k_align_right  = DeckFont::Alignment::Right;
+constexpr std::string_view const k_enum_alignment = std::string_view("DeckFont::Alignment");
+constexpr std::string_view const k_enum_style     = std::string_view("DeckFont::Style");
 
-constexpr DeckFont::Style const k_style_regular       = DeckFont::Style::Regular;
-constexpr DeckFont::Style const k_style_bold          = DeckFont::Style::Bold;
-constexpr DeckFont::Style const k_style_italic        = DeckFont::Style::Italic;
-constexpr DeckFont::Style const k_style_underline     = DeckFont::Style::Underline;
-constexpr DeckFont::Style const k_style_strikethrough = DeckFont::Style::Strikethrough;
+DeckEnum* k_align_left   = nullptr;
+DeckEnum* k_align_center = nullptr;
+DeckEnum* k_align_right  = nullptr;
 
-constexpr std::string_view to_string(DeckFont::Alignment alignment)
+DeckEnum* k_style_regular       = nullptr;
+DeckEnum* k_style_bold          = nullptr;
+DeckEnum* k_style_italic        = nullptr;
+DeckEnum* k_style_underline     = nullptr;
+DeckEnum* k_style_strikethrough = nullptr;
+
+void register_enum_value(lua_State* L, DeckEnum* enum_value)
 {
-	switch (alignment)
-	{
-		case DeckFont::Alignment::Left:
-			return "ALIGN_LEFT";
-		case DeckFont::Alignment::Center:
-			return "ALIGN_CENTER";
-		case DeckFont::Alignment::Right:
-			return "ALIGN_RIGHT";
-	}
-	return std::string_view("INTERNAL_ERROR");
-}
-
-constexpr std::string_view to_string(DeckFont::Style style)
-{
-	switch (style)
-	{
-		case DeckFont::Style::Regular:
-			return "STYLE_REGULAR";
-		case DeckFont::Style::Bold:
-			return "STYLE_BOLD";
-		case DeckFont::Style::Italic:
-			return "STYLE_ITALIC";
-		case DeckFont::Style::Underline:
-			return "STYLE_UNDERLINE";
-		case DeckFont::Style::Strikethrough:
-			return "STYLE_STRIKETHROUGH";
-	}
-	return std::string_view("INTERNAL_ERROR");
-}
-
-constexpr std::optional<DeckFont::Alignment> to_alignment(void* ptr)
-{
-	if (ptr == &k_align_left)
-		return DeckFont::Alignment::Left;
-	else if (ptr == &k_align_center)
-		return DeckFont::Alignment::Center;
-	else if (ptr == &k_align_right)
-		return DeckFont::Alignment::Right;
-	else
-		return std::nullopt;
-}
-
-constexpr std::optional<DeckFont::Style> to_style(void* ptr)
-{
-	if (ptr == &k_style_regular)
-		return DeckFont::Style::Regular;
-	else if (ptr == &k_style_bold)
-		return DeckFont::Style::Bold;
-	else if (ptr == &k_style_italic)
-		return DeckFont::Style::Italic;
-	else if (ptr == &k_style_underline)
-		return DeckFont::Style::Underline;
-	else if (ptr == &k_style_strikethrough)
-		return DeckFont::Style::Strikethrough;
-	else
-		return std::nullopt;
-}
-
-constexpr int to_ttf_alignment(DeckFont::Alignment alignment)
-{
-	switch (alignment)
-	{
-		case DeckFont::Alignment::Left:
-			return TTF_WRAPPED_ALIGN_LEFT;
-		case DeckFont::Alignment::Center:
-			return TTF_WRAPPED_ALIGN_CENTER;
-		case DeckFont::Alignment::Right:
-			return TTF_WRAPPED_ALIGN_RIGHT;
-	}
-	return TTF_WRAPPED_ALIGN_LEFT;
-}
-
-constexpr int to_ttf_style(DeckFont::Style style)
-{
-	switch (style)
-	{
-		case DeckFont::Style::Regular:
-			return TTF_STYLE_NORMAL;
-		case DeckFont::Style::Bold:
-			return TTF_STYLE_BOLD;
-		case DeckFont::Style::Italic:
-			return TTF_STYLE_ITALIC;
-		case DeckFont::Style::Underline:
-			return TTF_STYLE_UNDERLINE;
-		case DeckFont::Style::Strikethrough:
-			return TTF_STYLE_STRIKETHROUGH;
-	}
-	return TTF_STYLE_NORMAL;
-}
+	std::string_view name = enum_value->value_name();
+	lua_pushlstring(L, name.data(), name.size());
+	enum_value->push_this(L);
+	lua_settable(L, -3);
+};
 
 } // namespace
 
@@ -156,21 +76,27 @@ DeckFont::DeckFont(DeckFont const& other)
 
 void DeckFont::insert_enum_values(lua_State* L)
 {
-	for (auto k : { &k_align_left, &k_align_center, &k_align_right })
-	{
-		std::string_view name = to_string(*k);
-		lua_pushlstring(L, name.data(), name.size());
-		lua_pushlightuserdata(L, (void*)k);
-		lua_settable(L, -3);
-	}
+	auto get_or_create_alignment = [](lua_State* L, Alignment alignment) -> auto {
+		DeckEnum* enum_value = DeckEnum::get_or_create(L, k_enum_alignment, to_string(alignment), alignment);
+		register_enum_value(L, enum_value);
+		return enum_value;
+	};
 
-	for (auto& k : { &k_style_regular, &k_style_bold, &k_style_italic, &k_style_underline, &k_style_strikethrough })
-	{
-		std::string_view name = to_string(*k);
-		lua_pushlstring(L, name.data(), name.size());
-		lua_pushlightuserdata(L, (void*)k);
-		lua_settable(L, -3);
-	}
+	k_align_left   = get_or_create_alignment(L, Alignment::Left);
+	k_align_center = get_or_create_alignment(L, Alignment::Center);
+	k_align_right  = get_or_create_alignment(L, Alignment::Right);
+
+	auto get_or_create_style = [](lua_State* L, Style style) -> auto {
+		DeckEnum* enum_value = DeckEnum::get_or_create(L, k_enum_style, to_string(style), style);
+		register_enum_value(L, enum_value);
+		return enum_value;
+	};
+
+	k_style_regular       = get_or_create_style(L, Style::Regular);
+	k_style_bold          = get_or_create_style(L, Style::Bold);
+	k_style_italic        = get_or_create_style(L, Style::Italic);
+	k_style_underline     = get_or_create_style(L, Style::Underline);
+	k_style_strikethrough = get_or_create_style(L, Style::Strikethrough);
 }
 
 void DeckFont::init_class_table(lua_State* L)
@@ -213,13 +139,13 @@ int DeckFont::index(lua_State* L, std::string_view const& key) const
 		switch (m_alignment)
 		{
 			case Alignment::Left:
-				lua_pushlightuserdata(L, (void*)&k_align_left);
+				k_align_left->push_this(L);
 				break;
 			case Alignment::Center:
-				lua_pushlightuserdata(L, (void*)&k_align_center);
+				k_align_center->push_this(L);
 				break;
 			case Alignment::Right:
-				lua_pushlightuserdata(L, (void*)&k_align_right);
+				k_align_right->push_this(L);
 				break;
 		}
 	}
@@ -228,19 +154,19 @@ int DeckFont::index(lua_State* L, std::string_view const& key) const
 		switch (m_style)
 		{
 			case Style::Regular:
-				lua_pushlightuserdata(L, (void*)&k_style_regular);
+				k_style_regular->push_this(L);
 				break;
 			case Style::Bold:
-				lua_pushlightuserdata(L, (void*)&k_style_bold);
+				k_style_bold->push_this(L);
 				break;
 			case Style::Italic:
-				lua_pushlightuserdata(L, (void*)&k_style_italic);
+				k_style_italic->push_this(L);
 				break;
 			case Style::Underline:
-				lua_pushlightuserdata(L, (void*)&k_style_underline);
+				k_style_underline->push_this(L);
 				break;
 			case Style::Strikethrough:
-				lua_pushlightuserdata(L, (void*)&k_style_strikethrough);
+				k_style_strikethrough->push_this(L);
 				break;
 		}
 	}
@@ -272,18 +198,17 @@ int DeckFont::newindex(lua_State* L, lua_Integer key)
 			m_font_size = value;
 		}
 	}
-	else if (vtype == LUA_TLIGHTUSERDATA)
+	else if (DeckEnum* enum_value = DeckEnum::from_stack(L, -1, false); enum_value)
 	{
-		void* ptr = lua_touserdata(L, -1);
-		if (auto alignment = to_alignment(ptr); alignment)
+		if (std::optional<Alignment> align_value = enum_value->to_enum<Alignment>(k_enum_alignment); align_value)
 		{
-			m_alignment = alignment.value();
+			m_alignment = align_value.value();
 		}
-		else if (auto style = to_style(ptr); style)
+		else if (std::optional<Style> style_value = enum_value->to_enum<Style>(k_enum_style); style_value)
 		{
-			if (style.value() != m_style)
+			if (m_style != style_value.value())
 			{
-				m_style = style.value();
+				m_style = style_value.value();
 				if (m_font)
 					TTF_SetFontStyle(m_font, to_ttf_style(m_style));
 			}
@@ -345,27 +270,21 @@ int DeckFont::newindex(lua_State* L, std::string_view const& key)
 	}
 	else if (key == "align" || key == "alignment")
 	{
-		void* ptr = lua_touserdata(L, -1);
-		if (auto alignment = to_alignment(ptr); alignment)
+		std::optional<Alignment> alignment = DeckEnum::to_enum<Alignment>(L, -1, k_enum_alignment);
+		if (alignment)
 			m_alignment = alignment.value();
-		else
-			luaL_argerror(L, 3, "invalid enum value for alignment");
 	}
 	else if (key == "style")
 	{
-		void* ptr = lua_touserdata(L, -1);
-		if (auto style = to_style(ptr); style)
+		std::optional<Style> style = DeckEnum::to_enum<Style>(L, -1, k_enum_style);
+		if (style)
 		{
-			if (style.value() != m_style)
+			if (m_style != style.value())
 			{
 				m_style = style.value();
 				if (m_font)
 					TTF_SetFontStyle(m_font, to_ttf_style(m_style));
 			}
-		}
-		else
-		{
-			luaL_argerror(L, 3, "invalid enum value for style");
 		}
 	}
 	else
@@ -398,6 +317,70 @@ int DeckFont::tostring(lua_State* L) const
 
 	luaL_pushresult(&buf);
 	return 1;
+}
+
+int DeckFont::to_ttf_alignment(DeckFont::Alignment alignment)
+{
+	switch (alignment)
+	{
+		case DeckFont::Alignment::Left:
+			return TTF_WRAPPED_ALIGN_LEFT;
+		case DeckFont::Alignment::Center:
+			return TTF_WRAPPED_ALIGN_CENTER;
+		case DeckFont::Alignment::Right:
+			return TTF_WRAPPED_ALIGN_RIGHT;
+	}
+	return TTF_WRAPPED_ALIGN_LEFT;
+}
+
+int DeckFont::to_ttf_style(DeckFont::Style style)
+{
+	switch (style)
+	{
+		case DeckFont::Style::Regular:
+			return TTF_STYLE_NORMAL;
+		case DeckFont::Style::Bold:
+			return TTF_STYLE_BOLD;
+		case DeckFont::Style::Italic:
+			return TTF_STYLE_ITALIC;
+		case DeckFont::Style::Underline:
+			return TTF_STYLE_UNDERLINE;
+		case DeckFont::Style::Strikethrough:
+			return TTF_STYLE_STRIKETHROUGH;
+	}
+	return TTF_STYLE_NORMAL;
+}
+
+std::string_view DeckFont::to_string(DeckFont::Alignment alignment)
+{
+	switch (alignment)
+	{
+		case DeckFont::Alignment::Left:
+			return "ALIGN_LEFT";
+		case DeckFont::Alignment::Center:
+			return "ALIGN_CENTER";
+		case DeckFont::Alignment::Right:
+			return "ALIGN_RIGHT";
+	}
+	return std::string_view("INTERNAL_ERROR");
+}
+
+std::string_view DeckFont::to_string(DeckFont::Style style)
+{
+	switch (style)
+	{
+		case DeckFont::Style::Regular:
+			return "STYLE_REGULAR";
+		case DeckFont::Style::Bold:
+			return "STYLE_BOLD";
+		case DeckFont::Style::Italic:
+			return "STYLE_ITALIC";
+		case DeckFont::Style::Underline:
+			return "STYLE_UNDERLINE";
+		case DeckFont::Style::Strikethrough:
+			return "STYLE_STRIKETHROUGH";
+	}
+	return std::string_view("INTERNAL_ERROR");
 }
 
 void DeckFont::load_font()
@@ -462,20 +445,19 @@ int DeckFont::_lua_render_text(lua_State* L)
 			}
 		}
 
-		if (vtype == LUA_TLIGHTUSERDATA)
+		if (vtype == LUA_TUSERDATA)
 		{
-			void* ptr = lua_touserdata(L, idx);
-			if (auto override_alignment = to_alignment(ptr); override_alignment)
+			if (std::optional<Alignment> override_alignment = DeckEnum::to_enum<Alignment>(L, idx, k_enum_alignment, false); override_alignment)
 			{
 				alignment = override_alignment.value();
 				continue;
 			}
-		}
 
-		if (DeckColour* override_colour = DeckColour::from_stack(L, idx, false); override_colour)
-		{
-			colour = override_colour->get_colour();
-			continue;
+			if (DeckColour* override_colour = DeckColour::from_stack(L, idx, false); override_colour)
+			{
+				colour = override_colour->get_colour();
+				continue;
+			}
 		}
 
 		if (vtype != LUA_TNIL)

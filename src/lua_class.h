@@ -82,7 +82,7 @@ public:
 	static char const* type_name();
 
 	static void push_instance_list_table(lua_State* L);
-	void push_this(lua_State* L);
+	void push_this(lua_State* L) const;
 	inline int get_lua_ref_id() const { return m_lua_ref_id; }
 	void set_lua_ref_id(int ref_id);
 

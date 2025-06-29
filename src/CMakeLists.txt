@@ -13,6 +13,7 @@ set(SOURCES
     deck_colour.cpp
     deck_connector_container.cpp
     deck_connector_factory.cpp
+    deck_enum.cpp
     deck_font.cpp
     deck_logger.cpp
     deck_module.cpp

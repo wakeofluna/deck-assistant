@@ -439,9 +439,12 @@ void Application::build_environment_table(lua_State* L, util::Paths const* paths
 	lua_setfield(L, -2, "deck.logger");
 	DeckUtil::push_new(L, *paths);
 	lua_setfield(L, -2, "deck.util");
-	lua_pop(L, 2);
 
+	lua_createtable(L, 0, 0);
 	DeckFont::insert_enum_values(L);
+	lua_setfield(L, -2, "deck.enum");
+
+	lua_pop(L, 2);
 
 	// Build script loader functions
 	lua_pushcclosure(L, &override_loadstring, 0);

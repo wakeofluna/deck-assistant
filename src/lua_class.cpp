@@ -29,6 +29,7 @@
 #include "deck_colour.h"
 #include "deck_connector_container.h"
 #include "deck_connector_factory.h"
+#include "deck_enum.h"
 #include "deck_font.h"
 #include "deck_logger.h"
 #include "deck_module.h"
@@ -48,6 +49,7 @@ template class LuaClass<DeckCard>;
 template class LuaClass<DeckConnectorContainer>;
 template class LuaClass<DeckConnectorFactory>;
 template class LuaClass<DeckColour>;
+template class LuaClass<DeckEnum>;
 template class LuaClass<DeckFont>;
 template class LuaClass<DeckLogger>;
 template class LuaClass<DeckModule>;

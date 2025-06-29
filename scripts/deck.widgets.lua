@@ -1,5 +1,6 @@
 local deck = require('deck')
 local logger = require('deck.logger')
+local enum = require('deck.enum')
 --local util = require('deck.util')
 
 local default_font = deck:Font { 24, deck:Colour 'White' }
@@ -17,10 +18,10 @@ local function font_preferred_size(font, text, margin)
 
     local txt
     if text and text ~= '' then
-        txt = font:render(text, ALIGN_LEFT)
+        txt = font:render(text, enum.ALIGN_LEFT)
         return txt.width + margin * 2, txt.height + margin * 2
     else
-        txt = font:render('F', ALIGN_LEFT)
+        txt = font:render('F', enum.ALIGN_LEFT)
         return margin * 2, txt.height + margin * 2
     end
 end
@@ -37,7 +38,7 @@ local function default_base()
         if self._get_preferred_size then
             w, h = self:_get_preferred_size()
         elseif self.card then
-            w, h = self.card
+            w, h = self.card.width, self.card.height
         end
         if self.min_width and w < self.min_width then
             w = self.min_width
@@ -1086,7 +1087,7 @@ local function create_label(text, fgcolor, bgcolor)
 
     lbl.bgcolor = bgcolor and bgcolor or deck:Colour 'Transparent'
     lbl.fgcolor = fgcolor and fgcolor or deck:Colour 'White'
-    lbl.alignment = ALIGN_LEFT
+    lbl.alignment = enum.ALIGN_LEFT
     lbl.text = text
     lbl.font = default_font
     lbl.width = 400
@@ -1111,9 +1112,9 @@ local function create_label(text, fgcolor, bgcolor)
                 end
 
                 local pos = txt:centered(self.card)
-                if self.alignment == ALIGN_LEFT then
+                if self.alignment == enum.ALIGN_LEFT then
                     pos.x = 5
-                elseif self.alignment == ALIGN_RIGHT then
+                elseif self.alignment == enum.ALIGN_RIGHT then
                     pos.x = self.card.width - 5 - txt.width
                 end
 
@@ -1154,7 +1155,7 @@ local function create_label(text, fgcolor, bgcolor)
     end
 
     lbl.set_alignment = function(self, alignment)
-        assert(alignment == ALIGN_LEFT or alignment == ALIGN_CENTER or alignment == ALIGN_RIGHT)
+        assert(alignment == enum.ALIGN_LEFT or alignment == enum.ALIGN_CENTER or alignment == enum.ALIGN_RIGHT)
         if self.alignment ~= alignment then
             self.alignment = alignment
             if self.card then

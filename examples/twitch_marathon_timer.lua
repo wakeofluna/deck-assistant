@@ -2,6 +2,7 @@ local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
 local widgets = require('deck.widgets')
+local enum = require('deck.enum')
 require('connector.obs')
 require('connector.twitch')
 
@@ -104,7 +105,7 @@ local function set_window_title(win, title)
     win.title = title
     local lbl = widgets.create_label(title)
     lbl.bgcolor = deck:Colour 'indigo'
-    lbl.alignment = ALIGN_CENTER
+    lbl.alignment = enum.ALIGN_CENTER
     win.main_widget:add_child(lbl, 0, 0, 1, win.main_widget.cols)
 end
 
@@ -326,7 +327,7 @@ local function create_key_value(text)
     local key = widgets.create_label(text)
     grid:add_child(key, row, 0, 1, 2)
     local value = widgets.create_label('...')
-    value.alignment = ALIGN_CENTER
+    value.alignment = enum.ALIGN_CENTER
     grid:add_child(value, row, 2, 1, 2)
     return value, key
 end

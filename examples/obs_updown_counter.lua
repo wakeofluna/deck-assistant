@@ -2,6 +2,7 @@ local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
 local widgets = require('deck.widgets')
+local enum = require('deck.enum')
 require('connector.obs')
 
 widgets.default_font.size = 20
@@ -34,13 +35,13 @@ local reset_button = widgets.create_button('Reset')
 grid:add_child(reset_button, 0, 2)
 
 local time_label = widgets.create_label('00:00:00')
-time_label.alignment = ALIGN_CENTER
+time_label.alignment = enum.ALIGN_CENTER
 time_label.font = widgets.default_font:clone()
 time_label.font.size = 48
 grid:add_child(time_label, 1, 0, 2, grid.cols)
 
 local obs_label = widgets.create_label('OBS')
-obs_label.alignment = ALIGN_CENTER
+obs_label.alignment = enum.ALIGN_CENTER
 obs_label.bgcolor = color_disabled
 grid:add_child(obs_label, -1, 0)
 
