@@ -18,9 +18,9 @@ SETTINGS.mode = SETTINGS.mode or MODE_COUNTDOWN
 SETTINGS.countdown_time = SETTINGS.countdown_time or 60
 SETTINGS.countdown_finished = SETTINGS.countdown_finished or 'Soon!'
 
-obs = deck:Connector('OBS', 'Obs', { enabled = false })
-main_window = deck:Connector('Window', 'MainWindow', { width = 300, height = 175 })
-settings_window = deck:Connector('Window', 'SettingsWindow', { width = 850, height = 200, visible = false, exit_on_close = false })
+local obs = deck:Connector('OBS', 'Obs', { enabled = false })
+local main_window = deck:Connector('Window', 'MainWindow', { width = 300, height = 175 })
+local settings_window = deck:Connector('Window', 'SettingsWindow', { width = 850, height = 200, visible = false, exit_on_close = false })
 
 local grid = widgets.create_grid(4, 3)
 grid.bgcolor = deck:Colour 'Black'
@@ -237,7 +237,7 @@ end
 grid:add_child(setting_countdown_finished_inp, 5, 0, 1, grid.cols)
 
 local last_tick = 0
-function tick(clock)
+local function tick(clock)
     local delta = clock - last_tick
     if clock_running then
         timer_value = timer_value + delta / 1000.0
@@ -245,3 +245,12 @@ function tick(clock)
     end
     last_tick = clock
 end
+
+return {
+    tick = tick,
+    connectors = {
+        obs,
+        main_window,
+        settings_window
+    }
+}

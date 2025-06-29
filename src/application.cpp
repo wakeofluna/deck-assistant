@@ -249,22 +249,13 @@ bool Application::init(std::vector<std::string_view>&& args)
 	m_deckfile_mtime = std::filesystem::last_write_time(m_deckfile, ec);
 	m_deckfile_size  = std::filesystem::file_size(m_deckfile, ec);
 
-	// Duplicate the function so we can get the ENV table
-	lua_pushvalue(L, -1);
-
-	if (!LuaHelpers::pcall(L, 0, 0))
-	{
-		lua_pop(L, 1);
+	if (!LuaHelpers::pcall(L, 0, 1))
 		return false;
-	}
 
 	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading and running script");
 
 	// Save a copy of the new global table
-	lua_getfenv(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
-	// Now pop the function, it has served its purpose
-	lua_pop(L, 1);
 
 	return true;
 }
@@ -568,24 +559,16 @@ void Application::reload_deckfile(lua_State* L)
 	if (!LuaHelpers::load_script(L, m_deckfile))
 		return;
 
-	// Duplicate the function so we can get the ENV table
-	lua_pushvalue(L, -1);
-
-	if (!LuaHelpers::pcall(L, 0, 0))
-	{
-		lua_pop(L, 1);
+	if (!LuaHelpers::pcall(L, 0, 1))
 		return;
-	}
 
 	m_deckfile_mtime = deckfile_mtime;
 	m_deckfile_size  = deckfile_size;
 
-	// Save a copy of the new global table
-	lua_getfenv(L, -1);
-
+	// Save a copy of the script return table
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
 
 	LuaHelpers::emit_event(L, -1, "on_reload");
-	lua_pop(L, 2);
+	lua_pop(L, 1);
 }

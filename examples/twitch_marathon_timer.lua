@@ -2,7 +2,6 @@ local deck = require('deck')
 local logger = require('deck.logger')
 local util = require('deck.util')
 local widgets = require('deck.widgets')
-local ALIGN_CENTER = ALIGN_CENTER
 require('connector.obs')
 require('connector.twitch')
 
@@ -75,11 +74,11 @@ end
 reload_settings_table()
 reload_stats_table()
 
-obs = deck:Connector('OBS', 'Obs', { initial_enabled = false })
-twitch = deck:Connector('Twitch', { initial_enabled = false })
-main_window = deck:Connector('Window', 'MainWindow', { initial_width = 600, initial_height = 425 })
-secondary_window = deck:Connector('Window', 'SecondaryWindow', { initial_width = 1200, initial_height = 435, initial_visible = false, exit_on_close = false })
-correction_window = deck:Connector('Window', 'CorrectionWindow', { initial_width = 450, initial_height = 400, initial_visible = false, exit_on_close = false })
+local obs = deck:Connector('OBS', 'Obs', { enabled = false })
+local twitch = deck:Connector('Twitch', { enabled = false })
+local main_window = deck:Connector('Window', 'MainWindow', { width = 600, height = 425 })
+local secondary_window = deck:Connector('Window', 'SecondaryWindow', { width = 1200, height = 435, visible = false, exit_on_close = false })
+local correction_window = deck:Connector('Window', 'CorrectionWindow', { width = 450, height = 400, visible = false, exit_on_close = false })
 
 --twitch.scopes.follower_data = true
 --twitch.scopes.subscriber_data = true
@@ -666,7 +665,7 @@ local function tier_to_key(tier)
 end
 
 twitch.on_follow = function(self, channel, user)
-    print('FOLLOW', user_name)
+    print('FOLLOW', user.name)
 
     STATS.amount_followers = STATS.amount_followers + 1
     util.store_table(STATS_TABLE_NAME, STATS)
@@ -677,7 +676,7 @@ twitch.on_follow = function(self, channel, user)
     util.append_event_log('follows', log)
 end
 twitch.on_subscribe = function(self, channel, user, tier, is_gift)
-    print('SUB', user_name, 'TIER', tier, 'GIFT', is_gift)
+    print('SUB', user.name, 'TIER', tier, 'GIFT', is_gift)
 
     if is_gift then
         local ts = os.time()
@@ -709,7 +708,7 @@ twitch.on_subscribe = function(self, channel, user, tier, is_gift)
     end
 end
 twitch.on_unsubscribe = function(self, channel, user, tier, is_gift)
-    print('UNSUB', user_name, 'TIER', tier, 'GIFT', is_gift)
+    print('UNSUB', user.name, 'TIER', tier, 'GIFT', is_gift)
 
     local ts = os.time()
     local log = { timestamp = ts, time = os.date('%F %T', ts), user_name = user.name, tier = tier, was_gift = is_gift }
@@ -811,7 +810,8 @@ if not STATS.event_started_at then
     calc_timers(0)
     render_timers()
 end
-function tick(clock)
+
+local function tick(clock)
     if STATS.event_started_at then
         local now = os.time()
         local total_time = os.difftime(now, STATS.event_started_at)
@@ -827,3 +827,14 @@ function tick(clock)
         end
     end
 end
+
+return {
+    tick = tick,
+    connectors = {
+        obs,
+        twitch,
+        main_window,
+        secondary_window,
+        correction_window
+    }
+}
