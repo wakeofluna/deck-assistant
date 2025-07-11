@@ -124,6 +124,16 @@ int DeckColour::tostring(lua_State* L) const
 	return 1;
 }
 
+bool DeckColour::operator==(DeckColour const& other) const
+{
+	return m_colour == other.m_colour;
+}
+
+bool DeckColour::operator!=(DeckColour const& other) const
+{
+	return m_colour != other.m_colour;
+}
+
 int DeckColour::_lua_darken(lua_State* L)
 {
 	DeckColour* self  = from_stack(L, 1);

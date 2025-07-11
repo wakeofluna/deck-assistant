@@ -954,6 +954,7 @@ local function create_button(text, callback, initial_enabled)
     local btn = default_widget()
 
     btn.bgcolor = deck:Colour 'Blue'
+    btn.fgcolor = deck:Colour 'White'
     btn.text = text
     btn.font = default_font
     btn.callback = callback
@@ -1026,7 +1027,7 @@ local function create_button(text, callback, initial_enabled)
             self.normal = deck:Card(self.width, self.height)
             self.normal:clear(self.bgcolor)
             if self.text and self.text ~= '' then
-                local txt = self.font:render(self.text, self.width - 10)
+                local txt = self.font:render(self.text, self.width - 10, self.fgcolor)
                 self.normal:blit(txt, txt:centered(self.normal))
             end
             self.hover = nil
@@ -1076,6 +1077,24 @@ local function create_button(text, callback, initial_enabled)
 
     btn.enable = function(self)
         self:_update_state(BUTTON_NORMAL)
+    end
+
+    btn.set_fgcolor = function(self, fgcolor)
+        if self.fgcolor ~= fgcolor then
+            self.fgcolor = fgcolor
+            if self.card then
+                self:redraw(true)
+            end
+        end
+    end
+
+    btn.set_bgcolor = function(self, bgcolor)
+        if self.bgcolor ~= bgcolor then
+            self.bgcolor = bgcolor
+            if self.card then
+                self:redraw(true)
+            end
+        end
     end
 
     return btn

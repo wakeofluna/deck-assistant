@@ -37,6 +37,9 @@ public:
 	int newindex(lua_State* L, std::string_view const& key);
 	int tostring(lua_State* L) const;
 
+	bool operator==(DeckColour const& other) const;
+	bool operator!=(DeckColour const& other) const;
+
 private:
 	static int _lua_darken(lua_State* L);
 	static int _lua_desaturate(lua_State* L);

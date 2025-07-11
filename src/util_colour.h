@@ -69,6 +69,22 @@ struct Colour
 		return color;
 	}
 
+	constexpr bool operator==(Colour const& other) const
+	{
+		return color.r == other.color.r
+		    && color.g == other.color.g
+		    && color.b == other.color.b
+		    && color.a == other.color.a;
+	}
+
+	constexpr bool operator!=(Colour const& other) const
+	{
+		return color.r != other.color.r
+		    || color.g != other.color.g
+		    || color.b != other.color.b
+		    || color.a != other.color.a;
+	}
+
 	SDL_Color color;
 };
 
