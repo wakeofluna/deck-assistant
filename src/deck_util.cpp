@@ -18,6 +18,7 @@
 
 #include "deck_util.h"
 #include "builtins.h"
+#include "deck_logger.h"
 #include "lua_helpers.h"
 #include "util_blob.h"
 #include "util_paths.h"
@@ -210,6 +211,10 @@ void DeckUtil::init_instance_table(lua_State* L)
 	lua_pushlightuserdata(L, (void*)&m_paths);
 	lua_pushcclosure(L, &_lua_retrieve_event_log, 1);
 	lua_setfield(L, -2, "retrieve_event_log");
+
+	lua_pushlightuserdata(L, (void*)&m_paths);
+	lua_pushcclosure(L, &_lua_traverse_event_log, 1);
+	lua_setfield(L, -2, "traverse_event_log");
 }
 
 int DeckUtil::index(lua_State* L, std::string_view const& key) const
@@ -636,14 +641,11 @@ int DeckUtil::_lua_retrieve_event_log(lua_State* L)
 
 	for (std::size_t idx = 0; idx < count; ++idx)
 	{
-		std::size_t offset = 0;
-
-		err = util::convert_from_json(L, lines[start_idx + idx], offset);
-		if (err.empty() && offset == 0)
-			continue;
-
-		if (!err.empty())
+		std::size_t offset       = 0;
+		std::string_view problem = util::convert_from_json(L, lines[start_idx + idx], offset);
+		if (!problem.empty())
 		{
+			err = problem;
 			luaL_error(L, "%s: parse error on line %d: %s", store_filename.c_str(), start_idx + idx + 1, err.c_str());
 			return 0;
 		}
@@ -652,6 +654,53 @@ int DeckUtil::_lua_retrieve_event_log(lua_State* L)
 	}
 
 	return 1;
+}
+
+int DeckUtil::_lua_traverse_event_log(lua_State* L)
+{
+	util::Paths const* paths = reinterpret_cast<util::Paths const*>(lua_touserdata(L, lua_upvalueindex(1)));
+	int const top            = lua_gettop(L);
+
+	std::string_view const store_name = LuaHelpers::check_arg_string(L, 1);
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	luaL_argcheck(L, is_alphanumeric(store_name), 1, "store name must be alphanumeric");
+
+	std::string store_filename  = "event_";
+	store_filename             += store_name;
+	store_filename             += ".log";
+
+	std::string err;
+	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
+	std::string const file_data      = util::load_file(path, err);
+
+	std::vector<std::string_view> lines = util::split(file_data);
+	std::size_t const count             = lines.size();
+	for (std::size_t idx = 0; idx < count; ++idx)
+	{
+		std::string_view line = lines[idx];
+		if (line.empty())
+			continue;
+
+		lua_settop(L, top);
+		lua_pushvalue(L, 2);
+
+		std::size_t offset       = 0;
+		std::string_view problem = util::convert_from_json(L, line, offset);
+		if (!problem.empty())
+		{
+			DeckLogger::lua_log_message(L, DeckLogger::Level::Warning, store_filename, ": parse error on line ", idx + 1, ": ", problem);
+			continue;
+		}
+
+		if (!LuaHelpers::pcall(L, 1, 1))
+			break;
+
+		if (!lua_isnil(L, -1))
+			return 1;
+	}
+
+	return 0;
 }
 
 int DeckUtil::_lua_clipboard_text(lua_State* L)
