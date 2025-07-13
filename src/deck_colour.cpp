@@ -56,6 +56,15 @@ int DeckColour::index(lua_State* L, std::string_view const& key) const
 		push_new(L, self->m_colour);
 		return 1;
 	}
+	else if (key == "hex" || key == "html")
+	{
+		DeckColour* self = from_stack(L, 1);
+
+		std::array<char, 10> buf;
+		std::string_view hex = self->get_colour().to_string(buf);
+		lua_pushlstring(L, hex.data(), hex.size());
+		return 1;
+	}
 
 	for (char ch : key)
 	{
