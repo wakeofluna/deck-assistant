@@ -1148,6 +1148,15 @@ local function create_label(text, fgcolor, bgcolor)
 
     lbl.set_text = function(self, text)
         if self.text ~= text then
+            if self.on_changed then
+                local alt_text = self:on_changed(text)
+                if alt_text ~= nil then
+                    if self.text == alt_text then
+                        return
+                    end
+                    text = alt_text
+                end
+            end
             self.text = text
             if self.card then
                 self:redraw(true)
