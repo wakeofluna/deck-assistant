@@ -67,6 +67,7 @@ DeckFont::DeckFont(DeckFont const& other)
 {
 	m_font         = nullptr;
 	m_font_name    = other.m_font_name;
+	m_font_size    = other.m_font_size;
 	m_outline_size = other.m_outline_size;
 	m_max_width    = other.m_max_width;
 	m_colour       = other.m_colour;
