@@ -214,29 +214,45 @@ void convert_to_json_impl(lua_State* L, int idx, std::string& target, std::set<v
 					target += '{';
 					indent += 2;
 
-					bool first = true;
+					std::vector<std::string_view> sorted_keys;
+					sorted_keys.reserve(64);
+
 					while (lua_next(L, idx))
 					{
 						if (lua_type(L, -2) == LUA_TSTRING && is_convertible_to_json(L, -1))
 						{
-							if (!first)
-								target += ',';
-							else
-								first = false;
-
-							add_indent(target, indent, pretty);
-							convert_to_json_impl(L, -2, target, seen, pretty, indent);
-
-							target += ':';
-							if (pretty)
-								target += ' ';
-
-							seen.insert(this_table_ptr);
-							convert_to_json_impl(L, -1, target, seen, pretty, indent);
-							seen.erase(this_table_ptr);
+							std::string_view key = LuaHelpers::to_string_view(L, -2);
+							sorted_keys.push_back(key);
 						}
-
 						lua_pop(L, 1);
+					}
+
+					std::sort(sorted_keys.begin(), sorted_keys.end());
+
+					bool first = true;
+					for (std::string_view key : sorted_keys)
+					{
+						lua_pushlstring(L, key.data(), key.size());
+						lua_pushvalue(L, -1);
+						lua_gettable(L, -3);
+
+						if (!first)
+							target += ',';
+						else
+							first = false;
+
+						add_indent(target, indent, pretty);
+						convert_to_json_impl(L, -2, target, seen, pretty, indent);
+
+						target += ':';
+						if (pretty)
+							target += ' ';
+
+						seen.insert(this_table_ptr);
+						convert_to_json_impl(L, -1, target, seen, pretty, indent);
+						seen.erase(this_table_ptr);
+
+						lua_pop(L, 2);
 					}
 
 					indent -= 2;
