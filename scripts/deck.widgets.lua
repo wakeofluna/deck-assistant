@@ -1330,11 +1330,15 @@ local function create_input_field(initial_text)
         end
         if self.text ~= text then
             if self.numerical and text ~= '' and text ~= '-' then
+                local has_dot = string.sub(text, -1) == '.'
                 local nr = tonumber(text)
                 if nr == nil then
                     return
                 end
                 text = tostring(nr)
+                if has_dot then
+                    text = text .. '.'
+                end
             end
             if self.validate_text then
                 local retval = self:validate_text(text)
