@@ -412,8 +412,18 @@ local twitch_connector = function()
     end
 
     instance.resolve_user = function(self, user)
+        user = string.lower(user)
+
         if self._user_cache[user] then
             return self._user_cache[user]
+        end
+
+        if self.debugging then
+            coroutine.yield()
+            local result = {}
+            result.login = 'testViewer'
+            result.id = '73612018'
+            return result
         end
 
         local promise
@@ -425,9 +435,10 @@ local twitch_connector = function()
 
         local result = promise:wait()
         if result.ok then
-            local body = util.from_json(result.body)
+            local body = util.from_json(result.body) or {}
             for _, data in ipairs(body.data) do
                 logger(logger.INFO, 'Twitch: resolved user', user, 'to', data.id, '/', data.login)
+                self._user_cache[user] = data
                 self._user_cache[data.id] = data
                 self._user_cache[data.login] = data
             end
