@@ -301,7 +301,7 @@ local twitch_connector = function()
             do_subscribe('channel.follow', 2, { moderator_user_id = self.user_id })
         end
         if self.scopes.bits_notifications then
-            do_subscribe('channel.cheer')
+            do_subscribe('channel.bits.use')
         end
         if self.scopes.redemption_notifications then
             do_subscribe('channel.channel_points_custom_reward_redemption.add')
@@ -515,9 +515,13 @@ local twitch_connector = function()
             elseif subtype == 'channel.subscription.message' then
                 local user = { id = event.user_id, name = event.user_name, login = event.user_login }
                 notify('on_resubscribe', event.broadcaster_user_name, user, event.tier, event.cumulative_months, event.streak_months, event.message.text)
-            elseif subtype == 'channel.cheer' then
+            elseif subtype == 'channel.bits.use' then
                 local user = { id = event.user_id, name = event.user_name, login = event.user_login }
-                notify('on_cheer', event.broadcaster_user_name, user, event.bits, event.message)
+                local event_type = event.type
+                if event_type == 'power_up' then
+                    event_type = event.power_up.type
+                end
+                notify('on_bits', event.broadcaster_user_name, user, event.bits, event_type, event.message)
             elseif subtype == 'channel.channel_points_custom_reward_redemption.add' then
                 local user = { id = event.user_id, name = event.user_name, login = event.user_login }
                 notify('on_channel_points', event.broadcaster_user_name, user, event.reward.cost, event.reward.title, event.user_input)
