@@ -598,7 +598,7 @@ int DeckUtil::_lua_append_event_log(lua_State* L)
 
 	std::string store_filename  = "event_";
 	store_filename             += store_name;
-	store_filename             += ".log";
+	store_filename             += "_log.jsonl";
 
 	std::string err;
 	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
@@ -623,7 +623,7 @@ int DeckUtil::_lua_retrieve_event_log(lua_State* L)
 
 	std::string store_filename  = "event_";
 	store_filename             += store_name;
-	store_filename             += ".log";
+	store_filename             += "_log.jsonl";
 
 	std::string err;
 	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
@@ -668,7 +668,7 @@ int DeckUtil::_lua_traverse_event_log(lua_State* L)
 
 	std::string store_filename  = "event_";
 	store_filename             += store_name;
-	store_filename             += ".log";
+	store_filename             += "_log.jsonl";
 
 	std::string err;
 	std::filesystem::path const path = paths->get_sandbox_dir() / store_filename;
