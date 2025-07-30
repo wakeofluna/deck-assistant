@@ -7,48 +7,43 @@
   },
   "configurePresets": [
     {
-      "name": "debug-base",
-      "hidden": true,
+      "name": "debug",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "release-base",
-      "hidden": true,
-      "binaryDir": "${sourceDir}/build-release",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "debug",
-      "inherits": "debug-base",
-      "generator": "Ninja",
-      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++"
-      }
-    },
-    {
-      "name": "debug-windows",
-      "inherits": "debug-base",
-      "generator": "Visual Studio 17 2022",
-      "cacheVariables": {
-        "CMAKE_INSTALL_PREFIX": "install"
+      },
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
       }
     },
     {
       "name": "release",
-      "inherits": "release-base",
-      "generator": "Ninja"
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
-      "name": "release-windows",
-      "inherits": "release-base",
+      "name": "windows",
       "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "install"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
       }
     }
   ],
@@ -73,7 +68,8 @@
     },
     {
       "name": "debug-windows",
-      "configurePreset": "debug-windows",
+      "configurePreset": "windows",
+      "configuration": "Debug",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -82,7 +78,8 @@
     },
     {
       "name": "release-windows",
-      "configurePreset": "release-windows",
+      "configurePreset": "windows",
+      "configuration": "Release",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
