@@ -18,7 +18,6 @@
 
 #include "deck_enum.h"
 #include "lua_helpers.h"
-#include <cassert>
 
 char const* DeckEnum::LUA_TYPENAME = "deck:Enum";
 
