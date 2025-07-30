@@ -16,6 +16,13 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/")
 
+get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(is_multi_config)
+	set(BINARY_COPY_TARGET ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>)
+else()
+	set(BINARY_COPY_TARGET ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS YES)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
@@ -195,6 +202,16 @@ if (NOT ssl_FOUND)
 		target_include_directories(ssl INTERFACE ${OPENSSL_SRC_DIR}/x64/include)
 		target_compile_definitions(ssl INTERFACE HAVE_OPENSSL OPENSSL_NO_DEPRECATED)
 		install(FILES $<TARGET_FILE:libssl> $<TARGET_FILE:libcrypto> DESTINATION bin)
+
+		# Helpers for developers
+		add_custom_command(
+			OUTPUT "${BINARY_COPY_TARGET}/libssl-3-x64.dll" "${BINARY_COPY_TARGET}/libcrypto-3-x64.dll"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:libssl>" "$<TARGET_FILE:libcrypto>" ${BINARY_COPY_TARGET}
+		)
+		add_custom_target(ensure-ssl-for-devs
+			ALL
+			DEPENDS "${BINARY_COPY_TARGET}/libssl-3-x64.dll" "${BINARY_COPY_TARGET}/libcrypto-3-x64.dll"
+		)
 	endif ()
 else()
 	if (ssl_MODULE_NAME STREQUAL "gnutls")
