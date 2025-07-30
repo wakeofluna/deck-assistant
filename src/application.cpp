@@ -329,7 +329,11 @@ int Application::run()
 		assert(lua_gettop(L) == resettop && "DeckModule tick_outputs function is not stack balanced");
 
 		// Make sure we regularly clean up
-		lua_gc(L, LUA_GCSTEP, 1);
+		// We have to run a full cycle twice because, as according to spec,
+		// "The userdata itself is freed only in the next garbage-collection cycle."
+		// which may crash our stuff due to dangling pointers to any of our userdata objects.
+		lua_gc(L, LUA_GCCOLLECT, 0);
+		lua_gc(L, LUA_GCCOLLECT, 0);
 
 		// Wait for the next cycle. Skips ticks if we can't keep up.
 		auto const lower_limit = std::chrono::steady_clock::now();
