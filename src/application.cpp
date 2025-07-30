@@ -254,6 +254,20 @@ bool Application::init(std::vector<std::string_view>&& args)
 
 	assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while loading and running script");
 
+	// Do some sanity checking on the script return value since we expect a table
+	if (int ret_type = lua_type(L, -1); ret_type != LUA_TTABLE)
+	{
+		DeckLogger::log_message(L, DeckLogger::Level::Warning, "Main script did not return a table, creating placeholder. Please fix your script!");
+
+		lua_createtable(L, 0, 8);
+		lua_insert(L, -2);
+		lua_setfield(L, -2, ret_type == LUA_TFUNCTION ? "tick" : "value");
+
+		// Also grab a reference to all Connectors since otherwise they will be collected immediately
+		DeckModule::gather_connectors_into_table(L, -1);
+		assert(lua_gettop(L) == oldtop + 1 && "Internal stack error while building emergency script table");
+	}
+
 	// Save a copy of the new global table
 	lua_setfield(L, LUA_REGISTRYINDEX, "ACTIVE_SCRIPT_ENV");
 

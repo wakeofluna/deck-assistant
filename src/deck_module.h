@@ -35,6 +35,7 @@ public:
 	static constexpr bool const LUA_IS_GLOBAL = true;
 
 	static lua_Integer get_clock(lua_State* L);
+	static void gather_connectors_into_table(lua_State* L, int idx);
 
 	void tick_inputs(lua_State* L, lua_Integer clock);
 	void tick_outputs(lua_State* L, lua_Integer clock);

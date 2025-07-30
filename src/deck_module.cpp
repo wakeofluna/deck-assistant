@@ -57,6 +57,20 @@ lua_Integer DeckModule::get_clock(lua_State* L)
 	return self ? self->m_last_clock : 0;
 }
 
+void DeckModule::gather_connectors_into_table(lua_State* L, int idx)
+{
+	idx = LuaHelpers::absidx(L, idx);
+
+	push_global_instance(L);
+	LuaHelpers::push_instance_table(L, -1);
+	lua_rawgeti(L, -1, g_connector_container_idx);
+	lua_pushvalue(L, idx);
+	LuaHelpers::push_instance_table(L, -2);
+	LuaHelpers::copy_table_fields(L);
+
+	lua_pop(L, 4);
+}
+
 void DeckModule::tick_inputs(lua_State* L, lua_Integer clock)
 {
 	assert(from_stack(L, -1, false) != nullptr);
