@@ -162,7 +162,7 @@ void LuaHelpers::push_standard_weak_value_metatable(lua_State* L)
 		lua_createtable(L, 0, 2);
 		lua_pushliteral(L, "v");
 		lua_setfield(L, -2, "__mode");
-		lua_pushstring(L, k_weak_key_metatable_key);
+		lua_pushstring(L, k_weak_value_metatable_key);
 		lua_setfield(L, -2, "__metatable");
 
 		lua_pushvalue(L, -1);
