@@ -74,7 +74,7 @@ std::optional<int> DeckEnum::to_int(lua_State* L, int idx, std::string_view cons
 		return std::nullopt;
 	}
 
-	return std::make_optional(instance->m_value);
+	return std::make_optional(int(instance->m_value));
 }
 
 int DeckEnum::index(lua_State* L, std::string_view const& key) const
