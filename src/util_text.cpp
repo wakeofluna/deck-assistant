@@ -106,11 +106,23 @@ void convert_to_json_impl(lua_State* L, int idx, std::string& target, std::set<v
 				lua_Number value = lua_tonumber(L, idx);
 
 				char buf[32];
-				auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::fixed);
+				auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::fixed, 8);
 				if (ec != std::errc())
+				{
 					target += "null";
+				}
 				else
+				{
+					bool const has_dot = std::find(buf, end, '.') != end;
+					if (has_dot) // Should always be true, but just for safety that we don't destroy integers
+					{
+						while (end > buf && end[-1] == '0')
+							--end;
+						if (end[-1] == '.')
+							--end;
+					}
 					target.append(buf, end - buf);
+				}
 			}
 			break;
 
